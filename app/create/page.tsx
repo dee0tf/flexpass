@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, MapPin, DollarSign,
   Image as ImageIcon, Type, Clock, Hash,
-  AlertCircle, User
+  AlertCircle, User, Plus, Trash2
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 
@@ -16,25 +16,34 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+interface TicketTier {
+  name: string;
+  price: string;
+  quantity: string;
+}
+
 export default function CreateEvent() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  // Form State including NEW fields
+  // Form State
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     date: "",
-    start_time: "", // New
+    start_time: "",
     location: "",
-    price: "",
-    total_tickets: "", // New
-    sales_end_date: "", // New
-    organizer_name: "", // New
+    sales_end_date: "",
+    organizer_name: "",
     image_url: "",
     category: "Music",
   });
+
+  // Ticket Tiers State (Default with one Standard tier)
+  const [tiers, setTiers] = useState<TicketTier[]>([
+    { name: "Regular", price: "", quantity: "" }
+  ]);
 
   // 1. Check Auth on Load
   useEffect(() => {
@@ -50,34 +59,80 @@ export default function CreateEvent() {
     checkUser();
   }, [router]);
 
+  // Tier Management Functions
+  const addTier = () => {
+    setTiers([...tiers, { name: "", price: "", quantity: "" }]);
+  };
+
+  const removeTier = (index: number) => {
+    if (tiers.length > 1) {
+      const newTiers = [...tiers];
+      newTiers.splice(index, 1);
+      setTiers(newTiers);
+    }
+  };
+
+  const updateTier = (index: number, field: keyof TicketTier, value: string) => {
+    const newTiers = [...tiers];
+    newTiers[index][field] = value;
+    setTiers(newTiers);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     if (!user) return;
 
+    // Validation
+    if (tiers.some(t => !t.name || !t.price || !t.quantity)) {
+      alert("Please fill in all ticket tier details.");
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // 2. Insert Event with ALL new fields
-      const { error } = await supabase.from("events").insert([
+      // Calculate aggregate values for the main events table
+      const totalTickets = tiers.reduce((acc, t) => acc + Number(t.quantity), 0);
+      const minPrice = Math.min(...tiers.map(t => Number(t.price)));
+
+      // 1. Insert Event
+      const { data: eventData, error: eventError } = await supabase.from("events").insert([
         {
           title: formData.title,
           description: formData.description,
           date: formData.date,
           start_time: formData.start_time,
           location: formData.location,
-          price: Number(formData.price),
-          total_tickets: Number(formData.total_tickets),
-          sales_end_date: formData.sales_end_date, // Save the deadline
+          price: minPrice, // Store lowest price for display sorting
+          total_tickets: totalTickets,
+          sales_end_date: formData.sales_end_date,
           organizer_name: formData.organizer_name,
           image_url: formData.image_url,
           category: formData.category,
-          user_id: user.id, // Links event to YOU
+          user_id: user.id,
         },
-      ]);
+      ]).select().single();
 
-      if (error) throw error;
+      if (eventError) throw eventError;
 
-      alert("✨ Event Published Successfully!");
+      const newEventId = eventData.id;
+
+      // 2. Insert Ticket Tiers
+      const tiersToInsert = tiers.map(tier => ({
+        event_id: newEventId,
+        name: tier.name,
+        price: Number(tier.price),
+        quantity_available: Number(tier.quantity)
+      }));
+
+      const { error: tierError } = await supabase
+        .from("ticket_tiers")
+        .insert(tiersToInsert);
+
+      if (tierError) throw tierError;
+
+      alert("✨ Event Published Successfully with Ticket Tiers!");
       router.push("/dashboard");
 
     } catch (error: any) {
@@ -139,7 +194,7 @@ export default function CreateEvent() {
                   />
                 </div>
 
-                {/* Organizer Name - CLASSY TOUCH */}
+                {/* Organizer Name */}
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Host / Organizer Name</label>
                   <div className="relative">
@@ -197,64 +252,99 @@ export default function CreateEvent() {
               </div>
             </div>
 
-            {/* Section 2: Ticketing */}
+            {/* Section 2: Ticketing & Inventory */}
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2 border-b pb-2 pt-4">
-                <DollarSign className="h-5 w-5 text-[#f97316]" /> Ticketing & Inventory
-              </h2>
+              <div className="flex items-center justify-between border-b pb-2 pt-4">
+                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-[#f97316]" /> Ticket Classes
+                </h2>
+                <button
+                  type="button"
+                  onClick={addTier}
+                  className="text-sm text-[#581c87] font-semibold hover:text-[#f97316] flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="h-4 w-4" /> Add Ticket Class
+                </button>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Ticket Price (₦)</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-3 h-5 w-5 text-slate-400 pointer-events-none z-10" />
-                    <input
-                      type="number"
-                      name="price"
-                      required
-                      min="0"
-                      placeholder="5000"
-                      className="pl-10 pr-4 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none appearance-none"
-                      onChange={handleChange}
-                    />
-                  </div>
-                </div>
+              <div className="space-y-4">
+                {tiers.map((tier, index) => (
+                  <div key={index} className="bg-slate-50 p-4 rounded-xl border border-slate-200 relative group animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Class Name */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Class Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. VIP, Regular"
+                          value={tier.name}
+                          onChange={(e) => updateTier(index, "name", e.target.value)}
+                          className="w-full p-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none text-sm"
+                          required
+                        />
+                      </div>
 
-                {/* Total Tickets - CLASSY TOUCH */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Total Tickets Available</label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                    <input
-                      type="number"
-                      name="total_tickets"
-                      required
-                      min="1"
-                      placeholder="e.g. 100"
-                      className="pl-10 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
-                      onChange={handleChange}
-                    />
-                  </div>
-                </div>
+                      {/* Price */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Price (₦)</label>
+                        <input
+                          type="number"
+                          placeholder="0"
+                          min="0"
+                          value={tier.price}
+                          onChange={(e) => updateTier(index, "price", e.target.value)}
+                          className="w-full p-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none text-sm"
+                          required
+                        />
+                      </div>
 
-                {/* Sales Deadline - CLASSY TOUCH */}
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Stop Selling Tickets On
-                  </label>
-                  <div className="relative">
-                    <AlertCircle className="absolute left-3 top-3 h-5 w-5 text-slate-400 pointer-events-none z-10" />
-                    <input
-                      type="datetime-local"
-                      name="sales_end_date"
-                      required
-                      className="pl-10 pr-4 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none appearance-none"
-                      style={{ colorScheme: 'light' }}
-                      onChange={handleChange}
-                    />
+                      {/* Quantity */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Quantity</label>
+                        <input
+                          type="number"
+                          placeholder="100"
+                          min="1"
+                          value={tier.quantity}
+                          onChange={(e) => updateTier(index, "quantity", e.target.value)}
+                          className="w-full p-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none text-sm"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Remove Button */}
+                    {tiers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeTier(index)}
+                        className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1.5 rounded-full hover:bg-red-200 transition opacity-0 group-hover:opacity-100"
+                        title="Remove Ticket Class"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">Tickets sales will automatically close at this time.</p>
+                ))}
+              </div>
+
+              {/* Sales Deadline */}
+              <div className="pt-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Stop Selling Tickets On
+                </label>
+                <div className="relative">
+                  <AlertCircle className="absolute left-3 top-3 h-5 w-5 text-slate-400 pointer-events-none z-10" />
+                  <input
+                    type="datetime-local"
+                    name="sales_end_date"
+                    required
+                    className="pl-10 pr-4 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none appearance-none"
+                    style={{ colorScheme: 'light' }}
+                    onChange={handleChange}
+                  />
                 </div>
+                <p className="text-xs text-slate-500 mt-1">Ticket sales for all classes will close at this time.</p>
               </div>
             </div>
 
@@ -269,7 +359,6 @@ export default function CreateEvent() {
                   <ImageUpload
                     onUpload={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
                   />
-                  {/* Hidden input to ensure required validation logic still works or we can just rely on the state check manually */}
                 </div>
 
                 <div>

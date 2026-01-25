@@ -20,7 +20,15 @@ async function getEvent(id: string) {
     .single();
 
   if (!event) return null;
-  return event;
+
+  // Fetch Tiers
+  const { data: tiers } = await supabase
+    .from("ticket_tiers")
+    .select("*")
+    .eq("event_id", id)
+    .order('price', { ascending: true });
+
+  return { ...event, tiers: tiers || [] };
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -129,6 +137,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         eventTitle={event.title}
         eventPrice={event.price}
         eventId={event.id}
+        tiers={event.tiers}
       />
     </div>
   );
