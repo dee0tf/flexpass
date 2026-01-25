@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus, Minus, Loader2 } from "lucide-react";
 import { PaystackButton } from "react-paystack";
 import { createClient } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation"; 
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -49,19 +49,24 @@ export default function CheckoutModal({
 }: CheckoutModalProps) {
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   // --- INITIALIZE ROUTER ---
   const router = useRouter();
 
-  const totalAmount = price * quantity;
+  // FEE LOGIC
+  const FEE_PERCENTAGE = 0.05; // 5%
+  const subtotal = price * quantity;
+  const fee = subtotal * FEE_PERCENTAGE;
+  const totalAmount = subtotal + fee;
 
   // 2. The Success Logic
   const handleSuccess = async (reference: PaystackSuccessResponse) => {
     // --- THIS LOG WILL NOW WORK ---
     console.log("✅ COMPONENT SUCCESS! Processing Order...", {
-        eventId: eventId,
-        ref: reference.reference
+      eventId: eventId,
+      ref: reference.reference
     });
 
     setIsSaving(true);
@@ -69,8 +74,11 @@ export default function CheckoutModal({
       const ticketsToCreate = Array.from({ length: quantity }).map(() => ({
         event_id: eventId,
         user_email: email,
+        user_name: fullName, // Save the name
         status: "valid",
         purchase_reference: reference.reference,
+        fee_amount: fee / quantity, // Store per ticket fee
+        total_amount_paid: (price + (fee / quantity)) // Store per ticket total
       }));
 
       // --- 1. Save to Database ---
@@ -99,11 +107,12 @@ export default function CheckoutModal({
 
       // --- 3. Redirect Logic ---
       console.log("🎟️ Ticket Created! Redirecting to:", newTicketId);
-      
+
       onOpenChange(false); // Close modal
       setQuantity(1);
       setEmail("");
-      
+      setFullName("");
+
       // Redirect to the new Ticket Page
       router.push(`/tickets/${newTicketId}`);
 
@@ -164,6 +173,19 @@ export default function CheckoutModal({
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-600">
+              Full Name
+            </label>
+            <Input
+              type="text"
+              placeholder="Enter your full name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="rounded-xl h-12"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-600">
               Where should we send your ticket?
             </label>
             <Input
@@ -176,11 +198,21 @@ export default function CheckoutModal({
           </div>
 
           <div className="pt-2">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-slate-600">Total</span>
-              <span className="text-2xl font-bold text-[#581c87]">
-                ₦{totalAmount.toLocaleString()}
-              </span>
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between items-center text-sm text-slate-600">
+                <span>Subtotal</span>
+                <span>₦{subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm text-slate-600">
+                <span>Service Fee (5%)</span>
+                <span>₦{fee.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                <span className="font-bold text-slate-900">Total</span>
+                <span className="text-2xl font-bold text-[#581c87]">
+                  ₦{totalAmount.toLocaleString()}
+                </span>
+              </div>
             </div>
 
             {/* 4. SWITCH LOGIC: 
@@ -188,22 +220,22 @@ export default function CheckoutModal({
                 If not saving, show PaystackButton. 
             */}
             {isSaving ? (
-                <button
-                  disabled
-                  className="w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg opacity-70 flex items-center justify-center gap-2"
-                >
-                   <Loader2 className="h-5 w-5 animate-spin" /> Processing...
-                </button>
+              <button
+                disabled
+                className="w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg opacity-70 flex items-center justify-center gap-2"
+              >
+                <Loader2 className="h-5 w-5 animate-spin" /> Processing...
+              </button>
             ) : (
-                <div className="w-full relative">
-                    {/* Block click if no email */}
-                    {!email && <div className="absolute inset-0 z-10" onClick={() => alert("Please enter your email")} />}
-                    
-                    <PaystackButton 
-                        {...componentProps} 
-                        className="w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition-opacity shadow-lg shadow-indigo-200"
-                    />
-                </div>
+              <div className="w-full relative">
+                {/* Block click if no email or name */}
+                {(!email || !fullName) && <div className="absolute inset-0 z-10" onClick={() => alert("Please enter your name and email")} />}
+
+                <PaystackButton
+                  {...componentProps}
+                  className="w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition-opacity shadow-lg shadow-indigo-200"
+                />
+              </div>
             )}
           </div>
         </div>

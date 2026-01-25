@@ -23,7 +23,7 @@ export default function EventCard({ event }: EventCardProps) {
         ) : (
           <div className="w-full h-48 bg-gray-200"></div>
         )}
-        
+
         {/* Event details */}
         <div className="p-4">
           <h3 className="text-lg font-semibold text-[#0F172A] mb-2">{event.title}</h3>
@@ -42,4 +42,3 @@ export default function EventCard({ event }: EventCardProps) {
     </Link>
   );
 }
-

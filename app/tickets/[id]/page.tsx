@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { CheckCircle2, Calendar, MapPin, Ticket as TicketIcon } from "lucide-react";
+import TicketQR from "@/components/TicketQR";
 
 // Initialize Supabase (Server-side safe)
 const supabase = createClient(
@@ -20,7 +21,7 @@ export default async function TicketPage({ params }: Props) {
   // 1. Fetch the Ticket AND the Event details
   const { data: ticket } = await supabase
     .from("tickets")
-    .select("*, events(*)") 
+    .select("*, events(*)")
     .eq("id", id) // Use the unwrapped ID
     .single();
 
@@ -33,7 +34,7 @@ export default async function TicketPage({ params }: Props) {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-        
+
         {/* Header Section */}
         <div className="bg-[#581c87] p-8 text-center text-white relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
@@ -51,9 +52,9 @@ export default async function TicketPage({ params }: Props) {
           <div className="text-center">
             <h2 className="text-xl font-bold text-slate-900">{event.title}</h2>
             <div className="flex items-center justify-center gap-2 mt-2 text-slate-500 text-sm">
-                <span className="bg-slate-100 px-3 py-1 rounded-full">{ticket.status.toUpperCase()}</span>
-                <span>•</span>
-                <span>ID: {ticket.id.slice(0, 8)}</span>
+              <span className="bg-slate-100 px-3 py-1 rounded-full">{ticket.status.toUpperCase()}</span>
+              <span>•</span>
+              <span>ID: {ticket.id.slice(0, 8)}</span>
             </div>
           </div>
 
@@ -75,10 +76,12 @@ export default async function TicketPage({ params }: Props) {
             </div>
           </div>
 
-          {/* QR Code Placeholder */}
-          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center">
-             <TicketIcon className="h-12 w-12 text-slate-300 mb-2" />
-             <p className="text-xs text-slate-400">Show this at the entrance</p>
+          {/* Real QR Code - Show this at the entrance */}
+          <div className="flex flex-col items-center justify-center py-4">
+            <TicketQR ticketId={ticket.id} />
+            <p className="text-xs text-slate-400 mt-4 font-medium italic">
+              Scan this at the entrance to check-in
+            </p>
           </div>
 
           <Link href="/">

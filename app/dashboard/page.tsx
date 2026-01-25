@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { DollarSign, Ticket, TrendingUp, Users, Loader2 } from "lucide-react";
+import { DollarSign, Ticket, TrendingUp, Users, Loader2, Download, Edit, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
+import SalesChart from "@/components/SalesChart";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,7 +17,8 @@ export default function DashboardPage() {
     revenue: 0,
     ticketsSold: 0,
     activeEvents: 0,
-    recentSales: [] as any[]
+    recentSales: [] as any[],
+    myEvents: [] as any[]
   });
   const router = useRouter();
 
@@ -24,7 +26,7 @@ export default function DashboardPage() {
     async function loadDashboardData() {
       // 1. Get Current User
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         router.push("/login");
         return;
@@ -35,7 +37,7 @@ export default function DashboardPage() {
       // 2. Fetch EVENTS created by this user
       const { data: myEvents } = await supabase
         .from("events")
-        .select("id, title, price")
+        .select("*") // Fetch all fields for the list
         .eq("user_id", user.id); // <--- CRITICAL SECURITY FILTER
 
       if (!myEvents || myEvents.length === 0) {
@@ -45,7 +47,7 @@ export default function DashboardPage() {
 
       // 3. Fetch TICKETS for these specific events
       const myEventIds = myEvents.map(e => e.id);
-      
+
       const { data: myTickets } = await supabase
         .from("tickets")
         .select("*, events(title, price)")
@@ -53,22 +55,37 @@ export default function DashboardPage() {
         .eq("status", "valid")
         .order("created_at", { ascending: false });
 
-      // 4. Calculate Stats
+      // 4. Calculate Stats & Chart Data
       const ticketsSold = myTickets?.length || 0;
-      
+
       // Calculate Revenue
       const revenue = myTickets?.reduce((acc, ticket) => {
         // @ts-ignore
         return acc + (ticket.events?.price || 0);
       }, 0) || 0;
 
+      // Group by event title for chart
+      const chartDataMap = new Map();
+      myTickets?.forEach((ticket) => {
+        const title = ticket.events?.title || "Unknown";
+        const price = ticket.events?.price || 0;
+        chartDataMap.set(title, (chartDataMap.get(title) || 0) + price);
+      });
+
+      const chartData = Array.from(chartDataMap.entries()).map(([name, revenue]) => ({
+        name: name.length > 20 ? name.slice(0, 17) + "..." : name,
+        revenue
+      }));
+
       setStats({
         revenue,
         ticketsSold,
         activeEvents: myEvents.length,
-        recentSales: myTickets || []
-      });
-      
+        recentSales: myTickets || [],
+        myEvents: myEvents || [],
+        chartData
+      } as any);
+
       setLoading(false);
     }
 
@@ -82,6 +99,46 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const handleExport = () => {
+    if (!stats.recentSales || stats.recentSales.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    // 1. Define CSV Headers
+    const headers = ["Ticket ID", "Event", "Customer Name", "Email", "Amount", "Status", "Date"];
+
+    // 2. Map Data to CSV Rows
+    const rows = stats.recentSales.map(ticket => {
+      const date = new Date(ticket.created_at).toLocaleDateString();
+      const amount = ticket.events?.price || 0;
+      const eventTitle = ticket.events?.title || "Unknown";
+
+      return [
+        ticket.id,
+        `"${eventTitle.replace(/"/g, '""')}"`, // Escape quotes
+        `"${(ticket.user_name || "N/A").replace(/"/g, '""')}"`,
+        ticket.user_email,
+        amount,
+        ticket.status,
+        date
+      ].join(",");
+    });
+
+    // 3. Combine Headers and Rows
+    const csvContent = [headers.join(","), ...rows].join("\n");
+
+    // 4. Create Download Link
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `flexpass_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="space-y-8">
@@ -130,10 +187,60 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent Sales Table */}
+      {/* Sales Analytics Chart */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <h3 className="font-bold text-lg text-slate-900 mb-2">Revenue by Event</h3>
+        <p className="text-slate-500 text-sm mb-6">See which experiences are performing best.</p>
+        <SalesChart data={(stats as any).chartData || []} />
+      </div>
+
+      {/* My Events Management */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100">
+          <h3 className="font-bold text-lg text-slate-900">My Events</h3>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {stats.myEvents.length === 0 ? (
+            <p className="p-6 text-slate-500 text-sm">You haven't created any events yet.</p>
+          ) : (
+            stats.myEvents.map((event: any) => (
+              <div key={event.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 bg-slate-100 rounded-lg overflow-hidden relative">
+                    {event.image_url && <img src={event.image_url} alt={event.title} className="object-cover w-full h-full" />}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900">{event.title}</h4>
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <Calendar size={12} />
+                      {new Date(event.date).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => router.push(`/dashboard/events/${event.id}/edit`)}
+                  className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-100 hover:text-[#581c87] transition-colors"
+                >
+                  <Edit size={14} />
+                  Edit
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Recent Sales Table */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-bold text-lg text-slate-900">Recent Transactions</h3>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600">
@@ -162,7 +269,7 @@ export default function DashboardPage() {
                   </td>
                 </tr>
               ))}
-              
+
               {stats.recentSales.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">

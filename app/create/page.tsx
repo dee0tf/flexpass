@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { 
-  Loader2, Calendar, MapPin, DollarSign, 
-  Image as ImageIcon, Type, Clock, Hash, 
-  AlertCircle, User 
+import {
+  Loader2, Calendar, MapPin, DollarSign,
+  Image as ImageIcon, Type, Clock, Hash,
+  AlertCircle, User
 } from "lucide-react";
+import ImageUpload from "@/components/ImageUpload";
 
 // Initialize Supabase
 const supabase = createClient(
@@ -103,13 +104,13 @@ export default function CreateEvent() {
 
         <div className="bg-white shadow-xl rounded-3xl overflow-hidden border border-slate-100">
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
-            
+
             {/* Section 1: Event Details */}
             <div className="space-y-6">
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2 border-b pb-2">
                 <Calendar className="h-5 w-5 text-[#f97316]" /> Event Details
               </h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Event Title</label>
@@ -127,15 +128,15 @@ export default function CreateEvent() {
                 </div>
 
                 <div className="col-span-2">
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                   <textarea
-                     name="description"
-                     required
-                     rows={4}
-                     placeholder="What makes this event unmissable?"
-                     className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
-                     onChange={handleChange}
-                   />
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                  <textarea
+                    name="description"
+                    required
+                    rows={4}
+                    placeholder="What makes this event unmissable?"
+                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
+                    onChange={handleChange}
+                  />
                 </div>
 
                 {/* Organizer Name - CLASSY TOUCH */}
@@ -178,20 +179,20 @@ export default function CreateEvent() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="col-span-2">
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Location / Venue</label>
-                   <div className="relative">
-                     <MapPin className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                     <input
-                       type="text"
-                       name="location"
-                       required
-                       placeholder="e.g. Eko Hotel & Suites, VI"
-                       className="pl-10 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
-                       onChange={handleChange}
-                     />
-                   </div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Location / Venue</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+                    <input
+                      type="text"
+                      name="location"
+                      required
+                      placeholder="e.g. Eko Hotel & Suites, VI"
+                      className="pl-10 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
+                      onChange={handleChange}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -203,93 +204,90 @@ export default function CreateEvent() {
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Ticket Price (₦)</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                      <input
-                        type="number"
-                        name="price"
-                        required
-                        min="0"
-                        placeholder="5000"
-                        className="pl-10 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
-                        onChange={handleChange}
-                      />
-                    </div>
-                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Ticket Price (₦)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-3 h-5 w-5 text-slate-400 pointer-events-none z-10" />
+                    <input
+                      type="number"
+                      name="price"
+                      required
+                      min="0"
+                      placeholder="5000"
+                      className="pl-10 pr-4 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none appearance-none"
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
 
-                 {/* Total Tickets - CLASSY TOUCH */}
-                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Total Tickets Available</label>
-                    <div className="relative">
-                      <Hash className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                      <input
-                        type="number"
-                        name="total_tickets"
-                        required
-                        min="1"
-                        placeholder="e.g. 100"
-                        className="pl-10 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
-                        onChange={handleChange}
-                      />
-                    </div>
-                 </div>
+                {/* Total Tickets - CLASSY TOUCH */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Total Tickets Available</label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+                    <input
+                      type="number"
+                      name="total_tickets"
+                      required
+                      min="1"
+                      placeholder="e.g. 100"
+                      className="pl-10 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
 
-                 {/* Sales Deadline - CLASSY TOUCH */}
-                 <div className="col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Stop Selling Tickets On
-                    </label>
-                    <div className="relative">
-                      <AlertCircle className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                      <input
-                        type="datetime-local"
-                        name="sales_end_date"
-                        required
-                        className="pl-10 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
-                        onChange={handleChange}
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">Tickets sales will automatically close at this time.</p>
-                 </div>
+                {/* Sales Deadline - CLASSY TOUCH */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Stop Selling Tickets On
+                  </label>
+                  <div className="relative">
+                    <AlertCircle className="absolute left-3 top-3 h-5 w-5 text-slate-400 pointer-events-none z-10" />
+                    <input
+                      type="datetime-local"
+                      name="sales_end_date"
+                      required
+                      className="pl-10 pr-4 w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none appearance-none"
+                      style={{ colorScheme: 'light' }}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">Tickets sales will automatically close at this time.</p>
+                </div>
               </div>
             </div>
 
             {/* Section 3: Branding */}
             <div className="space-y-6">
-               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2 border-b pb-2 pt-4">
-                  <ImageIcon className="h-5 w-5 text-[#f97316]" /> Branding
-               </h2>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Event Image URL</label>
-                    <input
-                      type="url"
-                      name="image_url"
-                      required
-                      placeholder="https://..."
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none"
-                      onChange={handleChange}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                    <select
-                      name="category"
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none bg-white"
-                      onChange={handleChange}
-                    >
-                      <option value="Music">Music</option>
-                      <option value="Tech">Tech</option>
-                      <option value="Business">Business</option>
-                      <option value="Arts">Arts</option>
-                      <option value="Food">Food</option>
-                      <option value="Nightlife">Nightlife</option>
-                    </select>
-                  </div>
-               </div>
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2 border-b pb-2 pt-4">
+                <ImageIcon className="h-5 w-5 text-[#f97316]" /> Branding
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Event Image</label>
+                  <ImageUpload
+                    onUpload={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
+                  />
+                  {/* Hidden input to ensure required validation logic still works or we can just rely on the state check manually */}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                  <select
+                    name="category"
+                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-[#581c87] focus:outline-none bg-white"
+                    onChange={handleChange}
+                  >
+                    <option value="Music">Music</option>
+                    <option value="Tech">Tech</option>
+                    <option value="Business">Business</option>
+                    <option value="Arts">Arts</option>
+                    <option value="Food">Food</option>
+                    <option value="Nightlife">Nightlife</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <button

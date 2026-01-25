@@ -4,6 +4,8 @@ import Image from "next/image";
 import { Calendar, MapPin, Clock } from "lucide-react";
 import ClientEventPage from "./ClientEventPage";
 
+import { Metadata } from "next";
+
 // Initialize Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,11 +23,45 @@ async function getEvent(id: string) {
   return event;
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const event = await getEvent(id);
+
+  if (!event) {
+    return {
+      title: "Event Not Found - FlexPass",
+    };
+  }
+
+  return {
+    title: `${event.title} - FlexPass Nigeria`,
+    description: event.description?.slice(0, 160) || `Buy tickets for ${event.title} on FlexPass.`,
+    openGraph: {
+      title: event.title,
+      description: event.description?.slice(0, 160),
+      images: [
+        {
+          url: event.image_url || "/placeholder.jpg",
+          width: 1200,
+          height: 630,
+          alt: event.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: event.title,
+      description: event.description?.slice(0, 160),
+      images: [event.image_url || "/placeholder.jpg"],
+    },
+  };
+}
+
 // FIX: params is defined as a Promise now
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   // FIX: We must await params before using the ID
   const { id } = await params;
-  
+
   const event = await getEvent(id);
 
   if (!event) {
@@ -62,7 +98,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       <div className="max-w-3xl mx-auto px-6 -mt-16 relative z-10">
         <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">{event.title}</h1>
-          
+
           <div className="flex flex-col gap-3 mt-4 text-slate-600">
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-[#f97316]" />
@@ -89,10 +125,10 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* Checkout Button */}
-      <ClientEventPage 
-        eventTitle={event.title} 
-        eventPrice={event.price} 
-        eventId={event.id} 
+      <ClientEventPage
+        eventTitle={event.title}
+        eventPrice={event.price}
+        eventId={event.id}
       />
     </div>
   );

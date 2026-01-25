@@ -1,10 +1,9 @@
-"use client";
-
-import Image from "next/image";
 import Link from "next/link";
-import { Menu, User } from "lucide-react";
+import { Menu, User, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import Logo from "./Logo";
+import { useRouter } from "next/navigation";
 
 // Initialize Supabase
 const supabase = createClient(
@@ -15,6 +14,7 @@ const supabase = createClient(
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const router = useRouter();
 
   // Check if user is logged in
   useEffect(() => {
@@ -25,32 +25,26 @@ export default function Navbar() {
     checkUser();
   }, []);
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setMobileMenuOpen(false);
+    router.push("/login");
+    router.refresh(); // Ensure state updates across app
+  };
+
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo - Desktop */}
           <Link href="/" className="hidden md:block">
-            <Image
-              src="/Logo-full.jpg"
-              alt="FlexPass Logo"
-              height={40}
-              width={0}
-              className="h-10 w-auto"
-              priority
-            />
+            <Logo size={42} />
           </Link>
 
           {/* Logo - Mobile */}
           <Link href="/" className="md:hidden">
-            <Image
-              src="/Logo-icon.jpg"
-              alt="FlexPass Logo"
-              height={32}
-              width={0}
-              className="h-8 w-auto"
-              priority
-            />
+            <Logo type="icon" size={32} />
           </Link>
 
           {/* Desktop Navigation */}
@@ -67,23 +61,32 @@ export default function Navbar() {
             >
               Create Event
             </Link>
-            
-            {/* CONDITIONAL BUTTON: Shows Dashboard if logged in, Sign In if not */}
+
+            {/* CONDITIONAL BUTTONS */}
             {user ? (
-               <Link
-               href="/dashboard"
-               className="bg-slate-100 text-slate-900 border border-slate-200 px-6 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-2"
-             >
-               <User size={18} className="text-[#581c87]" />
-               Dashboard
-             </Link>
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/dashboard"
+                  className="bg-slate-100 text-slate-900 border border-slate-200 px-6 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-2"
+                >
+                  <User size={18} className="text-[#581c87]" />
+                  Dashboard
+                </Link>
+                <button
+                  onClick={handleSignOut}
+                  className="text-slate-500 hover:text-red-600 transition-colors flex items-center gap-2 font-medium"
+                  title="Sign Out"
+                >
+                  <LogOut size={20} />
+                </button>
+              </div>
             ) : (
               <Link
-              href="/login"
-              className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
-            >
-              Sign In
-            </Link>
+                href="/login"
+                className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
+              >
+                Sign In
+              </Link>
             )}
           </div>
 
@@ -115,25 +118,34 @@ export default function Navbar() {
               >
                 Create Event
               </Link>
-              
+
               {/* Mobile Conditional Button */}
               {user ? (
-                 <Link
-                 href="/dashboard"
-                 className="bg-slate-100 text-slate-900 px-6 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-2 w-fit"
-                 onClick={() => setMobileMenuOpen(false)}
-               >
-                 <User size={18} className="text-[#581c87]" />
-                 Dashboard
-               </Link>
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="bg-slate-100 text-slate-900 px-6 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-2 w-fit"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <User size={18} className="text-[#581c87]" />
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={handleSignOut}
+                    className="text-red-600 font-medium flex items-center gap-2 px-6 py-2"
+                  >
+                    <LogOut size={18} />
+                    Sign Out
+                  </button>
+                </>
               ) : (
                 <Link
-                href="/login"
-                className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity text-center w-fit"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Sign In
-              </Link>
+                  href="/login"
+                  className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity text-center w-fit"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Sign In
+                </Link>
               )}
             </div>
           </div>

@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Loader2, DollarSign, Lock, AlertCircle } from "lucide-react";
+import { Loader2, DollarSign, Lock, AlertCircle, RefreshCw } from "lucide-react";
+import BankSettings from "@/components/BankSettings";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,61 +23,245 @@ export default function WalletPage() {
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Withdrawal State
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [bankingDetails, setBankingDetails] = useState<any>(null);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [payouts, setPayouts] = useState<any[]>([]);
+
   useEffect(() => {
-    async function calculateBalance() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // 1. Get my events
-      const { data: myEvents } = await supabase.from("events").select("id").eq("user_id", user.id);
-      if (!myEvents || myEvents.length === 0) { setLoading(false); return; }
-
-      const myEventIds = myEvents.map(e => e.id);
-
-      // 2. Get tickets sold for my events
-      const { data: tickets } = await supabase
-        .from("tickets")
-        .select("*, events(price)")
-        .in("event_id", myEventIds)
-        .eq("status", "valid");
-
-      // 3. Sum up the price
-      const total = tickets?.reduce((acc, ticket: any) => acc + (ticket.events?.price || 0), 0) || 0;
-      setBalance(total);
-      setLoading(false);
-    }
-    calculateBalance();
+    loadWalletData();
   }, []);
+
+  async function loadWalletData() {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // 1. Get my events
+    const { data: myEvents } = await supabase.from("events").select("id").eq("user_id", user.id);
+    const myEventIds = myEvents?.map(e => e.id) || [];
+
+    // 2. Get TOTAL sales (Gross Sales before fees are removed? Or just ticket price?)
+    // Our plan: "Creator Revenue" = Ticket Price. "Fees" = Extra charge.
+    // So if ticket is 1000, user paid 1050. Creator gets 1000.
+    // We sum 'events(price)' or 'tickets(price)'?
+    // We should rely on ticket sales count * event price.
+
+    // FETCH TICKETS
+    const { data: tickets } = await supabase
+      .from("tickets")
+      .select("*, events(price)")
+      .in("event_id", myEventIds)
+      .eq("status", "valid");
+
+    const totalRevenue = tickets?.reduce((acc, ticket: any) => acc + (ticket.events?.price || 0), 0) || 0;
+
+    // 3. Get Previous Payouts (Approved/Paid ones reduce balance? Or just show all?)
+    // For a real ledger, Balance = Revenue - Payouts.
+    const { data: myPayouts } = await supabase
+      .from("payouts")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    setPayouts(myPayouts || []);
+
+    const totalWithdrawn = myPayouts
+      ?.filter(p => p.status !== 'rejected') // Count pending and paid against balance to prevent double withdraw
+      .reduce((acc, p) => acc + p.amount, 0) || 0;
+
+    setBalance(Math.max(0, totalRevenue - totalWithdrawn));
+
+    // 4. Check Bank Details
+    const { data: bank } = await supabase
+      .from("bank_accounts")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    setBankingDetails(bank);
+
+    setLoading(false);
+  }
+
+  const handleWithdraw = async () => {
+    if (!bankingDetails) {
+      alert("Please save your bank details first.");
+      return;
+    }
+
+    const amount = parseFloat(withdrawAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Invalid amount");
+      return;
+    }
+
+    if (amount > balance) {
+      alert("Insufficient funds");
+      return;
+    }
+
+    setWithdrawLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Create Payout Request
+    const { error } = await supabase.from("payouts").insert({
+      user_id: user?.id,
+      amount: amount,
+      status: "pending",
+      bank_details: bankingDetails
+    });
+
+    if (error) {
+      alert("Request failed: " + error.message);
+    } else {
+      alert("Withdrawal requested! It will be processed on Friday.");
+      setIsWithdrawOpen(false);
+      setWithdrawAmount("");
+      loadWalletData(); // Refresh balance
+    }
+    setWithdrawLoading(false);
+  };
 
   if (loading) return <div className="p-10"><Loader2 className="animate-spin text-[#581c87]" /></div>;
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-slate-900 mb-6">Wallet & Payouts</h1>
-
-      {/* Balance Card */}
-      <div className="bg-gradient-to-r from-[#581c87] to-[#7c3aed] text-white p-8 rounded-2xl shadow-xl mb-8">
-        <p className="text-purple-200 font-medium mb-1">Available Balance</p>
-        <h2 className="text-4xl font-bold flex items-center">
-          ₦{balance.toLocaleString()}
-        </h2>
-        <div className="mt-6 flex gap-3">
-          <button className="bg-white text-[#581c87] px-6 py-2 rounded-lg font-bold hover:bg-purple-50 transition">
-            Withdraw Funds
-          </button>
-        </div>
+    <div className="max-w-4xl mx-auto space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Wallet & Payouts</h1>
+        <p className="text-slate-500">Manage your earnings and withdraw to your bank.</p>
       </div>
 
-      {/* Info Section */}
-      <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex gap-3">
-        <AlertCircle className="text-orange-600 shrink-0" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* LEFT COLUMN: Balance & Withdraw */}
+        <div className="space-y-8">
+          {/* Balance Card */}
+          <div className="bg-gradient-to-r from-[#581c87] to-[#7c3aed] text-white p-8 rounded-2xl shadow-xl">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-purple-200 font-medium mb-1">Available Balance</p>
+                <h2 className="text-4xl font-bold flex items-center">
+                  ₦{balance.toLocaleString()}
+                </h2>
+              </div>
+              <button onClick={loadWalletData} className="text-purple-300 hover:text-white transition">
+                <RefreshCw size={20} />
+              </button>
+            </div>
+
+            <div className="mt-8">
+              <button
+                onClick={() => setIsWithdrawOpen(true)}
+                className="bg-white text-[#581c87] px-6 py-3 rounded-xl font-bold hover:bg-purple-50 transition shadow-lg w-full md:w-auto"
+              >
+                Withdraw Funds
+              </button>
+            </div>
+          </div>
+
+          {/* Payout History */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-slate-50">
+              <h3 className="font-bold text-slate-900">Withdrawal History</h3>
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {payouts.length === 0 ? (
+                <p className="p-6 text-center text-slate-500 text-sm">No withdrawals yet.</p>
+              ) : (
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-slate-500 bg-slate-50 uppercase">
+                    <tr>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Amount</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {payouts.map(p => (
+                      <tr key={p.id}>
+                        <td className="px-4 py-3 text-slate-600">{new Date(p.created_at).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 font-medium">₦{p.amount.toLocaleString()}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize
+                                                ${p.status === 'paid' ? 'bg-green-100 text-green-700' :
+                              p.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                'bg-yellow-100 text-yellow-700'}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Bank Settings */}
         <div>
-          <h4 className="font-bold text-orange-800 text-sm">Payout Schedule</h4>
-          <p className="text-orange-700 text-sm mt-1">
-            FlexPass processes payouts every Friday. Ensure your bank details are updated in Settings.
-          </p>
+          <BankSettings />
+
+          {/* Info Section */}
+          <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex gap-3 mt-6">
+            <AlertCircle className="text-orange-600 shrink-0" />
+            <div>
+              <h4 className="font-bold text-orange-800 text-sm">Payout Schedule</h4>
+              <p className="text-orange-700 text-sm mt-1">
+                FlexPass processes payouts every Friday. Ensure your bank details are correct.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Withdrawal Modal */}
+      <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
+        <DialogContent className="bg-white rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Request Withdrawal</DialogTitle>
+            <DialogDescription>
+              Available Balance: ₦{balance.toLocaleString()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Amount to withdraw</label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-3 text-slate-400 h-5 w-5" />
+                <Input
+                  type="number"
+                  className="pl-10 text-lg font-bold"
+                  placeholder="0.00"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {!bankingDetails ? (
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
+                You must save your bank details before withdrawing.
+              </div>
+            ) : (
+              <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-600">
+                Will be sent to: <span className="font-bold">{bankingDetails.bank_name} - {bankingDetails.account_number}</span>
+              </div>
+            )}
+
+            <Button
+              onClick={handleWithdraw}
+              disabled={withdrawLoading || !withdrawAmount || parseFloat(withdrawAmount) > balance || !bankingDetails}
+              className="w-full bg-[#581c87] hover:bg-[#4c1d75] text-white py-6 text-lg"
+            >
+              {withdrawLoading ? <Loader2 className="animate-spin" /> : "Confirm Withdrawal"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
