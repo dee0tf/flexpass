@@ -16,14 +16,26 @@ export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
-  // Check if user is logged in
+  // Check if user is logged in and listen for changes
   useEffect(() => {
     async function checkUser() {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
     }
     checkUser();
-  }, []);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+      if (event === 'SIGNED_OUT') {
+        setMobileMenuOpen(false);
+        router.refresh();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
