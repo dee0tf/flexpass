@@ -86,7 +86,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                 sales_end_date: event.sales_end_date ? new Date(event.sales_end_date).toISOString().slice(0, 16) : "",
                 organizer_name: event.organizer_name || "",
                 image_url: event.image_url || "",
-                category: event.category || "Music",
+                category: event.category || "Others",
             });
             setIsLoading(false);
         }

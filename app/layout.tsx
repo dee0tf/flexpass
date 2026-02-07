@@ -3,6 +3,7 @@
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useState, useEffect } from "react";
 
@@ -11,12 +12,16 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
 });
 
+import { usePathname } from "next/navigation";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const [isLoading, setIsLoading] = useState(true);
+  const pathname = usePathname();
+  const isDashboard = pathname?.startsWith("/dashboard");
 
   useEffect(() => {
     // Remove loading spinner as soon as React hydrates
@@ -33,8 +38,9 @@ export default function RootLayout({
         className={`${plusJakartaSans.variable} font-sans antialiased`}
       >
         {isLoading && <LoadingSpinner />}
-        <Navbar />
+        {!isDashboard && <Navbar />}
         {children}
+        {!isDashboard && <Footer />}
       </body>
     </html>
   );

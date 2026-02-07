@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  CalendarDays, 
-  Wallet, 
-  Settings, 
+import {
+  LayoutDashboard,
+  CalendarDays,
+  Wallet,
+  Settings,
   LogOut,
   Menu
 } from "lucide-react";
@@ -54,11 +54,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive 
-                    ? "bg-[#581c87] text-white shadow-lg shadow-purple-100" 
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive
+                    ? "bg-[#581c87] text-white shadow-lg shadow-purple-100"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                }`}
+                  }`}
               >
                 <item.icon size={20} />
                 <span className="font-medium">{item.name}</span>
@@ -68,7 +67,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="p-4 border-t border-slate-100">
-          <button 
+          <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl w-full transition-colors"
           >
@@ -80,15 +79,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 w-full bg-white border-b border-slate-200 z-20 px-4 py-3 flex justify-between items-center">
-         <span className="font-bold text-[#581c87]">FlexPass Dashboard</span>
-         <button onClick={() => setIsMobileOpen(!isMobileOpen)}>
-            <Menu className="text-slate-600" />
-         </button>
+        <span className="font-bold text-[#581c87]">FlexPass Dashboard</span>
+        <button onClick={() => setIsMobileOpen(!isMobileOpen)}>
+          <Menu className="text-slate-600" />
+        </button>
       </div>
 
       {/* Main Content Area */}
       <main className="flex-1 md:ml-64 p-4 md:p-8 mt-14 md:mt-0">
         {children}
+
+        <div className="mt-12 border-t border-slate-200 pt-6 text-center text-sm text-slate-400">
+          <p>&copy; {new Date().getFullYear()} FlexPass. Made with ❤️ in Lagos.</p>
+        </div>
       </main>
     </div>
   );

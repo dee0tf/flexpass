@@ -57,9 +57,28 @@ export default function CheckoutModal({
 }: CheckoutModalProps) {
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState(""); // New state for error
   const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
+
+  // Email validation helper
+  const validateEmail = (email: string) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(String(email).toLowerCase());
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setEmail(val);
+    if (emailError) setEmailError(""); // Clear error on type
+  };
+
+  const handleEmailBlur = () => {
+    if (email && !validateEmail(email)) {
+      setEmailError("Please enter a valid email address");
+    }
+  };
 
   // Determine if we are in "Legacy Mode" (No tiers)
   const isLegacyEvent = tiers.length === 0;
@@ -188,8 +207,8 @@ export default function CheckoutModal({
                     key={tier.id}
                     onClick={() => setSelectedTier(tier)}
                     className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${selectedTier?.id === tier.id
-                        ? "border-[#581c87] bg-purple-50 ring-1 ring-[#581c87]"
-                        : "border-slate-200 hover:border-purple-200 hover:bg-slate-50"
+                      ? "border-[#581c87] bg-purple-50 ring-1 ring-[#581c87]"
+                      : "border-slate-200 hover:border-purple-200 hover:bg-slate-50"
                       }`}
                   >
                     <div>
@@ -261,9 +280,13 @@ export default function CheckoutModal({
                   type="email"
                   placeholder="Enter your email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="rounded-xl h-12"
+                  onChange={handleEmailChange}
+                  onBlur={handleEmailBlur}
+                  className={`rounded-xl h-12 ${emailError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                 />
+                {emailError && (
+                  <p className="text-red-500 text-sm mt-1 animate-pulse">{emailError}</p>
+                )}
               </div>
 
               <div className="pt-2">
@@ -293,12 +316,21 @@ export default function CheckoutModal({
                   </button>
                 ) : (
                   <div className="w-full relative">
-                    {/* Block click if no email or name */}
-                    {(!email || !fullName) && <div className="absolute inset-0 z-10" onClick={() => alert("Please enter your name and email")} />}
+                    {/* Block click if no email, name, or if validatin error exists */}
+                    {(!email || !fullName || emailError) && (
+                      <div
+                        className="absolute inset-0 z-10 cursor-not-allowed"
+                        onClick={() => {
+                          if (!email || !fullName) alert("Please enter your name and email");
+                          else if (emailError) alert("Please fix the email error");
+                        }}
+                      />
+                    )}
 
                     <PaystackButton
                       {...componentProps}
-                      className="w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition-opacity shadow-lg shadow-indigo-200"
+                      className={`w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition-opacity shadow-lg shadow-indigo-200 ${(!email || !fullName || emailError) ? "opacity-50 pointer-events-none" : ""
+                        }`}
                     />
                   </div>
                 )}

@@ -69,6 +69,7 @@ export default function SearchFilters() {
                         <option value="Arts">Arts</option>
                         <option value="Food">Food</option>
                         <option value="Nightlife">Nightlife</option>
+                        <option value="Others">Others</option>
                     </select>
                 </div>
             </div>

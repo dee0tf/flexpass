@@ -1,8 +1,11 @@
-import { Search } from "lucide-react";
+
 import EventCard from "@/components/EventCard";
 import { createServerSupabase } from "@/lib/supabase";
+import HomeSearchBar from "@/components/HomeSearchBar";
 import { Event } from "@/lib/types";
 import Logo from "@/components/Logo";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   // Fetch events from Supabase
@@ -57,19 +60,7 @@ export default async function Home() {
           </p>
 
           {/* Search Bar */}
-          <div className="max-w-2xl mx-auto">
-            <div className="flex flex-col sm:flex-row gap-2 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl p-2">
-              <input
-                type="text"
-                placeholder="Search events, artists, venues..."
-                className="flex-1 px-4 py-3 text-[#0F172A] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-flex-purple/20 rounded-lg bg-transparent"
-              />
-              <button className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                <Search size={20} />
-                <span>Search</span>
-              </button>
-            </div>
-          </div>
+          <HomeSearchBar />
         </div>
       </section>
 
