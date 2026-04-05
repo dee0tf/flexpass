@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Building2, Save, Loader2 } from "lucide-react";
+import { Building2, Save, Loader2, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -10,10 +10,43 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Common Nigerian bank codes (Paystack codes)
+const NIGERIAN_BANKS = [
+    { name: "Access Bank", code: "044" },
+    { name: "Citibank", code: "023" },
+    { name: "Diamond Bank", code: "063" },
+    { name: "Ecobank Nigeria", code: "050" },
+    { name: "Fidelity Bank", code: "070" },
+    { name: "First Bank of Nigeria", code: "011" },
+    { name: "First City Monument Bank", code: "214" },
+    { name: "Globus Bank", code: "00103" },
+    { name: "Guaranty Trust Bank", code: "058" },
+    { name: "Heritage Bank", code: "030" },
+    { name: "Keystone Bank", code: "082" },
+    { name: "Kuda Bank", code: "50211" },
+    { name: "Moniepoint MFB", code: "50515" },
+    { name: "OPay", code: "999992" },
+    { name: "PalmPay", code: "999991" },
+    { name: "Polaris Bank", code: "076" },
+    { name: "Providus Bank", code: "101" },
+    { name: "Stanbic IBTC Bank", code: "221" },
+    { name: "Standard Chartered", code: "068" },
+    { name: "Sterling Bank", code: "232" },
+    { name: "Titan Bank", code: "102" },
+    { name: "Union Bank of Nigeria", code: "032" },
+    { name: "United Bank For Africa", code: "033" },
+    { name: "Unity Bank", code: "215" },
+    { name: "VFD Micro Finance Bank", code: "566" },
+    { name: "Wema Bank", code: "035" },
+    { name: "Zenith Bank", code: "057" },
+];
+
 export default function BankSettings() {
-    const [bankName, setBankName] = useState("");
+    const [bankCode, setBankCode] = useState("");
     const [accountNumber, setAccountNumber] = useState("");
     const [accountName, setAccountName] = useState("");
+    const [verifying, setVerifying] = useState(false);
+    const [verified, setVerified] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState("");
@@ -30,40 +63,76 @@ export default function BankSettings() {
                 .single();
 
             if (data) {
-                setBankName(data.bank_name);
-                setAccountNumber(data.account_number);
-                setAccountName(data.account_name);
+                setBankCode(data.bank_code || "");
+                setAccountNumber(data.account_number || "");
+                setAccountName(data.account_name || "");
+                if (data.account_name) setVerified(true);
             }
             setLoading(false);
         }
-
         fetchBankDetails();
     }, []);
 
+    // Auto-verify account when both bank code and 10-digit account number are present
+    useEffect(() => {
+        if (bankCode && accountNumber.length === 10) {
+            verifyAccount();
+        } else {
+            setVerified(false);
+            setAccountName("");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bankCode, accountNumber]);
+
+    const verifyAccount = async () => {
+        if (!bankCode || accountNumber.length !== 10) return;
+        setVerifying(true);
+        setVerified(false);
+        setAccountName("");
+        try {
+            const res = await fetch(
+                `/api/paystack/resolve-account?account_number=${accountNumber}&bank_code=${bankCode}`
+            );
+            const data = await res.json();
+            if (res.ok && data.account_name) {
+                setAccountName(data.account_name);
+                setVerified(true);
+            } else {
+                setAccountName("");
+                setMessage("Could not verify account. Please check the details.");
+            }
+        } catch {
+            setMessage("Verification failed. Please try again.");
+        } finally {
+            setVerifying(false);
+        }
+    };
+
     const handleSave = async () => {
+        if (!verified || !accountName) {
+            setMessage("Please verify your account number first.");
+            return;
+        }
         setSaving(true);
         setMessage("");
 
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Updates or Insert via 'upsert' logic is tricky with unique constraints sometimes, 
-        // but we made user_id unique in the schema, so we can use Upsert.
-
-        // First check if exists to determine ID, OR just upsert on user_id conflict if table allows.
-        // Our schema used 'UNIQUE(user_id)', so upsert works.
+        const selectedBank = NIGERIAN_BANKS.find(b => b.code === bankCode);
 
         const { error } = await supabase
             .from("bank_accounts")
             .upsert({
                 user_id: user.id,
-                bank_name: bankName,
+                bank_name: selectedBank?.name || bankCode,
+                bank_code: bankCode,
                 account_number: accountNumber,
-                account_name: accountName
+                account_name: accountName,
+                recipient_code: null, // Reset recipient code when bank details change
             }, { onConflict: 'user_id' });
 
         if (error) {
-            console.error(error);
             setMessage("Failed to save bank details.");
         } else {
             setMessage("Bank details saved successfully!");
@@ -82,20 +151,24 @@ export default function BankSettings() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">Bank Name</label>
-                    <Input
-                        value={bankName}
-                        onChange={(e) => setBankName(e.target.value)}
-                        placeholder="e.g. GTBank, Zenith Bank"
-                        className="rounded-xl"
-                    />
+                    <label className="text-sm font-medium text-slate-600">Bank</label>
+                    <select
+                        value={bankCode}
+                        onChange={(e) => setBankCode(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-[#480082] focus:outline-none"
+                    >
+                        <option value="">Select your bank</option>
+                        {NIGERIAN_BANKS.map(b => (
+                            <option key={b.code} value={b.code}>{b.name}</option>
+                        ))}
+                    </select>
                 </div>
 
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-600">Account Number</label>
                     <Input
                         value={accountNumber}
-                        onChange={(e) => setAccountNumber(e.target.value)}
+                        onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
                         placeholder="0123456789"
                         maxLength={10}
                         className="rounded-xl"
@@ -104,14 +177,22 @@ export default function BankSettings() {
 
                 <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium text-slate-600">Account Name</label>
-                    <Input
-                        value={accountName}
-                        onChange={(e) => setAccountName(e.target.value)}
-                        placeholder="Account Holder Name"
-                        className="rounded-xl"
-                    />
+                    <div className="relative">
+                        <Input
+                            value={verifying ? "Verifying..." : accountName}
+                            readOnly
+                            placeholder="Auto-filled after verification"
+                            className={`rounded-xl bg-slate-50 ${verified ? "border-green-400 text-green-700 font-medium" : ""}`}
+                        />
+                        {verifying && (
+                            <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-slate-400" />
+                        )}
+                        {verified && !verifying && (
+                            <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-green-500" />
+                        )}
+                    </div>
                     <p className="text-xs text-slate-400">
-                        Ensure this matches your bank account exactly to avoid payout delays.
+                        Account name is automatically verified via your bank.
                     </p>
                 </div>
             </div>
@@ -123,7 +204,7 @@ export default function BankSettings() {
 
                 <Button
                     onClick={handleSave}
-                    disabled={saving || !bankName || !accountNumber || !accountName}
+                    disabled={saving || !verified || !accountName}
                     className="bg-[#581c87] hover:bg-[#4c1d75] text-white"
                 >
                     {saving ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}

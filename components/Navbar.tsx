@@ -1,168 +1,190 @@
-import Link from "next/link";
-import { Menu, User, LogOut } from "lucide-react";
-import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
-import Logo from "./Logo";
-import { useRouter } from "next/navigation";
+"use client";
 
-// Initialize Supabase
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import Link from "next/link";
+import { Menu, X, User, LogOut, Ticket } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/lib/supabase";
+import Logo from "./Logo";
+import { useRouter, usePathname } from "next/navigation";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ email?: string } | null>(null);
+  const [scrolled, setScrolled] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const isHome = pathname === "/";
 
-  // Check if user is logged in and listen for changes
   useEffect(() => {
-    async function checkUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-    }
-    checkUser();
-
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      if (event === 'SIGNED_OUT') {
-        setMobileMenuOpen(false);
-        router.refresh();
-      }
+      if (event === "SIGNED_OUT") { setMobileMenuOpen(false); router.refresh(); }
     });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, [router]);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMobileMenuOpen(false);
+    }
+    if (mobileMenuOpen) document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileMenuOpen]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
     setMobileMenuOpen(false);
     router.push("/login");
-    router.refresh(); // Ensure state updates across app
+    router.refresh();
   };
 
+  const closeMenu = () => setMobileMenuOpen(false);
+
+  // Hero: transparent until scrolled. Other pages: always solid.
+  const isTransparent = isHome && !scrolled;
+
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo - Desktop */}
-          <Link href="/" className="hidden md:block">
-            <Logo size={42} />
-          </Link>
-
-          {/* Logo - Mobile */}
-          <Link href="/" className="md:hidden">
-            <Logo type="icon" size={32} />
-          </Link>
-
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
-            <Link
-              href="/events"
-              className="text-[#0F172A] hover:text-flex-purple transition-colors font-medium"
-            >
-              Find Events
-            </Link>
-            <Link
-              href="/create"
-              className="text-[#0F172A] hover:text-flex-purple transition-colors font-medium"
-            >
-              Create Event
+    <>
+      <nav
+        className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+        style={isTransparent
+          ? { background: "transparent" }
+          : { backgroundColor: "var(--nav-bg)", borderBottom: "1px solid var(--nav-border)", backdropFilter: "blur(14px)" }
+        }
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/" onClick={closeMenu}>
+              <Logo size={44} variant={isTransparent ? "white" : "gradient"} />
             </Link>
 
-            {/* CONDITIONAL BUTTONS */}
-            {user ? (
-              <div className="flex items-center gap-4">
-                <Link
-                  href="/dashboard"
-                  className="bg-slate-100 text-slate-900 border border-slate-200 px-6 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-2"
-                >
-                  <User size={18} className="text-[#581c87]" />
-                  Dashboard
-                </Link>
-                <button
-                  onClick={handleSignOut}
-                  className="text-slate-500 hover:text-red-600 transition-colors flex items-center gap-2 font-medium"
-                  title="Sign Out"
-                >
-                  <LogOut size={20} />
-                </button>
-              </div>
-            ) : (
-              <Link
-                href="/login"
-                className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
-              >
-                Sign In
-              </Link>
-            )}
-          </div>
-
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden text-[#0F172A] hover:text-flex-purple transition-colors"
-            aria-label="Toggle menu"
-          >
-            <Menu size={24} />
-          </button>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-200">
-            <div className="flex flex-col gap-4">
-              <Link
-                href="/events"
-                className="text-[#0F172A] hover:text-flex-purple transition-colors font-medium"
-                onClick={() => setMobileMenuOpen(false)}
+            {/* Desktop */}
+            <div className="hidden md:flex items-center gap-8">
+              <Link href="/events"
+                className="font-medium text-sm transition-colors"
+                style={{ color: isTransparent ? "rgba(255,255,255,0.85)" : "var(--text-secondary)" }}
               >
                 Find Events
               </Link>
-              <Link
-                href="/create"
-                className="text-[#0F172A] hover:text-flex-purple transition-colors font-medium"
-                onClick={() => setMobileMenuOpen(false)}
+              <Link href="/create"
+                className="font-medium text-sm transition-colors"
+                style={{ color: isTransparent ? "rgba(255,255,255,0.85)" : "var(--text-secondary)" }}
               >
-                Create Event
+                Host an Event
               </Link>
-
-              {/* Mobile Conditional Button */}
               {user ? (
-                <>
-                  <Link
-                    href="/dashboard"
-                    className="bg-slate-100 text-slate-900 px-6 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-2 w-fit"
-                    onClick={() => setMobileMenuOpen(false)}
+                <div className="flex items-center gap-3">
+                  <Link href="/dashboard"
+                    className="flex items-center gap-2 px-5 py-2 rounded-xl font-medium text-sm text-white transition-colors hover:opacity-90"
+                    style={{ backgroundColor: "var(--brand-indigo)" }}
                   >
-                    <User size={18} className="text-[#581c87]" />
-                    Dashboard
+                    <User size={15} /> Dashboard
                   </Link>
-                  <button
-                    onClick={handleSignOut}
-                    className="text-red-600 font-medium flex items-center gap-2 px-6 py-2"
+                  <button onClick={handleSignOut} title="Sign Out"
+                    className="p-2 rounded-xl transition-colors"
+                    style={{ color: "var(--text-muted)" }}
                   >
                     <LogOut size={18} />
-                    Sign Out
                   </button>
-                </>
+                </div>
               ) : (
-                <Link
-                  href="/login"
-                  className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity text-center w-fit"
-                  onClick={() => setMobileMenuOpen(false)}
+                <Link href="/login"
+                  className="px-5 py-2 rounded-xl font-bold text-sm text-[#0E0D0D] transition-colors hover:opacity-90"
+                  style={{ backgroundColor: "var(--brand-amber)" }}
                 >
                   Sign In
                 </Link>
               )}
             </div>
+
+            {/* Mobile toggle */}
+            <button
+              onClick={() => setMobileMenuOpen(p => !p)}
+              className="md:hidden p-2 rounded-xl transition-colors"
+              style={{ color: isTransparent ? "rgba(255,255,255,0.85)" : "var(--text-secondary)" }}
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
           </div>
-        )}
-      </div>
-    </nav>
+        </div>
+      </nav>
+
+      {/* Mobile drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={closeMenu} />
+          <div
+            ref={menuRef}
+            className="absolute top-0 right-0 h-full w-72 flex flex-col shadow-2xl"
+            style={{ backgroundColor: "var(--surface)" }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4"
+              style={{ borderBottom: "1px solid var(--border-color)" }}
+            >
+              <Logo size={32} variant="gradient" />
+              <button onClick={closeMenu} className="p-2 rounded-xl transition-colors"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Links */}
+            <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+              {[
+                { href: "/events", label: "Find Events", icon: <Ticket size={17} /> },
+                { href: "/create", label: "Host an Event", icon: <span className="text-base">✦</span> },
+                ...(user ? [{ href: "/dashboard", label: "Dashboard", icon: <User size={17} /> }] : []),
+              ].map(item => (
+                <Link key={item.href} href={item.href} onClick={closeMenu}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-colors"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  <span style={{ color: "var(--brand-lavender)" }}>{item.icon}</span>
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+
+            {/* Footer */}
+            <div className="px-4 py-5 space-y-3" style={{ borderTop: "1px solid var(--border-color)" }}>
+              {user ? (
+                <button onClick={handleSignOut}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium text-sm bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                >
+                  <LogOut size={17} /> Sign Out
+                </button>
+              ) : (
+                <Link href="/login" onClick={closeMenu}
+                  className="block w-full text-center py-3 rounded-xl font-bold text-sm text-[#0E0D0D] hover:opacity-90 transition-colors"
+                  style={{ backgroundColor: "var(--brand-amber)" }}
+                >
+                  Sign In
+                </Link>
+              )}
+              <p className="text-center text-xs" style={{ color: "var(--text-muted)" }}>
+                Tap, Flex, Enter, Repeat.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

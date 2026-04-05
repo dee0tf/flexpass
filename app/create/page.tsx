@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, MapPin, DollarSign,
-  Image as ImageIcon, Type, Clock, Hash,
+  Image as ImageIcon, Type, Clock,
   AlertCircle, User, Plus, Trash2
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
@@ -155,7 +155,6 @@ export default function CreateEvent() {
       router.push("/dashboard");
 
     } catch (error: any) {
-      console.error("Error:", error);
       alert("Failed to create event: " + error.message);
     } finally {
       setIsLoading(false);
@@ -419,7 +418,8 @@ export default function CreateEvent() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition shadow-lg shadow-purple-100 flex items-center justify-center gap-2 mt-8"
+                className="w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition flex items-center justify-center gap-2 mt-8"
+                style={{ backgroundColor: "var(--brand-indigo)" }}
               >
                 {isLoading ? (
                   <>

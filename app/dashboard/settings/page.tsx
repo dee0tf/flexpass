@@ -1,15 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { Save, Loader2, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
+import { User, Loader2, Save } from "lucide-react";
 import { Input } from "@/components/ui/input";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { Button } from "@/components/ui/button";
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -52,10 +47,10 @@ export default function SettingsPage() {
     <div className="max-w-xl">
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Account Settings</h1>
 
-      <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-6">
+      <div className="p-6 rounded-xl shadow-sm space-y-6" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
         <div className="flex items-center gap-4 mb-6">
-          <div className="h-16 w-16 bg-purple-100 rounded-full flex items-center justify-center">
-            <User className="h-8 w-8 text-[#581c87]" />
+          <div className="h-16 w-16 bg-[#480082]/10 rounded-full flex items-center justify-center">
+            <User className="h-8 w-8 text-[#480082]" />
           </div>
           <div>
             <h3 className="font-bold text-lg">{fullName || "User"}</h3>
@@ -93,7 +88,7 @@ export default function SettingsPage() {
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-[#581c87] hover:bg-[#4c1d75] text-white"
+            className="bg-[#480082] hover:bg-[#3a006b] text-white"
           >
             {saving ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
             Save Changes

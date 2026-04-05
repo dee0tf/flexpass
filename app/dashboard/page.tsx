@@ -1,15 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { DollarSign, Ticket, TrendingUp, Users, Loader2, Download, Edit, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download } from "lucide-react";
 import SalesChart from "@/components/SalesChart";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -32,7 +27,6 @@ export default function DashboardPage() {
         return;
       }
 
-      console.log("👤 Logged in as:", user.email);
 
       // 2. Fetch EVENTS created by this user
       const { data: myEvents } = await supabase
@@ -95,7 +89,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-[#581c87]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#480082]" />
       </div>
     );
   }
@@ -143,65 +137,65 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Dashboard Overview</h2>
-        <p className="text-slate-500">Welcome back, here is what's happening with your events.</p>
+        <h2 className="text-2xl font-bold text-theme">Dashboard Overview</h2>
+        <p className="text-theme-2">Welcome back, here is what's happening with your events.</p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Card 1: Revenue */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="p-6 rounded-2xl shadow-sm" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-green-100 rounded-lg">
               <DollarSign className="h-6 w-6 text-green-600" />
             </div>
           </div>
-          <p className="text-slate-500 text-sm">Total Revenue</p>
-          <h3 className="text-3xl font-bold text-slate-900 mt-1">
+          <p className="text-theme-2 text-sm">Total Revenue</p>
+          <h3 className="text-3xl font-bold text-theme mt-1">
             ₦{stats.revenue.toLocaleString()}
           </h3>
         </div>
 
         {/* Card 2: Tickets Sold */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="p-6 rounded-2xl shadow-sm" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
           <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Ticket className="h-6 w-6 text-[#581c87]" />
+            <div className="p-2 bg-[#480082]/10 rounded-lg">
+              <Ticket className="h-6 w-6 text-[#480082]" />
             </div>
           </div>
-          <p className="text-slate-500 text-sm">Tickets Sold</p>
-          <h3 className="text-3xl font-bold text-slate-900 mt-1">
+          <p className="text-theme-2 text-sm">Tickets Sold</p>
+          <h3 className="text-3xl font-bold text-theme mt-1">
             {stats.ticketsSold}
           </h3>
         </div>
 
         {/* Card 3: Events Active */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="p-6 rounded-2xl shadow-sm" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-orange-100 rounded-lg">
-              <Users className="h-6 w-6 text-[#f97316]" />
+              <Users className="h-6 w-6 text-[#FFB700]" />
             </div>
           </div>
-          <p className="text-slate-500 text-sm">Your Events</p>
-          <h3 className="text-3xl font-bold text-slate-900 mt-1">{stats.activeEvents}</h3>
+          <p className="text-theme-2 text-sm">Your Events</p>
+          <h3 className="text-3xl font-bold text-theme mt-1">{stats.activeEvents}</h3>
         </div>
       </div>
 
       {/* Sales Analytics Chart */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-        <h3 className="font-bold text-lg text-slate-900 mb-2">Revenue by Event</h3>
-        <p className="text-slate-500 text-sm mb-6">See which experiences are performing best.</p>
+      <div className="p-6 rounded-2xl shadow-sm" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
+        <h3 className="font-bold text-lg text-theme mb-2">Revenue by Event</h3>
+        <p className="text-theme-2 text-sm mb-6">See which experiences are performing best.</p>
         <SalesChart data={(stats as any).chartData || []} />
       </div>
 
       {/* My Events Management */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="rounded-2xl shadow-sm overflow-hidden" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
         <div className="p-6 border-b border-slate-100">
-          <h3 className="font-bold text-lg text-slate-900">My Events</h3>
+          <h3 className="font-bold text-lg text-theme">My Events</h3>
         </div>
         <div className="divide-y divide-slate-100">
           {stats.myEvents.length === 0 ? (
-            <p className="p-6 text-slate-500 text-sm">You haven't created any events yet.</p>
+            <p className="p-6 text-theme-2 text-sm">You haven't created any events yet.</p>
           ) : (
             stats.myEvents.map((event: any) => (
               <div key={event.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
@@ -210,8 +204,8 @@ export default function DashboardPage() {
                     {event.image_url && <img src={event.image_url} alt={event.title} className="object-cover w-full h-full" />}
                   </div>
                   <div>
-                    <h4 className="font-bold text-slate-900">{event.title}</h4>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <h4 className="font-bold text-theme">{event.title}</h4>
+                    <div className="flex items-center gap-2 text-xs text-theme-2">
                       <Calendar size={12} />
                       {new Date(event.date).toLocaleDateString()}
                     </div>
@@ -219,7 +213,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                   onClick={() => router.push(`/dashboard/events/${event.id}/edit`)}
-                  className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-100 hover:text-[#581c87] transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 border border-[#eDdedd] rounded-lg text-sm font-medium hover:bg-slate-100 hover:text-[#480082] transition-colors"
                 >
                   <Edit size={14} />
                   Edit
@@ -231,9 +225,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Sales Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="rounded-2xl shadow-sm overflow-hidden" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-lg text-slate-900">Recent Transactions</h3>
+          <h3 className="font-bold text-lg text-theme">Recent Transactions</h3>
           <button
             onClick={handleExport}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
@@ -243,8 +237,8 @@ export default function DashboardPage() {
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase font-medium">
+          <table className="w-full text-left text-sm text-theme-2">
+            <thead className="text-xs uppercase font-medium" style={{backgroundColor:"var(--surface-raised)"}}>
               <tr>
                 <th className="px-6 py-4">Event</th>
                 <th className="px-6 py-4">Customer</th>
@@ -255,13 +249,11 @@ export default function DashboardPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {stats.recentSales.slice(0, 5).map((ticket) => (
-                <tr key={ticket.id} className="hover:bg-slate-50 transition">
-                  {/* @ts-ignore */}
-                  <td className="px-6 py-4 font-medium text-slate-900">{ticket.events?.title || "Unknown"}</td>
+                <tr key={ticket.id} className="transition">
+                  <td className="px-6 py-4 font-medium text-theme">{(ticket as any).events?.title || "Unknown"}</td>
                   <td className="px-6 py-4">{ticket.user_email}</td>
                   <td className="px-6 py-4">{new Date(ticket.created_at).toLocaleDateString()}</td>
-                  {/* @ts-ignore */}
-                  <td className="px-6 py-4 font-bold">₦{ticket.events?.price.toLocaleString()}</td>
+                  <td className="px-6 py-4 font-bold">₦{((ticket as any).events?.price ?? 0).toLocaleString()}</td>
                   <td className="px-6 py-4">
                     <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
                       Paid

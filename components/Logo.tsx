@@ -6,60 +6,52 @@ interface LogoProps {
     className?: string;
     size?: number;
     type?: "full" | "icon";
+    variant?: "gradient" | "white";
 }
 
-export default function Logo({ className = "", size = 40, type = "full" }: LogoProps) {
-    const iconContent = (
-        <svg
-            viewBox="0 0 100 120"
-            className={className}
-            width={size}
-            height={size * 1.2}
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-        >
-            <defs>
-                <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#f97316" />
-                    <stop offset="100%" stopColor="#581c87" />
-                </linearGradient>
-                <mask id="ticket-mask">
-                    <rect x="0" y="0" width="100" height="120" fill="white" />
-                    {/* Ticket Perforations on the left */}
-                    <circle cx="0" cy="20" r="6" fill="black" />
-                    <circle cx="0" cy="40" r="6" fill="black" />
-                    <circle cx="0" cy="60" r="9" fill="black" />
-                    <circle cx="0" cy="80" r="6" fill="black" />
-                    <circle cx="0" cy="100" r="6" fill="black" />
-                </mask>
-            </defs>
+// The logo PNG is 1024×1024 but the actual logo content (F icon + "FlexPass" text)
+// occupies roughly the center 55% of the width and 20% of the height.
+// We use background-image cropping to display only the logo content area.
+export default function Logo({ className = "", size = 40, type = "full", variant = "gradient" }: LogoProps) {
+    // Logo content fractions within the 1024×1024 PNG
+    const logoHeightFraction = 0.20;
+    const logoWidthFraction = 0.55;
 
-            {/* The F Shape */}
-            <path
-                d="M20 10H90V35H45V55H80V80H45V110H20V10Z"
-                fill="url(#logo-gradient)"
-                mask="url(#ticket-mask)"
-            />
-        </svg>
-    );
+    // Scale image large enough so the logo fills `size` pixels in height
+    const imageRenderSize = size / logoHeightFraction; // e.g. 44 / 0.20 = 220px
 
-    if (type === "icon") {
-        return iconContent;
-    }
+    // Container dimensions — slightly wider than the logo to avoid clipping
+    const containerHeight = size;
+    const containerWidth = type === "icon"
+        ? size
+        : Math.round(imageRenderSize * logoWidthFraction * 1.15);
 
     return (
-        <div className={`flex items-center gap-2 ${className}`}>
-            {iconContent}
-            <span
-                className="font-bold text-2xl tracking-tighter"
+        <div
+            className={className}
+            style={{
+                width: containerWidth,
+                height: containerHeight,
+                overflow: "hidden",
+                position: "relative",
+                flexShrink: 0,
+            }}
+        >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src="/logo.png"
+                alt="FlexPass"
                 style={{
-                    background: 'linear-gradient(to bottom, #f97316, #581c87)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
+                    position: "absolute",
+                    width: imageRenderSize,
+                    height: imageRenderSize,
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    filter: variant === "white" ? "brightness(0) invert(1)" : "none",
+                    maxWidth: "none",
                 }}
-            >
-                FlexPass
-            </span>
+            />
         </div>
     );
 }

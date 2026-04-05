@@ -1,24 +1,17 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
+import { useRef } from "react";
 import { Search, Filter } from "lucide-react";
-// import { useDebouncedCallback } from "use-debounce"; // Removed
 
 export default function SearchFilters() {
     const searchParams = useSearchParams();
     const { replace } = useRouter();
-
-    // We'll use a ref to store the timeout ID for custom debounce
-    let searchTimeout: NodeJS.Timeout | null = null;
+    const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
     const handleSearch = (term: string) => {
-        // Clear any existing timeout
-        if (searchTimeout) {
-            clearTimeout(searchTimeout);
-        }
-
-        // Set a new timeout
-        searchTimeout = setTimeout(() => {
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        searchTimeout.current = setTimeout(() => {
             const params = new URLSearchParams(searchParams);
             if (term) {
                 params.set("q", term);

@@ -1,46 +1,38 @@
-"use client";
-
-import { Plus_Jakarta_Sans } from "next/font/google";
+import type { Metadata } from "next";
+import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import LoadingSpinner from "@/components/LoadingSpinner";
-import { useState, useEffect } from "react";
+import LayoutShell from "@/components/LayoutShell";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-plus-jakarta-sans",
+// Brand typeface: Space Grotesk (body/UI) — Clash Display loaded via CSS @font-face
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
-import { usePathname } from "next/navigation";
+export const metadata: Metadata = {
+  title: "FlexPass — Nigeria's Premier Ticketing Platform",
+  description: "Tap, Flex, Enter, Repeat. Discover and secure tickets for the hottest events in Nigeria.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+};
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const [isLoading, setIsLoading] = useState(true);
-  const pathname = usePathname();
-  const isDashboard = pathname?.startsWith("/dashboard");
-
-  useEffect(() => {
-    // Remove loading spinner as soon as React hydrates
-    setIsLoading(false);
-  }, []);
-
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <head>
-        <title>FlexPass - Nigerian Ticket Selling Platform</title>
-        <meta name="description" content="Your gateway to amazing events in Nigeria" />
+        {/* Clash Display from Fontshare CDN */}
+        <link rel="preconnect" href="https://api.fontshare.com" />
+        <link
+          href="https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap"
+          rel="stylesheet"
+        />
       </head>
-      <body
-        className={`${plusJakartaSans.variable} font-sans antialiased`}
-      >
-        {isLoading && <LoadingSpinner />}
-        {!isDashboard && <Navbar />}
-        {children}
-        {!isDashboard && <Footer />}
+      <body className={`${spaceGrotesk.variable} font-sans antialiased`}>
+        <LayoutShell>{children}</LayoutShell>
       </body>
     </html>
   );

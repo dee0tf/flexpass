@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, Minus, Loader2, Check } from "lucide-react";
 import { PaystackButton } from "react-paystack";
-import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -14,18 +13,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-// Initialize Supabase
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY;
 
 export interface TicketTier {
   id: string;
   name: string;
   price: number;
+  remaining?: number; // tickets left for this tier
 }
 
 interface CheckoutModalProps {
@@ -33,8 +27,9 @@ interface CheckoutModalProps {
   onOpenChange: (open: boolean) => void;
   eventTitle: string;
   eventId: string;
-  price: number; // Restored for legacy events/fallback
+  price: number;
   tiers?: TicketTier[];
+  legacyRemaining?: number; // for events with no tiers
 }
 
 // Define the shape of the Paystack response
@@ -52,8 +47,9 @@ export default function CheckoutModal({
   onOpenChange,
   eventTitle,
   eventId,
-  price: basePrice, // Rename to basePrice
+  price: basePrice,
   tiers = [],
+  legacyRemaining,
 }: CheckoutModalProps) {
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
@@ -103,78 +99,64 @@ export default function CheckoutModal({
   const fee = subtotal * FEE_PERCENTAGE;
   const totalAmount = subtotal + fee;
 
-  // 2. The Success Logic
+  // 2. The Success Logic — payment is verified SERVER-SIDE before ticket is created
   const handleSuccess = async (reference: PaystackSuccessResponse) => {
     if (!isLegacyEvent && !selectedTier) {
       alert("Please select a ticket type.");
       return;
     }
 
-    console.log("✅ COMPONENT SUCCESS! Processing Order...", {
-      eventId: eventId,
-      ref: reference.reference
-    });
-
     setIsSaving(true);
     try {
-      const ticketsToCreate = Array.from({ length: quantity }).map(() => ({
-        event_id: eventId,
-        user_email: email,
-        user_name: fullName,
-        status: "valid",
-        purchase_reference: reference.reference,
-        fee_amount: fee / quantity,
-        total_amount_paid: (finalPrice + (fee / quantity)),
-        tier_id: selectedTier?.id || null,     // Null for legacy
-        tier_name: selectedTier?.name || (isLegacyEvent ? "Standard" : null) // 'Standard' for legacy
-      }));
-
-      // --- 1. Save to Database ---
-      const { data, error } = await supabase
-        .from("tickets")
-        .insert(ticketsToCreate)
-        .select();
-
-      if (error) throw error;
-
-      const newTicketId = data[0].id; // Get ID of the first ticket
-
-      // --- 2. NEW: Send Email Receipt (Background Task) ---
-      fetch('/api/send-ticket', {
+      // Call our secure API route which verifies the payment with Paystack
+      // before inserting any ticket into the database
+      const res = await fetch('/api/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email,
-          eventTitle: eventTitle,
-          ticketId: newTicketId,
-          amount: totalAmount
-        })
+          reference: reference.reference,
+          eventId,
+          email,
+          fullName,
+          quantity,
+          tierId: selectedTier?.id || null,
+          tierName: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
+          price: finalPrice,
+          fee,
+        }),
       });
-      console.log("📧 Email request sent!");
 
-      // --- 3. Redirect Logic ---
-      console.log("🎟️ Ticket Created! Redirecting to:", newTicketId);
+      const result = await res.json();
 
-      onOpenChange(false); // Close modal
+      if (!res.ok) {
+        throw new Error(result.error || 'Payment verification failed');
+      }
+
+      const newTicketId = result.ticketId;
+
+      // Send email receipt in the background
+      fetch('/api/send-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, eventTitle, ticketId: newTicketId, amount: totalAmount }),
+      });
+
+      onOpenChange(false);
       setQuantity(1);
       setEmail("");
       setFullName("");
       setSelectedTier(null);
 
-      // Redirect to the new Ticket Page
       router.push(`/tickets/${newTicketId}`);
 
     } catch (error: any) {
-      console.error("Database Error:", error);
-      alert("Payment received, but ticket save failed: " + error.message);
+      alert("Ticket processing failed: " + error.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleClose = () => {
-    console.log("Payment closed");
-  };
+  const handleClose = () => { /* modal closed */ };
 
   // 3. Configuration for the Button Component
   const componentProps = {
@@ -202,26 +184,45 @@ export default function CheckoutModal({
             <div className="space-y-3">
               <label className="text-sm font-medium text-slate-600">Select Ticket Type</label>
               <div className="grid gap-3">
-                {tiers.map((tier) => (
-                  <div
-                    key={tier.id}
-                    onClick={() => setSelectedTier(tier)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${selectedTier?.id === tier.id
-                      ? "border-[#581c87] bg-purple-50 ring-1 ring-[#581c87]"
-                      : "border-slate-200 hover:border-purple-200 hover:bg-slate-50"
+                {tiers.map((tier) => {
+                  const soldOut = tier.remaining !== undefined && tier.remaining <= 0;
+                  return (
+                    <div
+                      key={tier.id}
+                      onClick={() => !soldOut && setSelectedTier(tier)}
+                      className={`p-3 rounded-xl border transition-all flex items-center justify-between ${
+                        soldOut
+                          ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                          : selectedTier?.id === tier.id
+                          ? "ring-1 cursor-pointer"
+                          : "border-slate-200 hover:border-purple-200 hover:bg-slate-50 cursor-pointer"
                       }`}
-                  >
-                    <div>
-                      <p className="font-bold text-slate-900">{tier.name}</p>
-                      <p className="text-sm text-slate-500">₦{tier.price.toLocaleString()}</p>
-                    </div>
-                    {selectedTier?.id === tier.id && (
-                      <div className="bg-[#581c87] text-white p-1 rounded-full">
-                        <Check className="h-3 w-3" />
+                      style={selectedTier?.id === tier.id && !soldOut ? {
+                        borderColor: "var(--brand-indigo)",
+                        backgroundColor: "rgba(72,0,130,0.05)",
+                        boxShadow: `0 0 0 1px var(--brand-indigo)`,
+                      } : {}}
+                    >
+                      <div>
+                        <p className="font-bold text-slate-900">{tier.name}</p>
+                        <p className="text-sm text-slate-500">₦{tier.price.toLocaleString()}</p>
+                        {soldOut ? (
+                          <p className="text-xs font-semibold text-red-500 mt-0.5">Sold out</p>
+                        ) : tier.remaining !== undefined && tier.remaining <= 20 ? (
+                          <p className="text-xs font-semibold text-orange-500 mt-0.5">{tier.remaining} left</p>
+                        ) : null}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {selectedTier?.id === tier.id && !soldOut && (
+                        <div className="text-white p-1 rounded-full" style={{ backgroundColor: "var(--brand-indigo)" }}>
+                          <Check className="h-3 w-3" />
+                        </div>
+                      )}
+                      {soldOut && (
+                        <span className="text-xs font-bold text-slate-400 border border-slate-200 px-2 py-0.5 rounded-full">Sold Out</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -229,34 +230,60 @@ export default function CheckoutModal({
           {/* QUANTITY & SUMMARY - Show if: (Legacy Event) OR (Tier Selected) */}
           {(isLegacyEvent || selectedTier) && (
             <>
-              <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl">
-                <div>
-                  <span className="block text-slate-900 font-semibold">
-                    {selectedTier ? `${selectedTier.name} Ticket` : "Standard Ticket"}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    ₦{finalPrice.toLocaleString()} each
-                  </span>
+              <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-raised)" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="block font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {selectedTier ? `${selectedTier.name} Ticket` : "Standard Ticket"}
+                    </span>
+                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      ₦{finalPrice.toLocaleString()} each
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="h-11 w-11 rounded-full"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="text-xl font-bold w-6 text-center" style={{ color: "var(--text-primary)" }}>{quantity}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setQuantity(Math.min(
+                        isLegacyEvent
+                          ? Math.min(10, legacyRemaining ?? 10)
+                          : Math.min(10, selectedTier?.remaining ?? 10),
+                        quantity + 1
+                      ))}
+                      disabled={
+                        isLegacyEvent
+                          ? quantity >= (legacyRemaining ?? 10)
+                          : quantity >= (selectedTier?.remaining ?? 10)
+                      }
+                      className="h-11 w-11 rounded-full"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="h-8 w-8 rounded-full"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="text-xl font-bold w-4 text-center">{quantity}</span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setQuantity(Math.min(10, quantity + 1))}
-                    className="h-8 w-8 rounded-full"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+                {/* Tickets remaining count */}
+                {(() => {
+                  const rem = isLegacyEvent ? legacyRemaining : selectedTier?.remaining;
+                  if (rem === undefined) return null;
+                  if (rem <= 0) return (
+                    <p className="text-xs font-semibold text-red-500 mt-2">This ticket type is sold out.</p>
+                  );
+                  if (rem <= 20) return (
+                    <p className="text-xs font-semibold text-orange-500 mt-2">Only {rem} ticket{rem !== 1 ? "s" : ""} remaining!</p>
+                  );
+                  return (
+                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>{rem} tickets available</p>
+                  );
+                })()}
               </div>
 
               <div className="space-y-2">
@@ -300,8 +327,8 @@ export default function CheckoutModal({
                     <span>₦{fee.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                    <span className="font-bold text-slate-900">Total</span>
-                    <span className="text-2xl font-bold text-[#581c87]">
+                    <span className="font-bold" style={{ color: "var(--text-primary)" }}>Total</span>
+                    <span className="text-2xl font-bold" style={{ color: "var(--brand-indigo)" }}>
                       ₦{totalAmount.toLocaleString()}
                     </span>
                   </div>
@@ -310,13 +337,13 @@ export default function CheckoutModal({
                 {isSaving ? (
                   <button
                     disabled
-                    className="w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg opacity-70 flex items-center justify-center gap-2"
+                    className="w-full text-white py-4 rounded-xl font-bold text-lg opacity-70 flex items-center justify-center gap-2"
+                    style={{ backgroundColor: "var(--brand-indigo)" }}
                   >
                     <Loader2 className="h-5 w-5 animate-spin" /> Processing...
                   </button>
                 ) : (
-                  <div className="w-full relative">
-                    {/* Block click if no email, name, or if validatin error exists */}
+                  <div className="w-full relative rounded-xl overflow-hidden" style={{ backgroundColor: "var(--brand-indigo)" }}>
                     {(!email || !fullName || emailError) && (
                       <div
                         className="absolute inset-0 z-10 cursor-not-allowed"
@@ -326,11 +353,9 @@ export default function CheckoutModal({
                         }}
                       />
                     )}
-
                     <PaystackButton
                       {...componentProps}
-                      className={`w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition-opacity shadow-lg shadow-indigo-200 ${(!email || !fullName || emailError) ? "opacity-50 pointer-events-none" : ""
-                        }`}
+                      className={`w-full py-4 font-bold text-lg text-white hover:opacity-90 transition-opacity bg-transparent ${(!email || !fullName || emailError) ? "opacity-50 pointer-events-none" : ""}`}
                     />
                   </div>
                 )}

@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { Loader2, Calendar, MapPin, Ticket, ExternalLink } from "lucide-react";
 import Link from "next/link";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "@/lib/supabase";
+import { Loader2, Calendar, MapPin, ExternalLink } from "lucide-react";
 
 export default function MyEventsPage() {
   const [events, setEvents] = useState<any[]>([]);
@@ -31,14 +26,14 @@ export default function MyEventsPage() {
     loadEvents();
   }, []);
 
-  if (loading) return <div className="p-10"><Loader2 className="animate-spin text-[#581c87]" /></div>;
+  if (loading) return <div className="p-10"><Loader2 className="animate-spin text-[#480082]" /></div>;
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-900">My Events</h1>
         <Link href="/create">
-          <button className="bg-[#581c87] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#4c1d75] transition">
+          <button className="bg-[#480082] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#3a006b] transition">
             + New Event
           </button>
         </Link>
@@ -46,12 +41,12 @@ export default function MyEventsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {events.map((event) => (
-          <div key={event.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition">
+          <div key={event.id} className="rounded-xl overflow-hidden shadow-sm hover:shadow-md transition" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
             <div className="h-32 bg-slate-100 relative">
                {/* eslint-disable-next-line @next/next/no-img-element */}
-               <img src={event.image_url} alt={event.title} className="w-full h-full object-cover" />
-               <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold text-[#581c87]">
-                 ₦{event.price.toLocaleString()}
+               {event.image_url && <img src={event.image_url} alt={event.title} className="w-full h-full object-cover" />}
+               <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold text-[#480082]">
+                 ₦{(event.price ?? 0).toLocaleString()}
                </div>
             </div>
             <div className="p-4">
@@ -66,7 +61,7 @@ export default function MyEventsPage() {
               </div>
               
               <div className="mt-4 pt-4 border-t border-slate-50 flex gap-2">
-                 <Link href={`/events/${event.id}`} className="flex-1 text-center text-xs font-bold text-[#581c87] bg-purple-50 py-2 rounded-lg hover:bg-purple-100 transition flex items-center justify-center gap-1">
+                 <Link href={`/events/${event.id}`} className="flex-1 text-center text-xs font-bold text-[#480082] bg-[#480082]/5 py-2 rounded-lg hover:bg-[#480082]/10 transition flex items-center justify-center gap-1">
                     View Page <ExternalLink size={12}/>
                  </Link>
               </div>

@@ -1,28 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
-  CalendarDays,
-  Wallet,
-  Settings,
-  LogOut,
-  Menu
+  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine
 } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import { useState } from "react";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import Logo from "@/components/Logo";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -30,69 +21,85 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const navItems = [
-    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-    { name: "My Events", href: "/dashboard/events", icon: CalendarDays },
-    { name: "Wallet", href: "/dashboard/wallet", icon: Wallet },
-    { name: "Settings", href: "/dashboard/settings", icon: Settings },
+    { name: "Overview",  href: "/dashboard",            icon: LayoutDashboard },
+    { name: "My Events", href: "/dashboard/events",     icon: CalendarDays },
+    { name: "Check-In",  href: "/dashboard/checkin",    icon: ScanLine },
+    { name: "Wallet",    href: "/dashboard/wallet",     icon: Wallet },
+    { name: "Settings",  href: "/dashboard/settings",   icon: Settings },
   ];
 
+  const SidebarContent = () => (
+    <>
+      <div className="p-6" style={{borderBottom:"1px solid var(--sidebar-border)"}}>
+        <Logo size={40} variant="gradient" />
+        <p className="text-xs text-[#0E0D0D]/40 mt-1.5">Host Dashboard</p>
+      </div>
+
+      <nav className="flex-1 p-4 space-y-1">
+        {navItems.map(item => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${
+                isActive
+                  ? "bg-[#480082] text-white shadow-lg shadow-[#480082]/20"
+                  : "text-[#0E0D0D]/60 hover:bg-[#F9F8FF] hover:text-[#480082]"
+              }`}
+            >
+              <item.icon size={18} />
+              {item.name}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="p-4" style={{borderTop:"1px solid var(--sidebar-border)"}}>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl w-full transition-colors text-sm font-medium"
+        >
+          <LogOut size={18} /> Sign Out
+        </button>
+      </div>
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 fixed h-full z-10">
-        <div className="p-6 border-b border-slate-100">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-[#f97316] to-[#581c87] bg-clip-text text-transparent">
-            FlexPass
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">Host Dashboard</p>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-2">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive
-                    ? "bg-[#581c87] text-white shadow-lg shadow-purple-100"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-              >
-                <item.icon size={20} />
-                <span className="font-medium">{item.name}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-slate-100">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl w-full transition-colors"
-          >
-            <LogOut size={20} />
-            <span className="font-medium">Sign Out</span>
-          </button>
-        </div>
+    <div className="min-h-screen bg-[#F9F8FF] flex">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-64 fixed h-full z-10" style={{backgroundColor:"var(--sidebar-bg)",borderRight:"1px solid var(--sidebar-border)"}}>
+        <SidebarContent />
       </aside>
 
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 w-full bg-white border-b border-slate-200 z-20 px-4 py-3 flex justify-between items-center">
-        <span className="font-bold text-[#581c87]">FlexPass Dashboard</span>
-        <button onClick={() => setIsMobileOpen(!isMobileOpen)}>
-          <Menu className="text-slate-600" />
+      {/* Mobile header */}
+      <div className="md:hidden fixed top-0 w-full z-20 px-4 h-14 flex justify-between items-center" style={{backgroundColor:"var(--nav-bg)",borderBottom:"1px solid var(--nav-border)",backdropFilter:"blur(12px)"}}>
+        <Logo size={36} variant="gradient" />
+        <button onClick={() => setMobileOpen(p => !p)} className="p-2 rounded-xl hover:bg-[#F9F8FF] text-[#0E0D0D]/60 transition-colors">
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
-      {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 p-4 md:p-8 mt-14 md:mt-0">
-        {children}
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-30 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
+          <div className="absolute top-0 left-0 h-full w-64 flex flex-col" style={{backgroundColor:"var(--sidebar-bg)"}}>
+            <SidebarContent />
+          </div>
+        </div>
+      )}
 
-        <div className="mt-12 border-t border-slate-200 pt-6 text-center text-sm text-slate-400">
-          <p>&copy; {new Date().getFullYear()} FlexPass. Made with ❤️ in Lagos.</p>
+      {/* Main content */}
+      <main className="flex-1 md:ml-64 p-4 md:p-8 mt-14 md:mt-0 min-h-screen" style={{backgroundColor:"var(--background)"}}>
+        {children}
+        <div className="mt-12 border-t border-[#eDdedd] pt-6 text-center text-xs text-[#0E0D0D]/30">
+          &copy; {new Date().getFullYear()} FlexPass — Made with ♥ in Lagos
         </div>
       </main>
+      <ThemeToggle />
     </div>
   );
 }

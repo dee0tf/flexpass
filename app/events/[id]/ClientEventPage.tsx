@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic"; // <--- 1. Import Dynamic tool
+import dynamic from "next/dynamic";
 import { TicketTier } from "@/components/CheckoutModal";
 
-// 2. Import the Modal dynamically and turn off SSR (Server Side Rendering)
 const CheckoutModal = dynamic(
   () => import("@/components/CheckoutModal"),
   { ssr: false }
@@ -15,14 +14,11 @@ interface ClientProps {
   eventPrice: number;
   eventId: string;
   tiers: TicketTier[];
+  legacyRemaining: number;
 }
 
-export default function ClientEventPage({ eventTitle, eventPrice, eventId, tiers }: ClientProps) {
+export default function ClientEventPage({ eventTitle, eventPrice, eventId, tiers, legacyRemaining }: ClientProps) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-
-  // Formatting price logic
-  // If we have multiple tiers, show "From lowestPrice"
-  // If we have 1 tier or 0, existing logic holds (eventPrice is presumably the min price from the DB)
 
   const hasMultipleTiers = tiers && tiers.length > 1;
   const lowestPrice = tiers && tiers.length > 0 ? Math.min(...tiers.map(t => t.price)) : eventPrice;
@@ -31,39 +27,60 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, tiers
     ? `From ₦${lowestPrice.toLocaleString()}`
     : `₦${lowestPrice.toLocaleString()}`;
 
+  // Total remaining across all tiers (or legacy)
+  const totalRemaining = tiers.length > 0
+    ? tiers.reduce((acc, t) => acc + (t.remaining ?? 0), 0)
+    : legacyRemaining;
+
+  const soldOut = totalRemaining === 0;
+
   return (
     <>
-      {/* Sticky Bottom Bar for Mobile */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-lg flex items-center justify-between md:hidden z-50">
+      {/* Sticky Bottom Bar — Mobile */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 shadow-lg flex items-center justify-between md:hidden z-50"
+        style={{ backgroundColor: "var(--surface)", borderTop: "1px solid var(--border-color)" }}
+      >
         <div>
-          <p className="text-sm text-slate-500">Price</p>
-          <p className="text-xl font-bold text-[#581c87]">
-            {priceDisplay}
-          </p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Price</p>
+          <p className="text-xl font-bold" style={{ color: "var(--brand-indigo)" }}>{priceDisplay}</p>
+          {totalRemaining <= 20 && !soldOut && (
+            <p className="text-xs font-semibold text-orange-500">{totalRemaining} left!</p>
+          )}
         </div>
         <button
           onClick={() => setIsCheckoutOpen(true)}
-          className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-8 py-3 rounded-xl font-bold shadow-md"
+          disabled={soldOut}
+          className="px-8 py-3 rounded-xl font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ backgroundColor: soldOut ? "var(--text-muted)" : "var(--brand-indigo)" }}
         >
-          Buy Ticket
+          {soldOut ? "Sold Out" : "Buy Ticket"}
         </button>
       </div>
 
-      {/* Floating Card for Desktop */}
-      <div className="hidden md:block fixed bottom-10 right-10 bg-white p-6 rounded-2xl shadow-2xl border border-slate-100 z-50 w-80">
-        <p className="text-slate-500 mb-1">{hasMultipleTiers ? "Starting from" : "Price per ticket"}</p>
-        <p className="text-3xl font-bold text-[#581c87] mb-6">
+      {/* Floating Card — Desktop */}
+      <div className="hidden md:block fixed bottom-10 right-10 p-6 rounded-2xl shadow-2xl z-50 w-80"
+        style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border-color)" }}
+      >
+        <p className="text-sm mb-1" style={{ color: "var(--text-secondary)" }}>
+          {hasMultipleTiers ? "Starting from" : "Price per ticket"}
+        </p>
+        <p className="text-3xl font-bold mb-1" style={{ color: "var(--brand-indigo)" }}>
           {priceDisplay}
         </p>
+        {totalRemaining <= 20 && !soldOut && (
+          <p className="text-sm font-semibold text-orange-500 mb-4">Only {totalRemaining} tickets left!</p>
+        )}
+        {!totalRemaining || soldOut ? null : <div className="mb-4" />}
         <button
           onClick={() => setIsCheckoutOpen(true)}
-          className="w-full bg-gradient-to-b from-[#f97316] to-[#581c87] text-white py-4 rounded-xl font-bold shadow-md hover:opacity-90"
+          disabled={soldOut}
+          className="w-full py-4 rounded-xl font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ backgroundColor: soldOut ? "var(--text-muted)" : "var(--brand-indigo)" }}
         >
-          Get Tickets
+          {soldOut ? "Sold Out" : "Get Tickets"}
         </button>
       </div>
 
-      {/* The Modal */}
       {isCheckoutOpen && (
         <CheckoutModal
           open={isCheckoutOpen}
@@ -72,6 +89,7 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, tiers
           eventId={eventId}
           tiers={tiers}
           price={eventPrice}
+          legacyRemaining={legacyRemaining}
         />
       )}
     </>

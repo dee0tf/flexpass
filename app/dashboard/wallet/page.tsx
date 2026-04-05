@@ -1,23 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { Loader2, DollarSign, Lock, AlertCircle, RefreshCw } from "lucide-react";
-import BankSettings from "@/components/BankSettings";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { supabase } from "@/lib/supabase";
+import { Loader2, RefreshCw, AlertCircle, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import BankSettings from "@/components/BankSettings";
 
 export default function WalletPage() {
   const [balance, setBalance] = useState(0);
@@ -93,39 +82,47 @@ export default function WalletPage() {
     }
 
     const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
-      alert("Invalid amount");
+    if (isNaN(amount) || amount < 1000) {
+      alert("Minimum withdrawal is ₦1,000");
       return;
     }
 
     if (amount > balance) {
-      alert("Insufficient funds");
+      alert("Insufficient balance");
       return;
     }
 
     setWithdrawLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      // Get session token to authenticate the server-side transfer API
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { alert("Please log in again."); return; }
 
-    // Create Payout Request
-    const { error } = await supabase.from("payouts").insert({
-      user_id: user?.id,
-      amount: amount,
-      status: "pending",
-      bank_details: bankingDetails
-    });
+      const res = await fetch('/api/paystack/transfer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ amount }),
+      });
 
-    if (error) {
-      alert("Request failed: " + error.message);
-    } else {
-      alert("Withdrawal requested! It will be processed on Friday.");
-      setIsWithdrawOpen(false);
-      setWithdrawAmount("");
-      loadWalletData(); // Refresh balance
+      const result = await res.json();
+
+      if (!res.ok) {
+        alert("Withdrawal failed: " + result.error);
+      } else {
+        alert(result.message || "Withdrawal initiated successfully!");
+        setIsWithdrawOpen(false);
+        setWithdrawAmount("");
+        loadWalletData();
+      }
+    } finally {
+      setWithdrawLoading(false);
     }
-    setWithdrawLoading(false);
   };
 
-  if (loading) return <div className="p-10"><Loader2 className="animate-spin text-[#581c87]" /></div>;
+  if (loading) return <div className="p-10"><Loader2 className="animate-spin text-[#480082]" /></div>;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -138,10 +135,10 @@ export default function WalletPage() {
         {/* LEFT COLUMN: Balance & Withdraw */}
         <div className="space-y-8">
           {/* Balance Card */}
-          <div className="bg-gradient-to-r from-[#581c87] to-[#7c3aed] text-white p-8 rounded-2xl shadow-xl">
+          <div className="bg-gradient-to-r from-[#480082] to-[#9F67FE] text-white p-8 rounded-2xl shadow-xl">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-purple-200 font-medium mb-1">Available Balance</p>
+                <p className="text-[#9F67FE]/70 font-medium mb-1">Available Balance</p>
                 <h2 className="text-4xl font-bold flex items-center">
                   ₦{balance.toLocaleString()}
                 </h2>
@@ -154,7 +151,7 @@ export default function WalletPage() {
             <div className="mt-8">
               <button
                 onClick={() => setIsWithdrawOpen(true)}
-                className="bg-white text-[#581c87] px-6 py-3 rounded-xl font-bold hover:bg-purple-50 transition shadow-lg w-full md:w-auto"
+                className="bg-white text-[#480082] px-6 py-3 rounded-xl font-bold hover:bg-[#480082]/5 transition shadow-lg w-full md:w-auto"
               >
                 Withdraw Funds
               </button>
@@ -162,11 +159,11 @@ export default function WalletPage() {
           </div>
 
           {/* Payout History */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="rounded-2xl shadow-sm overflow-hidden" style={{backgroundColor:"var(--card-bg)",border:"1px solid var(--card-border)"}}>
             <div className="p-4 border-b border-slate-100 bg-slate-50">
               <h3 className="font-bold text-slate-900">Withdrawal History</h3>
             </div>
-            <div className="max-h-60 overflow-y-auto">
+            <div className="max-h-60 overflow-y-auto" style={{backgroundColor:"var(--card-bg)"}}>
               {payouts.length === 0 ? (
                 <p className="p-6 text-center text-slate-500 text-sm">No withdrawals yet.</p>
               ) : (
@@ -255,7 +252,7 @@ export default function WalletPage() {
             <Button
               onClick={handleWithdraw}
               disabled={withdrawLoading || !withdrawAmount || parseFloat(withdrawAmount) > balance || !bankingDetails}
-              className="w-full bg-[#581c87] hover:bg-[#4c1d75] text-white py-6 text-lg"
+              className="w-full bg-[#480082] hover:bg-[#3a006b] text-white py-6 text-lg"
             >
               {withdrawLoading ? <Loader2 className="animate-spin" /> : "Confirm Withdrawal"}
             </Button>

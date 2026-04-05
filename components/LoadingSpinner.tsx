@@ -2,12 +2,12 @@
 
 export default function LoadingSpinner() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm">
-      <div className="flex gap-2">
-        <div className="h-3 w-3 rounded-full bg-gradient-to-r from-[#f97316] to-[#581c87] animate-bounce" style={{ animationDelay: '0ms' }}></div>
-        <div className="h-3 w-3 rounded-full bg-gradient-to-r from-[#f97316] to-[#581c87] animate-bounce" style={{ animationDelay: '150ms' }}></div>
-        <div className="h-3 w-3 rounded-full bg-gradient-to-r from-[#f97316] to-[#581c87] animate-bounce" style={{ animationDelay: '300ms' }}></div>
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white">
+      <div className="relative mb-6">
+        <div className="h-14 w-14 rounded-full border-4 border-[#eDdedd] border-t-[#480082] animate-spin" />
       </div>
+      <p className="font-display text-[#480082] font-semibold text-lg tracking-wide">FlexPass</p>
+      <p className="text-sm text-[#9F67FE] mt-1">Tap, Flex, Enter, Repeat.</p>
     </div>
   );
 }

@@ -28,8 +28,21 @@ export default function ImageUpload({ onUpload, defaultValue = "" }: ImageUpload
             }
 
             const file = e.target.files[0];
-            const fileExt = file.name.split(".").pop();
-            const fileName = `${Math.random()}.${fileExt}`;
+
+            // Validate file type
+            const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                throw new Error("Only JPEG, PNG, GIF, and WebP images are allowed.");
+            }
+
+            // Validate file size (5MB max)
+            const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+            if (file.size > MAX_SIZE_BYTES) {
+                throw new Error("Image must be under 5MB.");
+            }
+
+            const fileExt = file.name.split(".").pop()?.toLowerCase();
+            const fileName = `${crypto.randomUUID()}.${fileExt}`;
             const filePath = `${fileName}`;
 
             const { error: uploadError } = await supabase.storage

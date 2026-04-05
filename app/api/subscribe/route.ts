@@ -16,6 +16,10 @@ export async function POST(request: Request) {
         if (!email) {
             return NextResponse.json({ error: "Email is required" }, { status: 400 });
         }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+        }
 
         // 1. Save to Database
         const { error: dbError } = await supabase
@@ -54,7 +58,6 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ message: "Subscribed successfully! Check your inbox." });
     } catch (error: any) {
-        console.error("Subscription Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

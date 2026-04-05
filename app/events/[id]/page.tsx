@@ -21,14 +21,36 @@ async function getEvent(id: string) {
 
   if (!event) return null;
 
-  // Fetch Tiers
+  // Fetch tiers
   const { data: tiers } = await supabase
     .from("ticket_tiers")
     .select("*")
     .eq("event_id", id)
     .order('price', { ascending: true });
 
-  return { ...event, tiers: tiers || [] };
+  // Count sold tickets per tier so buyers can see remaining
+  const { data: soldRows } = await supabase
+    .from("tickets")
+    .select("tier_id")
+    .eq("event_id", id)
+    .eq("status", "valid");
+
+  const soldByTier: Record<string, number> = {};
+  for (const row of soldRows || []) {
+    const key = row.tier_id ?? "__legacy__";
+    soldByTier[key] = (soldByTier[key] || 0) + 1;
+  }
+
+  const tiersWithRemaining = (tiers || []).map((t: any) => ({
+    ...t,
+    remaining: Math.max(0, t.quantity_available - (soldByTier[t.id] || 0)),
+  }));
+
+  // For legacy (no-tier) events
+  const legacySold = soldByTier["__legacy__"] || 0;
+  const legacyRemaining = Math.max(0, (event.total_tickets || 0) - legacySold);
+
+  return { ...event, tiers: tiersWithRemaining, legacyRemaining };
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -138,6 +160,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         eventPrice={event.price}
         eventId={event.id}
         tiers={event.tiers}
+        legacyRemaining={event.legacyRemaining}
       />
     </div>
   );

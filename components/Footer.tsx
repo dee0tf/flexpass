@@ -1,148 +1,140 @@
+"use client";
+
 import Link from "next/link";
-import { Twitter, Instagram, Facebook, Mail, ArrowRight, Loader2, Check } from "lucide-react";
+import { Mail, ArrowRight, Loader2, Check } from "lucide-react";
 import Logo from "./Logo";
 import { useState } from "react";
 
 export default function Footer() {
-    const currentYear = new Date().getFullYear();
-    const [email, setEmail] = useState("");
-    const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-    const [message, setMessage] = useState("");
+  const year = new Date().getFullYear();
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
 
-    const handleSubscribe = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!email) return;
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (res.ok) { setStatus("success"); setMessage(data.message); setEmail(""); }
+      else { setStatus("error"); setMessage(data.error || "Something went wrong"); }
+    } catch {
+      setStatus("error"); setMessage("Failed to connect. Try again.");
+    }
+  };
 
-        setStatus("loading");
-        try {
-            const res = await fetch("/api/subscribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email }),
-            });
+  return (
+    <footer className="pt-16 pb-8 px-4 sm:px-6 lg:px-8 relative overflow-hidden"
+      style={{ backgroundColor: "#0A0812", color: "rgba(240,238,248,0.5)" }}>
+      {/* Glows */}
+      <div className="absolute top-0 left-1/3 w-72 h-72 rounded-full pointer-events-none"
+        style={{ background: "rgba(72,0,130,0.25)", filter: "blur(80px)" }} />
+      <div className="absolute bottom-0 right-1/3 w-72 h-72 rounded-full pointer-events-none"
+        style={{ background: "rgba(159,103,254,0.1)", filter: "blur(80px)" }} />
 
-            const data = await res.json();
-
-            if (res.ok) {
-                setStatus("success");
-                setMessage(data.message);
-                setEmail("");
-            } else {
-                setStatus("error");
-                setMessage(data.error || "Something went wrong");
-            }
-        } catch (err) {
-            setStatus("error");
-            setMessage("Failed to connect. Please try again.");
-        }
-    };
-
-    return (
-        <footer className="bg-[#0F172A] text-slate-300 py-16 px-4 sm:px-6 lg:px-8 border-t border-slate-800 relative overflow-hidden">
-            {/* Background Gradient Blurs */}
-            <div className="absolute top-0 left-1/4 w-96 h-96 bg-flex-purple/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-flex-orange/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16 relative z-10">
-                {/* Brand Column */}
-                <div className="space-y-6">
-                    <Link href="/">
-                        <Logo type="full" className="brightness-0 invert" />
-                    </Link>
-                    <p className="text-slate-400 leading-relaxed text-sm">
-                        Experience the future of events in Nigeria. Secure tickets, seamless entry, and unforgettable moments.
-                    </p>
-                    <div className="flex items-center gap-4">
-                        <a href="#" className="bg-slate-800 p-2.5 rounded-full hover:bg-[#581c87] hover:text-white transition-all text-slate-400">
-                            <Twitter size={18} />
-                        </a>
-                        <a href="#" className="bg-slate-800 p-2.5 rounded-full hover:bg-[#f97316] hover:text-white transition-all text-slate-400">
-                            <Instagram size={18} />
-                        </a>
-                        <a href="#" className="bg-slate-800 p-2.5 rounded-full hover:bg-blue-600 hover:text-white transition-all text-slate-400">
-                            <Facebook size={18} />
-                        </a>
-                    </div>
-                </div>
-
-                {/* Product & Company (Merged for space) */}
-                <div className="grid grid-cols-2 gap-8">
-                    <div>
-                        <h3 className="text-white font-bold text-lg mb-6">Product</h3>
-                        <ul className="space-y-3 text-sm">
-                            <li><Link href="/events" className="hover:text-[#f97316] transition-colors">Find Events</Link></li>
-                            <li><Link href="/create" className="hover:text-[#f97316] transition-colors">Host Event</Link></li>
-                            <li><Link href="#" className="hover:text-[#f97316] transition-colors">Pricing</Link></li>
-                            <li><Link href="#" className="hover:text-[#f97316] transition-colors">Features</Link></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h3 className="text-white font-bold text-lg mb-6">Company</h3>
-                        <ul className="space-y-3 text-sm">
-                            <li><Link href="#" className="hover:text-[#581c87] transition-colors">About</Link></li>
-                            <li><Link href="#" className="hover:text-[#581c87] transition-colors">Careers</Link></li>
-                            <li><Link href="#" className="hover:text-[#581c87] transition-colors">Blog</Link></li>
-                            <li><Link href="#" className="hover:text-[#581c87] transition-colors">Contact</Link></li>
-                        </ul>
-                    </div>
-                </div>
-
-                {/* Resources */}
-                <div>
-                    <h3 className="text-white font-bold text-lg mb-6">Resources</h3>
-                    <ul className="space-y-3 text-sm">
-                        <li><Link href="#" className="hover:text-white transition-colors">Help Center</Link></li>
-                        <li><Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                        <li><Link href="#" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                        <li><Link href="#" className="hover:text-white transition-colors">Cookies</Link></li>
-                    </ul>
-                </div>
-
-                {/* Newsletter Subscription */}
-                <div className="lg:col-span-1">
-                    <h3 className="text-white font-bold text-lg mb-4">Stay in the loop</h3>
-                    <p className="text-slate-400 text-sm mb-6">
-                        Join our newsletter to get the latest updates on events and exclusive offers.
-                    </p>
-                    <form onSubmit={handleSubscribe} className="space-y-3">
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-5 w-5 text-slate-500" />
-                            <input
-                                type="email"
-                                placeholder="Enter your email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                disabled={status === "loading" || status === "success"}
-                                className="w-full bg-slate-900 border border-slate-700 text-white placeholder-slate-500 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87] transition-all disabled:opacity-50"
-                            />
-                        </div>
-
-                        {status === "success" ? (
-                            <div className="w-full bg-green-500/10 text-green-400 border border-green-500/20 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
-                                <Check size={18} /> {message}
-                            </div>
-                        ) : (
-                            <button
-                                disabled={status === "loading"}
-                                className="w-full bg-gradient-to-r from-[#f97316] to-[#581c87] text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-70"
-                            >
-                                {status === "loading" ? <Loader2 className="animate-spin" size={18} /> : <>Subscribe <ArrowRight size={18} /></>}
-                            </button>
-                        )}
-
-                        {status === "error" && (
-                            <p className="text-red-400 text-xs">{message}</p>
-                        )}
-                    </form>
-                </div>
+      <div className="max-w-7xl mx-auto relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-14">
+          {/* Brand */}
+          <div className="space-y-5">
+            <Link href="/"><Logo size={36} variant="white" /></Link>
+            <p className="text-sm leading-relaxed" style={{ color: "rgba(240,238,248,0.45)" }}>
+              Your all-access pass to Nigeria&apos;s hottest events. Tap, Flex, Enter, Repeat.
+            </p>
+            <div className="flex gap-3">
+              {[
+                { label: "X", href: "#" },
+                { label: "IG", href: "#" },
+              ].map((s) => (
+                <a key={s.label} href={s.href}
+                  className="px-3 py-2 rounded-xl border text-xs font-bold transition-all hover:text-white"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.08)", color: "rgba(240,238,248,0.4)" }}
+                >
+                  {s.label}
+                </a>
+              ))}
             </div>
+          </div>
 
-            <div className="max-w-7xl mx-auto pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-500 relative z-10">
-                <p>&copy; {currentYear} FlexPass. All rights reserved.</p>
-                <div className="flex items-center gap-6">
-                    <span>Made with ❤️ in Lagos</span>
+          {/* Links */}
+          <div className="grid grid-cols-2 gap-8">
+            {[
+              { title: "Product", links: [["Find Events", "/events"], ["Host Event", "/create"]] },
+              { title: "Company", links: [["Contact", "mailto:hello@flexpass.ng"]] },
+            ].map(col => (
+              <div key={col.title}>
+                <h4 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">{col.title}</h4>
+                <ul className="space-y-3 text-sm">
+                  {col.links.map(([label, href]) => (
+                    <li key={label}>
+                      <Link href={href} className="hover:text-[#FFB700] transition-colors">{label}</Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          {/* Resources — placeholder until pages are built */}
+          <div>
+            <h4 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">Support</h4>
+            <ul className="space-y-3 text-sm">
+              <li>
+                <a href="mailto:hello@flexpass.ng" className="hover:text-white transition-colors">
+                  hello@flexpass.ng
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Newsletter */}
+          <div>
+            <h4 className="text-white font-display font-semibold mb-2 text-xs uppercase tracking-widest">Stay in the Loop</h4>
+            <p className="text-sm mb-5" style={{ color: "rgba(240,238,248,0.35)" }}>Early access to the hottest events.</p>
+            <form onSubmit={handleSubscribe} className="space-y-3">
+              <div className="relative">
+                <Mail className="absolute left-3 top-3.5 h-4 w-4" style={{ color: "rgba(240,238,248,0.3)" }} />
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  disabled={status === "loading" || status === "success"}
+                  className="w-full rounded-xl py-3 pl-10 pr-4 text-sm transition focus:outline-none disabled:opacity-50 text-white"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(159,103,254,0.2)",
+                  }}
+                />
+              </div>
+              {status === "success" ? (
+                <div className="flex items-center gap-2 text-sm text-green-400 bg-green-400/10 border border-green-400/20 px-4 py-3 rounded-xl">
+                  <Check size={15} /> {message}
                 </div>
-            </div>
-        </footer>
-    );
+              ) : (
+                <button disabled={status === "loading"}
+                  className="w-full py-3 rounded-xl font-bold text-sm text-[#0E0D0D] hover:opacity-90 transition flex items-center justify-center gap-2 disabled:opacity-60"
+                  style={{ backgroundColor: "var(--brand-amber)" }}
+                >
+                  {status === "loading" ? <Loader2 size={15} className="animate-spin" /> : <><span>Subscribe</span><ArrowRight size={15} /></>}
+                </button>
+              )}
+              {status === "error" && <p className="text-red-400 text-xs">{message}</p>}
+            </form>
+          </div>
+        </div>
+
+        <div className="pt-8 flex flex-col md:flex-row justify-between items-center gap-3 text-xs"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "rgba(240,238,248,0.25)" }}>
+          <p>&copy; {year} FlexPass. All rights reserved.</p>
+          <p>Made with <span style={{ color: "var(--brand-amber)" }}>♥</span> in Lagos, Nigeria</p>
+        </div>
+      </div>
+    </footer>
+  );
 }

@@ -25,8 +25,7 @@ export default async function EventsPage({
     const { data: events, error } = await query;
 
     if (error) {
-        console.error("Supabase Error:", error);
-    }
+        }
 
     const eventsList: Event[] = events || [];
 
