@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Protect dashboard and create routes server-side
-// Supabase stores its session in a cookie named sb-{ref}-auth-token
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isProtected =
@@ -11,7 +10,7 @@ export function middleware(request: NextRequest) {
 
   if (!isProtected) return NextResponse.next();
 
-  // Check for any Supabase auth cookie (works for both old and new SDK versions)
+  // Check for any Supabase auth cookie
   const cookies = request.cookies.getAll();
   const hasSession = cookies.some(
     (c) =>
