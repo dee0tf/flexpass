@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import { use } from "react";
-import type { TicketTier } from "@/lib/types";
 
 interface TierFormData {
   id?: string;
@@ -56,7 +55,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         .from("ticket_tiers").select("*").eq("event_id", id).order("price", { ascending: true });
 
       setTiers(
-        (existingTiers || []).map((t: TicketTier) => ({
+        (existingTiers || []).map((t: any) => ({
           id: t.id,
           name: t.name,
           price: t.price.toString(),
