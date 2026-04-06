@@ -29,7 +29,7 @@ interface CheckoutModalProps {
   eventId: string;
   price: number;
   tiers?: TicketTier[];
-  legacyRemaining?: number; // for events with no tiers
+  legacyRemaining?: number;
 }
 
 // Define the shape of the Paystack response
@@ -53,10 +53,19 @@ export default function CheckoutModal({
 }: CheckoutModalProps) {
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
-  const [emailError, setEmailError] = useState(""); // New state for error
+  const [emailError, setEmailError] = useState("");
   const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
+  const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
+
+  // Fetch host's subaccount code for automatic fund splitting
+  useEffect(() => {
+    fetch(`/api/event-subaccount?eventId=${eventId}`)
+      .then(r => r.json())
+      .then(d => setSubaccountCode(d.subaccount_code || null))
+      .catch(() => {});
+  }, [eventId]);
 
   // Email validation helper
   const validateEmail = (email: string) => {
@@ -159,13 +168,17 @@ export default function CheckoutModal({
   const handleClose = () => { /* modal closed */ };
 
   // 3. Configuration for the Button Component
-  const componentProps = {
-    email: email,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const componentProps: any = {
+    email,
     amount: totalAmount * 100, // Kobo
     publicKey: PAYSTACK_KEY || "",
     text: `Pay ₦${totalAmount.toLocaleString()}`,
     onSuccess: (ref: any) => handleSuccess(ref),
     onClose: handleClose,
+    // Automatic split — host gets 95%, FlexPass keeps 5%
+    // Only applied when the host has a verified Paystack subaccount
+    ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
   };
 
   return (
