@@ -135,7 +135,24 @@ export default function BankSettings() {
         if (error) {
             setMessage("Failed to save bank details.");
         } else {
-            setMessage("Bank details saved successfully!");
+            setMessage("Bank details saved! Registering with Paystack...");
+
+            // Register host as a Paystack subaccount so payments auto-split
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                const res = await fetch('/api/paystack/subaccount', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                });
+                if (res.ok) {
+                    setMessage("Bank details saved & verified with Paystack ✓");
+                } else {
+                    // Not fatal — subaccount can be retried next save
+                    setMessage("Bank details saved. Paystack registration pending.");
+                }
+            } else {
+                setMessage("Bank details saved successfully!");
+            }
         }
         setSaving(false);
     };
