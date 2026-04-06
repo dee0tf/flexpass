@@ -50,6 +50,7 @@ export default function Footer() {
               {[
                 { label: "X", href: "#" },
                 { label: "IG", href: "#" },
+                { label: "WA", href: "https://wa.me/2348000000000" },
               ].map((s) => (
                 <a key={s.label} href={s.href}
                   className="px-3 py-2 rounded-xl border text-xs font-bold transition-all hover:text-white"
@@ -65,7 +66,7 @@ export default function Footer() {
           <div className="grid grid-cols-2 gap-8">
             {[
               { title: "Product", links: [["Find Events", "/events"], ["Host Event", "/create"]] },
-              { title: "Company", links: [["About", "/about"], ["Privacy Policy", "/privacy"], ["Contact", "mailto:hello@flexpass.ng"]] },
+              { title: "Company", links: [["About", "/about"], ["FAQ", "/faq"], ["Privacy Policy", "/privacy"], ["Terms of Service", "/tos"], ["Refund Policy", "/refund"]] },
             ].map(col => (
               <div key={col.title}>
                 <h4 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">{col.title}</h4>

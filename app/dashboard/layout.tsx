@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine
+  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useState } from "react";
@@ -21,11 +21,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const navItems = [
-    { name: "Overview",  href: "/dashboard",            icon: LayoutDashboard },
-    { name: "My Events", href: "/dashboard/events",     icon: CalendarDays },
-    { name: "Check-In",  href: "/dashboard/checkin",    icon: ScanLine },
-    { name: "Wallet",    href: "/dashboard/wallet",     icon: Wallet },
-    { name: "Settings",  href: "/dashboard/settings",   icon: Settings },
+    { name: "Overview",   href: "/dashboard",           icon: LayoutDashboard },
+    { name: "My Events",  href: "/dashboard/events",    icon: CalendarDays },
+    { name: "My Tickets", href: "/dashboard/tickets",   icon: TicketIcon },
+    { name: "Check-In",   href: "/dashboard/checkin",   icon: ScanLine },
+    { name: "Wallet",     href: "/dashboard/wallet",    icon: Wallet },
+    { name: "Settings",   href: "/dashboard/settings",  icon: Settings },
   ];
 
   const SidebarContent = () => (

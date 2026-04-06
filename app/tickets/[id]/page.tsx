@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, Calendar, MapPin } from "lucide-react";
 import TicketQR from "@/components/TicketQR";
+import TicketActions from "@/components/TicketActions";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -84,6 +85,14 @@ export default async function TicketPage({ params }: Props) {
               Scan at the entrance to check in
             </p>
           </div>
+
+          {/* Add to Calendar + Share */}
+          <TicketActions
+            eventTitle={event.title}
+            eventDate={event.date}
+            eventLocation={event.location}
+            eventId={event.id}
+          />
 
           <Link href="/">
             <button className="w-full py-4 rounded-xl font-bold text-white hover:opacity-90 transition mt-2"
