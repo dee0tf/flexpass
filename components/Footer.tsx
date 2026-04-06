@@ -65,7 +65,7 @@ export default function Footer() {
           <div className="grid grid-cols-2 gap-8">
             {[
               { title: "Product", links: [["Find Events", "/events"], ["Host Event", "/create"]] },
-              { title: "Company", links: [["About", "/about"], ["Contact", "mailto:hello@flexpass.ng"]] },
+              { title: "Company", links: [["About", "/about"], ["Privacy Policy", "/privacy"], ["Contact", "mailto:hello@flexpass.ng"]] },
             ].map(col => (
               <div key={col.title}>
                 <h4 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">{col.title}</h4>
@@ -132,7 +132,10 @@ export default function Footer() {
         <div className="pt-8 flex flex-col md:flex-row justify-between items-center gap-3 text-xs"
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "rgba(240,238,248,0.25)" }}>
           <p>&copy; {year} FlexPass. All rights reserved.</p>
-          <p>Made with <span style={{ color: "var(--brand-amber)" }}>♥</span> in Lagos, Nigeria</p>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <p>Made with <span style={{ color: "var(--brand-amber)" }}>♥</span> in Lagos, Nigeria</p>
+          </div>
         </div>
       </div>
     </footer>
