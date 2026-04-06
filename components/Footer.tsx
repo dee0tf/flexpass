@@ -65,7 +65,7 @@ export default function Footer() {
           <div className="grid grid-cols-2 gap-8">
             {[
               { title: "Product", links: [["Find Events", "/events"], ["Host Event", "/create"]] },
-              { title: "Company", links: [["Contact", "mailto:hello@flexpass.ng"]] },
+              { title: "Company", links: [["About", "/about"], ["Contact", "mailto:hello@flexpass.ng"]] },
             ].map(col => (
               <div key={col.title}>
                 <h4 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">{col.title}</h4>
