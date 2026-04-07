@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, LogIn, Mail, Eye, EyeOff, AlertCircle } from "lucide-react";
 import Logo from "@/components/Logo";
@@ -16,7 +15,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
 
   const validateEmail = (val: string) => {
     if (val && !emailRegex.test(val)) setEmailError("Please enter a valid email address.");
@@ -31,10 +29,10 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      router.push("/dashboard");
+      // Hard redirect — guarantees the session is fully available when the dashboard mounts
+      window.location.href = "/dashboard";
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid login credentials.");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -54,8 +52,6 @@ export default function LoginPage() {
             <p className="text-sm mb-8" style={{ color: "var(--text-muted)" }}>Login to manage your events</p>
 
             <form onSubmit={handleLogin} className="space-y-5">
-
-              {/* Email */}
               <div>
                 <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Email Address</label>
                 <div className="relative">
@@ -77,7 +73,6 @@ export default function LoginPage() {
                 )}
               </div>
 
-              {/* Password */}
               <div>
                 <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Password</label>
                 <div className="relative">
@@ -89,13 +84,9 @@ export default function LoginPage() {
                     className="w-full pl-4 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
                     style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(p => !p)}
+                  <button type="button" onClick={() => setShowPassword(p => !p)}
                     className="absolute right-3 top-3.5 p-0.5 rounded transition hover:opacity-70"
-                    style={{ color: "var(--text-muted)" }}
-                    tabIndex={-1}
-                  >
+                    style={{ color: "var(--text-muted)" }} tabIndex={-1}>
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
@@ -107,10 +98,8 @@ export default function LoginPage() {
                 </p>
               )}
 
-              <button
-                disabled={isLoading}
-                className="w-full bg-[#480082] hover:bg-[#3a006b] text-white py-3.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 disabled:opacity-60"
-              >
+              <button disabled={isLoading}
+                className="w-full bg-[#480082] hover:bg-[#3a006b] text-white py-3.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 disabled:opacity-60">
                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><LogIn size={18} /> Log In</>}
               </button>
             </form>

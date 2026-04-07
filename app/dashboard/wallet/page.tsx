@@ -25,8 +25,9 @@ export default function WalletPage() {
 
   async function loadWalletData() {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) { setLoading(false); return; }
 
     // 1. Get my events
     const { data: myEvents } = await supabase.from("events").select("id").eq("user_id", user.id);

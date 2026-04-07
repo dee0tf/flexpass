@@ -21,6 +21,7 @@ export default function Navbar() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       if (event === "SIGNED_OUT") { setMobileMenuOpen(false); router.refresh(); }
+      if (event === "SIGNED_IN") { router.refresh(); }
     });
     return () => subscription.unsubscribe();
   }, [router]);

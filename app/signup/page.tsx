@@ -163,7 +163,8 @@ export default function SignupPage() {
 
       // 3. Redirect or show email confirmation
       if (!data.session) { setEmailSent(true); return; }
-      router.push("/dashboard");
+      // Hard redirect — ensures session is fully available when dashboard mounts
+      window.location.href = "/dashboard";
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
