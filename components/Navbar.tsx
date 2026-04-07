@@ -17,7 +17,7 @@ export default function Navbar() {
   const isHome = pathname === "/";
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
+    supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       if (event === "SIGNED_OUT") { setMobileMenuOpen(false); router.refresh(); }

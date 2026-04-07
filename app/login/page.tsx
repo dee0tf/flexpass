@@ -32,7 +32,7 @@ export default function LoginPage() {
       if (error) throw error;
       // Show success animation briefly then hard-redirect
       setSuccess(true);
-      setTimeout(() => { window.location.href = "/dashboard"; }, 1800);
+      setTimeout(() => { window.location.href = "/dashboard"; }, 1500);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid login credentials.");
       setIsLoading(false);

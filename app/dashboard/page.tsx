@@ -28,18 +28,16 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Listen for auth state — fires immediately with current session (no network call)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // getSession() reads from localStorage — instant, no network call, no timing issues
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        router.replace("/login");
+        window.location.href = "/login";
         return;
       }
       setUser(session.user);
-      await loadDashboardData(session.user.id);
+      loadDashboardData(session.user.id);
     });
-
-    return () => subscription.unsubscribe();
-  }, [router]);
+  }, []);
 
   async function loadDashboardData(userId: string) {
     try {

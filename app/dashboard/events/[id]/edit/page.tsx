@@ -35,8 +35,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) { window.location.href = "/login"; return; }
 
       const { data: event, error } = await supabase
         .from("events").select("*").eq("id", id).single();
