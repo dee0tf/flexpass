@@ -129,10 +129,14 @@ export default function SignupPage() {
 
     try {
       // 1. Create auth account
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
       const { data, error: signupError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo: `${siteUrl}/dashboard`,
+        },
       });
       if (signupError) throw signupError;
 

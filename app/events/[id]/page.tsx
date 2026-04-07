@@ -131,15 +131,15 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
 
           <div className="flex flex-col gap-3 mt-4 text-slate-600">
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-[#f97316]" />
+              <Calendar className="h-5 w-5 text-[#480082]" />
               <span>{dateString}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-[#f97316]" />
+              <Clock className="h-5 w-5 text-[#480082]" />
               <span>{timeString}</span>
             </div>
             <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-[#f97316]" />
+              <MapPin className="h-5 w-5 text-[#480082]" />
               <span>{event.location}</span>
             </div>
           </div>
