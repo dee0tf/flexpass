@@ -30,9 +30,9 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // Show success animation briefly then hard-redirect
       setSuccess(true);
-      setTimeout(() => { window.location.href = "/dashboard"; }, 1500);
+      // Replace immediately — no delay, no race condition
+      window.location.replace("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid login credentials.");
       setIsLoading(false);
