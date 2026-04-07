@@ -32,7 +32,7 @@ export default function HomeSearchBar() {
         />
         <button 
           type="submit"
-          className="bg-gradient-to-b from-[#f97316] to-[#581c87] text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+          className="bg-[#480082] hover:bg-[#3a006b] text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
         >
           <Search size={20} />
           <span>Search</span>

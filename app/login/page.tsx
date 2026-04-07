@@ -108,7 +108,7 @@ export default function LoginPage() {
               )}
 
               <button
-                disabled={isLoading || !!emailError}
+                disabled={isLoading}
                 className="w-full bg-[#480082] hover:bg-[#3a006b] text-white py-3.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><LogIn size={18} /> Log In</>}
