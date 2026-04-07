@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { Loader2, LogIn, Mail, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Loader2, LogIn, Mail, Eye, EyeOff, AlertCircle, CheckCircle2 } from "lucide-react";
 import Logo from "@/components/Logo";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
   const validateEmail = (val: string) => {
@@ -29,13 +30,41 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // Hard redirect — guarantees the session is fully available when the dashboard mounts
-      window.location.href = "/dashboard";
+      // Show success animation briefly then hard-redirect
+      setSuccess(true);
+      setTimeout(() => { window.location.href = "/dashboard"; }, 1800);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid login credentials.");
       setIsLoading(false);
     }
   };
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "var(--background)" }}>
+        <div className="flex flex-col items-center gap-5 animate-fade-in">
+          {/* Animated circle */}
+          <div className="relative flex items-center justify-center">
+            <div className="h-24 w-24 rounded-full animate-ping absolute"
+              style={{ backgroundColor: "rgba(72,0,130,0.15)" }} />
+            <div className="h-24 w-24 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: "rgba(72,0,130,0.12)", border: "2px solid var(--brand-indigo)" }}>
+              <CheckCircle2 className="h-12 w-12" style={{ color: "var(--brand-indigo)" }} />
+            </div>
+          </div>
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-1" style={{ color: "var(--text-primary)" }}>
+              Welcome back! 🎉
+            </h2>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              Successfully logged in. Taking you to your dashboard…
+            </p>
+          </div>
+          <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--brand-indigo)" }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "var(--background)" }}>
