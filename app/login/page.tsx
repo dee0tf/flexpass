@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { Loader2, LogIn, Mail, Eye, EyeOff, AlertCircle, CheckCircle2 } from "lucide-react";
@@ -17,6 +17,15 @@ export default function LoginPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
+  // If user is already logged in, redirect to dashboard immediately
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        window.location.replace("/dashboard");
+      }
+    });
+  }, []);
+
   const validateEmail = (val: string) => {
     if (val && !emailRegex.test(val)) setEmailError("Please enter a valid email address.");
     else setEmailError("");
@@ -28,11 +37,19 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      setSuccess(true);
-      // Replace immediately — no delay, no race condition
-      window.location.replace("/dashboard");
+
+      // Confirm the session is set before navigating
+      if (data.session) {
+        setSuccess(true);
+        // Small delay to ensure localStorage is flushed, then navigate
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 100);
+      } else {
+        throw new Error("Login succeeded but no session was returned.");
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid login credentials.");
       setIsLoading(false);

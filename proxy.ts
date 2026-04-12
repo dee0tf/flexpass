@@ -1,33 +1,20 @@
+// DISABLED: This server-side proxy checked for Supabase auth COOKIES,
+// but our Supabase client uses localStorage for session persistence.
+// The cookie check always failed, causing an infinite /login redirect loop.
+//
+// Auth protection is handled client-side in each dashboard page via
+// supabase.auth.getSession().
+//
+// To re-enable server-side auth guards, switch to @supabase/ssr which
+// uses cookie-based sessions, then restore this middleware.
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Protect dashboard and create routes server-side
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  const isProtected =
-    pathname.startsWith('/dashboard') || pathname === '/create';
-
-  if (!isProtected) return NextResponse.next();
-
-  // Check for any Supabase auth cookie
-  const cookies = request.cookies.getAll();
-  const hasSession = cookies.some(
-    (c) =>
-      c.name.includes('auth-token') ||
-      c.name.includes('sb-') ||
-      c.name === 'supabase-auth-token'
-  );
-
-  if (!hasSession) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('next', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
+export function proxy(_request: NextRequest) {
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/create'],
+  matcher: [],
 };

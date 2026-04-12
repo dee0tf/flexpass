@@ -17,15 +17,30 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // INITIAL_SESSION fires once after the Supabase client finishes its async
-    // localStorage read — the definitive initial auth state, never a false null.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event !== "INITIAL_SESSION") return;
-      if (!session) { window.location.replace("/login"); return; }
+    let cancelled = false;
+
+    // Primary: explicitly fetch session (works reliably after page reload)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      if (!session) {
+        window.location.replace("/login");
+        return;
+      }
       setUser(session.user);
       loadDashboardData(session.user.id);
     });
-    return () => subscription.unsubscribe();
+
+    // Also listen for sign-out so the page reacts if user logs out in another tab
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        window.location.replace("/login");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

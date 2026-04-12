@@ -1,22 +1,26 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 // Get environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Validate environment variables
-if (!supabaseUrl) {
-  throw new Error("Missing env.NEXT_PUBLIC_SUPABASE_URL");
-}
+// True singleton — only ONE SupabaseClient instance ever exists.
+// This prevents race conditions where multiple GoTrueClient instances
+// each fire their own INITIAL_SESSION event with stale data.
+let _supabase: SupabaseClient | null = null;
 
-if (!supabaseAnonKey) {
-  throw new Error("Missing env.NEXT_PUBLIC_SUPABASE_ANON_KEY");
+function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        detectSessionInUrl: true,
+        persistSession: typeof window !== "undefined",  // only persist on client
+        autoRefreshToken: true,
+      },
+    });
+  }
+  return _supabase;
 }
-
-// Client-side Supabase client (for use in Client Components)
-export const createClientSupabase = () => {
-  return createClient(supabaseUrl, supabaseAnonKey);
-};
 
 // Server-side Supabase client (for use in Server Components, API Routes, Server Actions)
 export const createServerSupabase = () => {
@@ -27,6 +31,5 @@ export const createServerSupabase = () => {
   });
 };
 
-// Default export for convenience (client-side)
-export const supabase = createClientSupabase();
-
+// Default export for convenience — guaranteed singleton
+export const supabase = getSupabase();
