@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Building2, Save, Loader2, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,8 @@ export default function BankSettings() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState("");
+    // Prevent auto-verify from firing when we populate fields from saved DB data
+    const skipNextVerify = useRef(false);
 
     useEffect(() => {
         async function fetchBankDetails() {
@@ -64,6 +66,7 @@ export default function BankSettings() {
                 .single();
 
             if (data) {
+                skipNextVerify.current = true;
                 setBankCode(data.bank_code || "");
                 setAccountNumber(data.account_number || "");
                 setAccountName(data.account_name || "");
@@ -76,6 +79,10 @@ export default function BankSettings() {
 
     // Auto-verify account when both bank code and 10-digit account number are present
     useEffect(() => {
+        if (skipNextVerify.current) {
+            skipNextVerify.current = false;
+            return;
+        }
         if (bankCode && accountNumber.length === 10) {
             verifyAccount();
         } else {
@@ -117,7 +124,8 @@ export default function BankSettings() {
         setSaving(true);
         setMessage("");
 
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session: saveSession } } = await supabase.auth.getSession();
+        const user = saveSession?.user;
         if (!user) return;
 
         const selectedBank = NIGERIAN_BANKS.find(b => b.code === bankCode);
@@ -139,11 +147,10 @@ export default function BankSettings() {
             setMessage("Bank details saved! Registering with Paystack...");
 
             // Register host as a Paystack subaccount so payments auto-split
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
+            if (saveSession) {
                 const res = await fetch('/api/paystack/subaccount', {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${session.access_token}` },
+                    headers: { Authorization: `Bearer ${saveSession.access_token}` },
                 });
                 if (res.ok) {
                     setMessage("Bank details saved & verified with Paystack ✓");

@@ -86,8 +86,8 @@ export default function Footer() {
             <h4 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">Support</h4>
             <ul className="space-y-3 text-sm">
               <li>
-                <a href="mailto:hello@flexpass.ng" className="hover:text-white transition-colors">
-                  hello@flexpass.ng
+                <a href="mailto:admin@flexpasshq.com" className="hover:text-white transition-colors">
+                  admin@flexpasshq.com
                 </a>
               </li>
             </ul>
