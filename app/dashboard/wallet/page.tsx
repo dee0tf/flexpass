@@ -95,29 +95,24 @@ export default function WalletPage() {
 
     setWithdrawLoading(true);
     try {
-      // Get session token to authenticate the server-side transfer API
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { alert("Please log in again."); return; }
 
-      const res = await fetch('/api/paystack/transfer', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ amount }),
+      // Just record a pending request — admin reviews and approves before any transfer fires
+      const { error } = await supabase.from("payouts").insert({
+        user_id: session.user.id,
+        amount,
+        status: "pending",
+        bank_account_id: bankingDetails.id,
       });
 
-      const result = await res.json();
+      if (error) throw error;
 
-      if (!res.ok) {
-        alert("Withdrawal failed: " + result.error);
-      } else {
-        alert(result.message || "Withdrawal initiated successfully!");
-        setIsWithdrawOpen(false);
-        setWithdrawAmount("");
-        loadWalletData();
-      }
+      setIsWithdrawOpen(false);
+      setWithdrawAmount("");
+      loadWalletData();
+    } catch (err: any) {
+      alert("Request failed: " + err.message);
     } finally {
       setWithdrawLoading(false);
     }
@@ -250,12 +245,15 @@ export default function WalletPage() {
               </div>
             )}
 
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+              Your request will be reviewed and processed by FlexPass within 24 hours.
+            </div>
             <Button
               onClick={handleWithdraw}
               disabled={withdrawLoading || !withdrawAmount || parseFloat(withdrawAmount) > balance || !bankingDetails}
               className="w-full bg-[#480082] hover:bg-[#3a006b] text-white py-6 text-lg"
             >
-              {withdrawLoading ? <Loader2 className="animate-spin" /> : "Confirm Withdrawal"}
+              {withdrawLoading ? <Loader2 className="animate-spin" /> : "Submit Withdrawal Request"}
             </Button>
           </div>
         </DialogContent>
