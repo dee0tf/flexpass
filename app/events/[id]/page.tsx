@@ -159,6 +159,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         eventTitle={event.title}
         eventPrice={event.price}
         eventId={event.id}
+        eventDate={event.date}
         tiers={event.tiers}
         legacyRemaining={event.legacyRemaining}
       />

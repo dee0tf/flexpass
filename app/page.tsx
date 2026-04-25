@@ -90,11 +90,6 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/40">
-          <span className="text-xs tracking-widest uppercase">Scroll</span>
-          <div className="h-8 w-px bg-gradient-to-b from-white/40 to-transparent" />
-        </div>
       </section>
 
       {/* ── Featured Events ─────────────────────────── */}

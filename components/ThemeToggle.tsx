@@ -48,7 +48,7 @@ export default function ThemeToggle() {
       onClick={toggle}
       aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
       title={`Switch to ${isDark ? "light" : "dark"} mode`}
-      className="fixed bottom-6 right-6 z-50 group"
+      className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 group"
     >
       {/* Outer ring — subtle glow */}
       <span className={`absolute inset-0 rounded-2xl transition-opacity duration-300 ${

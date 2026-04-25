@@ -17,7 +17,7 @@ FlexPass acts as a technology intermediary between event Organizers and Consumer
   {
     number: "2",
     title: "Event Cancellation by Organizer",
-    content: `If an Organizer cancels an event, all ticket holders are entitled to a full refund of the ticket price paid. The FlexPass service fee (5%) may be non-refundable as it covers the cost of processing and platform services.
+    content: `If an Organizer cancels an event, all ticket holders are entitled to a full refund of the ticket price paid. The FlexPass service fee (5%) shall be non-refundable as it covers the cost of processing and platform services.
 
 In the event of a cancellation, FlexPass will notify all ticket holders via the email address provided at the time of purchase. Organizers are required to notify FlexPass at least 24 hours before the scheduled event start time for the cancellation to be processed smoothly.
 

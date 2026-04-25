@@ -14,11 +14,12 @@ interface ClientProps {
   eventTitle: string;
   eventPrice: number;
   eventId: string;
+  eventDate: string;
   tiers: TicketTier[];
   legacyRemaining: number;
 }
 
-export default function ClientEventPage({ eventTitle, eventPrice, eventId, tiers, legacyRemaining }: ClientProps) {
+export default function ClientEventPage({ eventTitle, eventPrice, eventId, eventDate, tiers, legacyRemaining }: ClientProps) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -46,6 +47,7 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, tiers
     : legacyRemaining;
 
   const soldOut = totalRemaining === 0;
+  const ended = new Date(eventDate) < new Date();
 
   return (
     <>
@@ -71,11 +73,11 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, tiers
           </button>
           <button
             onClick={() => setIsCheckoutOpen(true)}
-            disabled={soldOut}
+            disabled={soldOut || ended}
             className="px-8 py-3 rounded-xl font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ backgroundColor: soldOut ? "var(--text-muted)" : "var(--brand-indigo)" }}
+            style={{ backgroundColor: ended ? "#6b7280" : soldOut ? "var(--text-muted)" : "var(--brand-indigo)" }}
           >
-            {soldOut ? "Sold Out" : "Buy Ticket"}
+            {ended ? "Ended" : soldOut ? "Sold Out" : "Buy Ticket"}
           </button>
         </div>
       </div>
@@ -96,11 +98,11 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, tiers
         {!totalRemaining || soldOut ? null : <div className="mb-4" />}
         <button
           onClick={() => setIsCheckoutOpen(true)}
-          disabled={soldOut}
+          disabled={soldOut || ended}
           className="w-full py-4 rounded-xl font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ backgroundColor: soldOut ? "var(--text-muted)" : "var(--brand-indigo)" }}
+          style={{ backgroundColor: ended ? "#6b7280" : soldOut ? "var(--text-muted)" : "var(--brand-indigo)" }}
         >
-          {soldOut ? "Sold Out" : "Get Tickets"}
+          {ended ? "Event Ended" : soldOut ? "Sold Out" : "Get Tickets"}
         </button>
         <button
           onClick={handleShare}
