@@ -108,6 +108,52 @@ export default function CheckoutModal({
   const fee = subtotal * FEE_PERCENTAGE;
   const totalAmount = subtotal + fee;
 
+  // Free ticket detection — fee on a ₦0 ticket is also ₦0
+  const isFree = totalAmount === 0 && (isLegacyEvent || !!selectedTier);
+
+  // Free ticket claim — bypasses Paystack entirely, server verifies price from DB
+  const handleClaimFree = async () => {
+    if (!email || !fullName) { alert("Please enter your name and email."); return; }
+    if (!isLegacyEvent && !selectedTier) { alert("Please select a ticket type."); return; }
+
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/claim-free-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          email,
+          fullName,
+          quantity,
+          tierId: selectedTier?.id || null,
+          tierName: selectedTier?.name || (isLegacyEvent ? 'Standard' : null),
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to claim ticket');
+
+      // Send confirmation email in background
+      fetch('/api/send-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, eventTitle, ticketId: result.ticketId, amount: 0 }),
+      });
+
+      onOpenChange(false);
+      setQuantity(1);
+      setEmail('');
+      setFullName('');
+      setSelectedTier(null);
+      router.push(`/tickets/${result.ticketId}`);
+    } catch (err: any) {
+      alert('Could not claim ticket: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // 2. The Success Logic — payment is verified SERVER-SIDE before ticket is created
   const handleSuccess = async (reference: PaystackSuccessResponse) => {
     if (!isLegacyEvent && !selectedTier) {
@@ -331,20 +377,29 @@ export default function CheckoutModal({
 
               <div className="pt-2">
                 <div className="space-y-2 mb-4">
-                  <div className="flex justify-between items-center text-sm text-slate-600">
-                    <span>Subtotal</span>
-                    <span>₦{subtotal.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm text-slate-600">
-                    <span>Service Fee (5%)</span>
-                    <span>₦{fee.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                    <span className="font-bold" style={{ color: "var(--text-primary)" }}>Total</span>
-                    <span className="text-2xl font-bold" style={{ color: "var(--brand-indigo)" }}>
-                      ₦{totalAmount.toLocaleString()}
-                    </span>
-                  </div>
+                  {isFree ? (
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="font-bold" style={{ color: "var(--text-primary)" }}>Total</span>
+                      <span className="text-2xl font-bold text-green-600">Free</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center text-sm text-slate-600">
+                        <span>Subtotal</span>
+                        <span>₦{subtotal.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm text-slate-600">
+                        <span>Service Fee (5%)</span>
+                        <span>₦{fee.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                        <span className="font-bold" style={{ color: "var(--text-primary)" }}>Total</span>
+                        <span className="text-2xl font-bold" style={{ color: "var(--brand-indigo)" }}>
+                          ₦{totalAmount.toLocaleString()}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {isSaving ? (
@@ -355,7 +410,18 @@ export default function CheckoutModal({
                   >
                     <Loader2 className="h-5 w-5 animate-spin" /> Processing...
                   </button>
+                ) : isFree ? (
+                  // Free ticket — no Paystack, server verifies price=0 from DB
+                  <button
+                    onClick={handleClaimFree}
+                    disabled={!email || !fullName || !!emailError}
+                    className="w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: "var(--brand-indigo)" }}
+                  >
+                    Claim Free Ticket
+                  </button>
                 ) : (
+                  // Paid ticket — Paystack handles payment
                   <div className="w-full relative rounded-xl overflow-hidden" style={{ backgroundColor: "var(--brand-indigo)" }}>
                     {(!email || !fullName || emailError) && (
                       <div

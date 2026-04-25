@@ -68,9 +68,15 @@ export async function POST(request: Request) {
     if (tierId) {
       const { data: tier } = await supabase
         .from('ticket_tiers')
-        .select('quantity_available')
+        .select('quantity_available, event_id')
         .eq('id', tierId)
         .single();
+
+      // Confirm this tier actually belongs to the event in the request
+      if (!tier || tier.event_id !== eventId) {
+        console.error(`[verify-payment] Tier mismatch: tierId=${tierId} does not belong to eventId=${eventId}`);
+        return NextResponse.json({ error: 'Invalid ticket tier for this event' }, { status: 400 });
+      }
 
       const { count: soldCount } = await supabase
         .from('tickets')
@@ -110,12 +116,15 @@ export async function POST(request: Request) {
 
     // --- 6. Insert verified ticket(s) ---
     const perTicketFee = fee / quantity;
-    const ticketsToCreate = Array.from({ length: quantity }).map(() => ({
+    // Each row gets a unique purchase_reference so the UNIQUE constraint holds.
+    // For single tickets: use the reference as-is.
+    // For multi-ticket: suffix with position (e.g. ref-1, ref-2).
+    const ticketsToCreate = Array.from({ length: quantity }, (_, i) => ({
       event_id: eventId,
       user_email: email,
       user_name: fullName,
       status: 'valid',
-      purchase_reference: reference,
+      purchase_reference: quantity > 1 ? `${reference}-${i + 1}` : reference,
       fee_amount: perTicketFee,
       total_amount_paid: price + perTicketFee,
       tier_id: tierId || null,
