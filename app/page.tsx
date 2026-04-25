@@ -21,14 +21,14 @@ export default async function Home() {
   const { data: events } = await supabase
     .from("events")
     .select("*")
-    .gte("date", now.split("T")[0])          // only upcoming
+    .gte("date", now)                        // full timestamp — excludes anything already past
     .order("date", { ascending: true })
     .limit(9);
 
   const { data: featuredEvents } = await supabase
     .from("events")
     .select("*")
-    .gte("date", now.split("T")[0])
+    .gte("date", now)
     .order("created_at", { ascending: false })
     .limit(3);
 

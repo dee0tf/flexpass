@@ -12,7 +12,8 @@ export default async function EventsPage({
     const { q, category } = await searchParams;
 
     const supabase = createServerSupabase();
-    let query = supabase.from("events").select("*").order("date", { ascending: true });
+    const now = new Date().toISOString();
+    let query = supabase.from("events").select("*").gte("date", now).order("date", { ascending: true });
 
     if (q) query = query.ilike("title", `%${q}%`);
     if (category && category !== "All") query = query.eq("category", category);
