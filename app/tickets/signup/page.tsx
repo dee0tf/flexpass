@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Loader2, ArrowRight, Mail, Eye, EyeOff, User,
-  Building2, CheckCircle2, AlertCircle,
+  Building2, CheckCircle2, AlertCircle, Instagram, Globe,
 } from "lucide-react";
-import Logo from "@/components/Logo";
 
 const NIGERIAN_BANKS = [
   { name: "Access Bank", code: "044" },
@@ -39,8 +38,8 @@ const NIGERIAN_BANKS = [
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignupPage() {
-  // Account fields
   const [fullName, setFullName] = useState("");
+  const [gender, setGender] = useState("");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [password, setPassword] = useState("");
@@ -49,6 +48,12 @@ export default function SignupPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
+  // Creator / host fields
+  const [hostName, setHostName] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
+  const [tiktokUrl, setTiktokUrl] = useState("");
+  const [twitterUrl, setTwitterUrl] = useState("");
+
   // Bank fields
   const [bankCode, setBankCode] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
@@ -56,15 +61,18 @@ export default function SignupPage() {
   const [verifying, setVerifying] = useState(false);
   const [bankVerified, setBankVerified] = useState(false);
   const [bankError, setBankError] = useState("");
+  const skipNextVerify = useRef(false);
 
-  // Form state
+  // ToS
+  const [agreedToTos, setAgreedToTos] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
 
-  // Auto-verify bank account when both fields are filled
   useEffect(() => {
+    if (skipNextVerify.current) { skipNextVerify.current = false; return; }
     if (bankCode && accountNumber.length === 10) {
       verifyBankAccount();
     } else {
@@ -81,9 +89,7 @@ export default function SignupPage() {
     setAccountName("");
     setBankError("");
     try {
-      const res = await fetch(
-        `/api/paystack/resolve-account?account_number=${accountNumber}&bank_code=${bankCode}`
-      );
+      const res = await fetch(`/api/paystack/resolve-account?account_number=${accountNumber}&bank_code=${bankCode}`);
       const data = await res.json();
       if (res.ok && data.account_name) {
         setAccountName(data.account_name);
@@ -111,13 +117,11 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Final validation
     if (!emailRegex.test(email)) { setEmailError("Please enter a valid email address."); return; }
     if (password !== confirmPassword) { setPasswordError("Passwords do not match."); return; }
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (!agreedToTos) { setError("Please agree to the Terms of Service to continue."); return; }
 
-    // Bank section — if partially filled, warn
     const bankPartiallyFilled = bankCode || accountNumber;
     if (bankPartiallyFilled && !bankVerified) {
       setError("Please complete and verify your bank details, or leave both fields empty.");
@@ -128,19 +132,24 @@ export default function SignupPage() {
     setError("");
 
     try {
-      // 1. Create auth account
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
       const { data, error: signupError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { full_name: fullName },
-          emailRedirectTo: `${siteUrl}/dashboard`,
+          data: {
+            full_name: fullName,
+            gender,
+            host_name: hostName || fullName,
+            instagram_url: instagramUrl,
+            tiktok_url: tiktokUrl,
+            twitter_url: twitterUrl,
+          },
+          emailRedirectTo: `${siteUrl}/auth/confirmed`,
         },
       });
       if (signupError) throw signupError;
 
-      // 2. Save bank details if verified
       if (bankVerified && accountName && data.user) {
         const selectedBank = NIGERIAN_BANKS.find(b => b.code === bankCode);
         await supabase.from("bank_accounts").upsert({
@@ -152,7 +161,6 @@ export default function SignupPage() {
           recipient_code: null,
         }, { onConflict: "user_id" });
 
-        // Register Paystack subaccount in background
         if (data.session) {
           fetch("/api/paystack/subaccount", {
             method: "POST",
@@ -161,9 +169,7 @@ export default function SignupPage() {
         }
       }
 
-      // 3. Redirect or show email confirmation
       if (!data.session) { setEmailSent(true); return; }
-      // Hard redirect — ensures session is fully available when dashboard mounts
       window.location.href = "/dashboard";
 
     } catch (err: unknown) {
@@ -195,13 +201,12 @@ export default function SignupPage() {
     );
   }
 
+  const inputClass = "w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition";
+  const inputStyle = { backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12" style={{ backgroundColor: "var(--background)" }}>
       <div className="w-full max-w-lg">
-        <div className="flex justify-center mb-8">
-          <Logo size={44} variant="gradient" />
-        </div>
-
         <div className="rounded-3xl shadow-xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
           <div className="h-1.5 w-full grad-brand" />
           <div className="p-8">
@@ -211,18 +216,34 @@ export default function SignupPage() {
             <form onSubmit={handleSignup} className="space-y-5">
 
               {/* ── Personal Info ── */}
-              <div>
-                <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3.5 h-4 w-4 pointer-events-none" style={{ color: "var(--text-muted)" }} />
-                  <input
-                    type="text" required
-                    placeholder="John Doe"
-                    value={fullName}
-                    onChange={e => setFullName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
-                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Full Name</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3.5 h-4 w-4 pointer-events-none" style={{ color: "var(--text-muted)" }} />
+                    <input type="text" required placeholder="John Doe" value={fullName}
+                      onChange={e => setFullName(e.target.value)}
+                      className={`${inputClass} pl-10`} style={inputStyle} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Gender</label>
+                  <select required value={gender} onChange={e => setGender(e.target.value)}
+                    className={inputClass} style={inputStyle}>
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Non-binary">Non-binary</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Host / Brand Name</label>
+                  <input type="text" placeholder="e.g. Vibe Africa" value={hostName}
+                    onChange={e => setHostName(e.target.value)}
+                    className={inputClass} style={inputStyle} />
                 </div>
               </div>
 
@@ -230,41 +251,24 @@ export default function SignupPage() {
                 <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3.5 h-4 w-4 pointer-events-none" style={{ color: "var(--text-muted)" }} />
-                  <input
-                    type="email" required
-                    placeholder="you@example.com"
-                    value={email}
+                  <input type="email" required placeholder="you@example.com" value={email}
                     onChange={e => { setEmail(e.target.value); if (emailError) setEmailError(""); }}
                     onBlur={() => validateEmail(email)}
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition ${emailError ? "ring-2 ring-red-400" : ""}`}
-                    style={{ backgroundColor: "var(--input-bg)", border: `1px solid ${emailError ? "#f87171" : "var(--input-border)"}`, color: "var(--text-primary)" }}
-                  />
+                    className={`${inputClass} pl-10 ${emailError ? "ring-2 ring-red-400" : ""}`}
+                    style={{ ...inputStyle, border: `1px solid ${emailError ? "#f87171" : "var(--input-border)"}` }} />
                 </div>
-                {emailError && (
-                  <p className="flex items-center gap-1 text-red-500 text-xs mt-1.5">
-                    <AlertCircle size={12} /> {emailError}
-                  </p>
-                )}
+                {emailError && <p className="flex items-center gap-1 text-red-500 text-xs mt-1.5"><AlertCircle size={12} /> {emailError}</p>}
               </div>
 
               <div>
                 <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Password</label>
                 <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"} required minLength={8}
-                    placeholder="Min. 8 characters"
-                    value={password}
+                  <input type={showPassword ? "text" : "password"} required minLength={8}
+                    placeholder="Min. 8 characters" value={password}
                     onChange={e => { setPassword(e.target.value); validatePasswords(e.target.value, confirmPassword); }}
-                    className="w-full pl-4 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
-                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-3 top-3.5 p-0.5 rounded transition hover:opacity-70"
-                    style={{ color: "var(--text-muted)" }}
-                    tabIndex={-1}
-                  >
+                    className={`${inputClass} pr-12`} style={inputStyle} />
+                  <button type="button" onClick={() => setShowPassword(p => !p)} tabIndex={-1}
+                    className="absolute right-3 top-3.5 p-0.5 rounded hover:opacity-70" style={{ color: "var(--text-muted)" }}>
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
@@ -273,96 +277,93 @@ export default function SignupPage() {
               <div>
                 <label className="text-sm font-medium block mb-1.5" style={{ color: "var(--text-secondary)" }}>Confirm Password</label>
                 <div className="relative">
-                  <input
-                    type={showConfirm ? "text" : "password"} required
-                    placeholder="Re-enter your password"
-                    value={confirmPassword}
+                  <input type={showConfirm ? "text" : "password"} required
+                    placeholder="Re-enter your password" value={confirmPassword}
                     onChange={e => { setConfirmPassword(e.target.value); validatePasswords(password, e.target.value); }}
-                    className={`w-full pl-4 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 transition ${passwordError ? "ring-2 ring-red-400" : ""}`}
-                    style={{ backgroundColor: "var(--input-bg)", border: `1px solid ${passwordError ? "#f87171" : "var(--input-border)"}`, color: "var(--text-primary)" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirm(p => !p)}
-                    className="absolute right-3 top-3.5 p-0.5 rounded transition hover:opacity-70"
-                    style={{ color: "var(--text-muted)" }}
-                    tabIndex={-1}
-                  >
+                    className={`${inputClass} pr-12 ${passwordError ? "ring-2 ring-red-400" : ""}`}
+                    style={{ ...inputStyle, border: `1px solid ${passwordError ? "#f87171" : "var(--input-border)"}` }} />
+                  <button type="button" onClick={() => setShowConfirm(p => !p)} tabIndex={-1}
+                    className="absolute right-3 top-3.5 p-0.5 rounded hover:opacity-70" style={{ color: "var(--text-muted)" }}>
                     {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-                {passwordError && (
-                  <p className="flex items-center gap-1 text-red-500 text-xs mt-1.5">
-                    <AlertCircle size={12} /> {passwordError}
+                {passwordError && <p className="flex items-center gap-1 text-red-500 text-xs mt-1.5"><AlertCircle size={12} /> {passwordError}</p>}
+              </div>
+
+              {/* ── Social Media (optional) ── */}
+              <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" style={{ color: "var(--brand-indigo)" }} />
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    Social Media <span className="font-normal" style={{ color: "var(--text-muted)" }}>(optional — shown on your events)</span>
                   </p>
-                )}
+                </div>
+                {[
+                  { label: "Instagram URL", value: instagramUrl, setter: setInstagramUrl, placeholder: "https://instagram.com/yourpage" },
+                  { label: "TikTok URL", value: tiktokUrl, setter: setTiktokUrl, placeholder: "https://tiktok.com/@yourpage" },
+                  { label: "Twitter / X URL", value: twitterUrl, setter: setTwitterUrl, placeholder: "https://x.com/yourhandle" },
+                ].map(f => (
+                  <div key={f.label}>
+                    <label className="text-xs font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>{f.label}</label>
+                    <input type="url" placeholder={f.placeholder} value={f.value}
+                      onChange={e => f.setter(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 transition"
+                      style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                  </div>
+                ))}
               </div>
 
               {/* ── Bank Details (optional) ── */}
-              <div
-                className="rounded-2xl p-5 space-y-4"
-                style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}
-              >
+              <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4" style={{ color: "var(--brand-indigo)" }} />
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     Bank Details <span className="font-normal" style={{ color: "var(--text-muted)" }}>(optional — for receiving payouts)</span>
                   </p>
                 </div>
-
                 <div>
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Bank</label>
-                  <select
-                    value={bankCode}
-                    onChange={e => setBankCode(e.target.value)}
+                  <select value={bankCode} onChange={e => setBankCode(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 transition"
-                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                  >
+                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}>
                     <option value="">Select your bank</option>
-                    {NIGERIAN_BANKS.map(b => (
-                      <option key={b.code} value={b.code}>{b.name}</option>
-                    ))}
+                    {NIGERIAN_BANKS.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
                   </select>
                 </div>
-
                 <div>
                   <label className="text-xs font-medium block mb-1" style={{ color: "var(--text-secondary)" }}>Account Number</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={10}
-                    placeholder="0123456789"
+                  <input type="text" inputMode="numeric" maxLength={10} placeholder="0123456789"
                     value={accountNumber}
                     onChange={e => setAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 transition"
-                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                  />
+                    style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
                 </div>
-
-                {/* Account Name */}
                 <div className="relative">
-                  <input
-                    readOnly
-                    value={verifying ? "Verifying..." : accountName}
+                  <input readOnly value={verifying ? "Verifying..." : accountName}
                     placeholder="Account name auto-fills after verification"
                     className="w-full px-3 py-2.5 pr-9 rounded-xl text-sm"
-                    style={{
-                      backgroundColor: "var(--surface)",
-                      border: `1px solid ${bankVerified ? "#4ade80" : "var(--card-border)"}`,
-                      color: bankVerified ? "#16a34a" : "var(--text-muted)",
-                      fontWeight: bankVerified ? 600 : 400,
-                    }}
-                  />
+                    style={{ backgroundColor: "var(--surface)", border: `1px solid ${bankVerified ? "#4ade80" : "var(--card-border)"}`, color: bankVerified ? "#16a34a" : "var(--text-muted)", fontWeight: bankVerified ? 600 : 400 }} />
                   <div className="absolute right-3 top-2.5">
                     {verifying && <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--text-muted)" }} />}
                     {bankVerified && !verifying && <CheckCircle2 className="h-4 w-4 text-green-500" />}
                   </div>
                 </div>
-                {bankError && (
-                  <p className="flex items-center gap-1 text-red-500 text-xs">
-                    <AlertCircle size={12} /> {bankError}
-                  </p>
-                )}
+                {bankError && <p className="flex items-center gap-1 text-red-500 text-xs"><AlertCircle size={12} /> {bankError}</p>}
+              </div>
+
+              {/* ── Terms of Service ── */}
+              <div className="flex items-start gap-3">
+                <input type="checkbox" id="tos" checked={agreedToTos} onChange={e => setAgreedToTos(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded accent-[#480082] cursor-pointer flex-shrink-0" />
+                <label htmlFor="tos" className="text-sm cursor-pointer leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  I have read and agree to the{" "}
+                  <Link href="/tos" target="_blank" className="font-semibold underline hover:no-underline" style={{ color: "var(--brand-indigo)" }}>
+                    Terms of Service
+                  </Link>{" "}and{" "}
+                  <Link href="/privacy" target="_blank" className="font-semibold underline hover:no-underline" style={{ color: "var(--brand-indigo)" }}>
+                    Privacy Policy
+                  </Link>
+                </label>
               </div>
 
               {error && (
@@ -371,10 +372,8 @@ export default function SignupPage() {
                 </p>
               )}
 
-              <button
-                disabled={isLoading || !!emailError || !!passwordError}
-                className="w-full bg-[#FFB700] text-[#0E0D0D] py-3.5 rounded-xl font-bold transition flex items-center justify-center gap-2 hover:bg-[#e6a500] disabled:opacity-60"
-              >
+              <button disabled={isLoading || !!emailError || !!passwordError}
+                className="w-full bg-[#FFB700] text-[#0E0D0D] py-3.5 rounded-xl font-bold transition flex items-center justify-center gap-2 hover:bg-[#e6a500] disabled:opacity-60">
                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Create Account <ArrowRight size={18} /></>}
               </button>
             </form>

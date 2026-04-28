@@ -55,7 +55,9 @@ export default function CheckoutModal({
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [fullName, setFullName] = useState("");
+  const [gender, setGender] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [paystackActive, setPaystackActive] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
 
@@ -125,6 +127,7 @@ export default function CheckoutModal({
           eventId,
           email,
           fullName,
+          gender,
           quantity,
           tierId: selectedTier?.id || null,
           tierName: selectedTier?.name || (isLegacyEvent ? 'Standard' : null),
@@ -145,6 +148,7 @@ export default function CheckoutModal({
       setQuantity(1);
       setEmail('');
       setFullName('');
+      setGender('');
       setSelectedTier(null);
       router.push(`/tickets/${result.ticketId}`);
     } catch (err: any) {
@@ -173,6 +177,7 @@ export default function CheckoutModal({
           eventId,
           email,
           fullName,
+          gender,
           quantity,
           tierId: selectedTier?.id || null,
           tierName: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
@@ -200,8 +205,8 @@ export default function CheckoutModal({
       setQuantity(1);
       setEmail("");
       setFullName("");
+      setGender("");
       setSelectedTier(null);
-
       router.push(`/tickets/${newTicketId}`);
 
     } catch (error: any) {
@@ -220,10 +225,9 @@ export default function CheckoutModal({
     amount: totalAmount * 100, // Kobo
     publicKey: PAYSTACK_KEY || "",
     text: `Pay ₦${totalAmount.toLocaleString()}`,
-    onSuccess: (ref: any) => handleSuccess(ref),
-    onClose: handleClose,
+    onSuccess: (ref: any) => { setPaystackActive(false); document.body.style.overflow = ""; handleSuccess(ref); },
+    onClose: () => { setPaystackActive(false); document.body.style.overflow = ""; handleClose(); },
     // Automatic split — host gets 95%, FlexPass keeps 5%
-    // Only applied when the host has a verified Paystack subaccount
     ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
   };
 
@@ -346,9 +350,7 @@ export default function CheckoutModal({
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-600">
-                  Full Name
-                </label>
+                <label className="text-sm font-medium text-slate-600">Full Name</label>
                 <Input
                   type="text"
                   placeholder="Enter your full name"
@@ -356,6 +358,21 @@ export default function CheckoutModal({
                   onChange={(e) => setFullName(e.target.value)}
                   className="rounded-xl h-12"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Gender</label>
+                <select
+                  value={gender}
+                  onChange={e => setGender(e.target.value)}
+                  className="w-full rounded-xl h-12 px-3 border border-input bg-background text-sm focus:outline-none focus:ring-2"
+                >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Non-binary">Non-binary</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
               </div>
 
               <div className="space-y-2">
@@ -422,19 +439,17 @@ export default function CheckoutModal({
                   </button>
                 ) : (
                   // Paid ticket — Paystack handles payment
-                  <div className="w-full relative rounded-xl overflow-hidden" style={{ backgroundColor: "var(--brand-indigo)" }}>
-                    {(!email || !fullName || emailError) && (
-                      <div
-                        className="absolute inset-0 z-10 cursor-not-allowed"
-                        onClick={() => {
-                          if (!email || !fullName) alert("Please enter your name and email");
-                          else if (emailError) alert("Please fix the email error");
-                        }}
-                      />
-                    )}
+                  // The PaystackButton wrapper has no overflow/transform so Paystack iframe is never clipped
+                  <div className="w-full rounded-xl" style={{ backgroundColor: "var(--brand-indigo)" }}>
                     <PaystackButton
                       {...componentProps}
-                      className={`w-full py-4 font-bold text-lg text-white hover:opacity-90 transition-opacity bg-transparent ${(!email || !fullName || emailError) ? "opacity-50 pointer-events-none" : ""}`}
+                      onClick={() => {
+                        // Restore body scroll so Paystack iframe is fully interactive (fixes iOS Safari touch block)
+                        setPaystackActive(true);
+                        document.body.style.overflow = "";
+                      }}
+                      disabled={!email || !fullName || !!emailError}
+                      className={`w-full py-4 font-bold text-lg text-white hover:opacity-90 transition-opacity bg-transparent ${(!email || !fullName || emailError) ? "opacity-50 cursor-not-allowed" : ""}`}
                     />
                   </div>
                 )}

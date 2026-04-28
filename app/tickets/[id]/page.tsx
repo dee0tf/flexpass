@@ -49,11 +49,17 @@ export default async function TicketPage({ params }: Props) {
         <div className="p-6 space-y-6">
           <div className="text-center">
             <h2 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{event.title}</h2>
-            <div className="flex items-center justify-center gap-2 mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
               <span className="px-3 py-1 rounded-full text-xs font-bold"
                 style={{ backgroundColor: "var(--surface-raised)", color: "var(--brand-indigo)" }}>
                 {ticket.tier_name || "Standard"}
               </span>
+              {ticket.user_gender && (
+                <>
+                  <span>•</span>
+                  <span className="text-xs">{ticket.user_gender}</span>
+                </>
+              )}
               <span>•</span>
               <span>ID: {ticket.id.slice(0, 8).toUpperCase()}</span>
             </div>

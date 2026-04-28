@@ -11,7 +11,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { eventId, email, fullName, quantity, tierId, tierName } = body;
+    const { eventId, email, fullName, gender, quantity, tierId, tierName } = body;
 
     // --- 1. Input validation ---
     if (!eventId || !email || !fullName || !quantity) {
@@ -122,8 +122,8 @@ export async function POST(request: Request) {
       event_id: eventId,
       user_email: email,
       user_name: fullName,
+      user_gender: gender || null,
       status: 'valid',
-      // Suffix per-ticket so each row has a unique purchase_reference
       purchase_reference: quantity > 1 ? `${baseRef}-${i + 1}` : baseRef,
       fee_amount: 0,
       total_amount_paid: 0,

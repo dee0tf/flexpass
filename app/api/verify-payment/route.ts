@@ -9,7 +9,7 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { reference, eventId, email, fullName, quantity, tierId, tierName, price, fee } = body;
+    const { reference, eventId, email, fullName, gender, quantity, tierId, tierName, price, fee } = body;
 
     // --- 1. Input validation ---
     if (!reference || !eventId || !email || !fullName || !quantity || price == null) {
@@ -123,6 +123,7 @@ export async function POST(request: Request) {
       event_id: eventId,
       user_email: email,
       user_name: fullName,
+      user_gender: gender || null,
       status: 'valid',
       purchase_reference: quantity > 1 ? `${reference}-${i + 1}` : reference,
       fee_amount: perTicketFee,

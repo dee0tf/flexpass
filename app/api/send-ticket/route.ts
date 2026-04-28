@@ -71,7 +71,7 @@ export async function POST(request: Request) {
                 <tr>
                   <td style="padding-top:16px;">
                     <p style="margin:0;color:rgba(240,238,248,0.4);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Amount Paid</p>
-                    <p style="margin:4px 0 0;color:#9F67FE;font-size:22px;font-weight:800;">&#x20A6;${safeAmount.toLocaleString()}</p>
+                    <p style="margin:4px 0 0;color:#9F67FE;font-size:22px;font-weight:800;">${safeAmount === 0 ? "Free" : `&#x20A6;${safeAmount.toLocaleString()}`}</p>
                   </td>
                 </tr>
               </table>
