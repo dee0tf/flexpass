@@ -83,8 +83,8 @@ export async function POST(request: Request) {
             </div>
 
             <div style="text-align:center;">
-              <a href="https://flexpasshq.com/dashboard/tickets" style="display:inline-block;background:linear-gradient(135deg,#480082,#9F67FE);color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;">
-                View My Tickets
+              <a href="https://flexpasshq.com/tickets/${safeTicketId}" style="display:inline-block;background:linear-gradient(135deg,#480082,#9F67FE);color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;">
+                View My Ticket
               </a>
             </div>
           </td>
