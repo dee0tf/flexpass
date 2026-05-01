@@ -1,17 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Minus, Loader2, Check } from "lucide-react";
+import { Plus, Minus, Loader2, Check, X } from "lucide-react";
 import { PaystackButton } from "react-paystack";
 import { useRouter } from "next/navigation";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY;
 
@@ -19,7 +11,7 @@ export interface TicketTier {
   id: string;
   name: string;
   price: number;
-  remaining?: number; // tickets left for this tier
+  remaining?: number;
 }
 
 interface CheckoutModalProps {
@@ -32,7 +24,6 @@ interface CheckoutModalProps {
   legacyRemaining?: number;
 }
 
-// Define the shape of the Paystack response
 interface PaystackSuccessResponse {
   reference: string;
   message: string;
@@ -41,6 +32,14 @@ interface PaystackSuccessResponse {
   transaction: string;
   trxref: string;
 }
+
+// Shared input style — always adapts to dark/light via CSS vars
+const inputStyle: React.CSSProperties = {
+  backgroundColor: "var(--input-bg)",
+  border: "1px solid var(--input-border)",
+  color: "var(--text-primary)",
+};
+const labelStyle: React.CSSProperties = { color: "var(--text-secondary)" };
 
 export default function CheckoutModal({
   open,
@@ -60,8 +59,8 @@ export default function CheckoutModal({
   const [paystackActive, setPaystackActive] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
+  const router = useRouter();
 
-  // Fetch host's subaccount code for automatic fund splitting
   useEffect(() => {
     fetch(`/api/event-subaccount?eventId=${eventId}`)
       .then(r => r.json())
@@ -69,146 +68,93 @@ export default function CheckoutModal({
       .catch(() => {});
   }, [eventId]);
 
-  // Email validation helper
-  const validateEmail = (email: string) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(String(email).toLowerCase());
-  };
-
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setEmail(val);
-    if (emailError) setEmailError(""); // Clear error on type
-  };
-
-  const handleEmailBlur = () => {
-    if (email && !validateEmail(email)) {
-      setEmailError("Please enter a valid email address");
-    }
-  };
-
-  // Determine if we are in "Legacy Mode" (No tiers)
-  const isLegacyEvent = tiers.length === 0;
-
-  // Auto-select logic
   useEffect(() => {
-    if (tiers.length === 1) {
-      setSelectedTier(tiers[0]);
-    }
+    if (tiers.length === 1) setSelectedTier(tiers[0]);
   }, [tiers]);
 
-  // --- INITIALIZE ROUTER ---
-  const router = useRouter();
+  // Lock/unlock body scroll with modal open state
+  useEffect(() => {
+    if (open && !paystackActive) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [open, paystackActive]);
 
-  // PRICE LOGIC
-  // If legacy, use basePrice. If tiers, use selectedTier price (or 0 if none selected)
+  const validateEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.toLowerCase());
+
+  const isLegacyEvent = tiers.length === 0;
   const finalPrice = isLegacyEvent ? basePrice : (selectedTier ? selectedTier.price : 0);
-
-  // FEE LOGIC
-  const FEE_PERCENTAGE = 0.05; // 5%
+  const FEE_PERCENTAGE = 0.05;
   const subtotal = finalPrice * quantity;
-  const fee = subtotal * FEE_PERCENTAGE;
+  const fee = Math.round(subtotal * FEE_PERCENTAGE * 100) / 100;
   const totalAmount = subtotal + fee;
-
-  // Free ticket detection — fee on a ₦0 ticket is also ₦0
   const isFree = totalAmount === 0 && (isLegacyEvent || !!selectedTier);
 
-  // Free ticket claim — bypasses Paystack entirely, server verifies price from DB
-  const handleClaimFree = async () => {
-    if (!email || !fullName) { alert("Please enter your name and email."); return; }
-    if (!isLegacyEvent && !selectedTier) { alert("Please select a ticket type."); return; }
+  const resetForm = () => {
+    setQuantity(1); setEmail(""); setFullName(""); setGender(""); setSelectedTier(null);
+  };
 
+  const handleClaimFree = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch('/api/claim-free-ticket', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/claim-free-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          eventId,
-          email,
-          fullName,
-          gender,
-          quantity,
+          eventId, email, fullName, gender, quantity,
           tierId: selectedTier?.id || null,
-          tierName: selectedTier?.name || (isLegacyEvent ? 'Standard' : null),
+          tierName: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
         }),
       });
-
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Failed to claim ticket');
+      if (!res.ok) throw new Error(result.error || "Failed to claim ticket");
 
-      // Send confirmation email in background
-      fetch('/api/send-ticket', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      fetch("/api/send-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, eventTitle, ticketId: result.ticketId, amount: 0 }),
       });
 
       onOpenChange(false);
-      setQuantity(1);
-      setEmail('');
-      setFullName('');
-      setGender('');
-      setSelectedTier(null);
+      resetForm();
       router.push(`/tickets/${result.ticketId}`);
     } catch (err: any) {
-      alert('Could not claim ticket: ' + err.message);
+      alert("Could not claim ticket: " + err.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // 2. The Success Logic — payment is verified SERVER-SIDE before ticket is created
   const handleSuccess = async (reference: PaystackSuccessResponse) => {
-    if (!isLegacyEvent && !selectedTier) {
-      alert("Please select a ticket type.");
-      return;
-    }
-
+    setPaystackActive(false);
+    document.body.style.overflow = "";
     setIsSaving(true);
     try {
-      // Call our secure API route which verifies the payment with Paystack
-      // before inserting any ticket into the database
-      const res = await fetch('/api/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/verify-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reference: reference.reference,
-          eventId,
-          email,
-          fullName,
-          gender,
-          quantity,
+          eventId, email, fullName, gender, quantity,
           tierId: selectedTier?.id || null,
           tierName: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
-          price: finalPrice,
-          fee,
+          price: finalPrice, fee,
         }),
       });
-
       const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Payment verification failed");
 
-      if (!res.ok) {
-        throw new Error(result.error || 'Payment verification failed');
-      }
-
-      const newTicketId = result.ticketId;
-
-      // Send email receipt in the background
-      fetch('/api/send-ticket', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, eventTitle, ticketId: newTicketId, amount: totalAmount }),
+      fetch("/api/send-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, eventTitle, ticketId: result.ticketId, amount: totalAmount }),
       });
 
       onOpenChange(false);
-      setQuantity(1);
-      setEmail("");
-      setFullName("");
-      setGender("");
-      setSelectedTier(null);
-      router.push(`/tickets/${newTicketId}`);
-
+      resetForm();
+      router.push(`/tickets/${result.ticketId}`);
     } catch (error: any) {
       alert("Ticket processing failed: " + error.message);
     } finally {
@@ -216,258 +162,258 @@ export default function CheckoutModal({
     }
   };
 
-  const handleClose = () => { /* modal closed */ };
-
-  // 3. Configuration for the Button Component
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const componentProps: any = {
     email,
-    amount: totalAmount * 100, // Kobo
+    amount: Math.round(totalAmount * 100),
     publicKey: PAYSTACK_KEY || "",
     text: `Pay ₦${totalAmount.toLocaleString()}`,
-    onSuccess: (ref: any) => { setPaystackActive(false); document.body.style.overflow = ""; handleSuccess(ref); },
-    onClose: () => { setPaystackActive(false); document.body.style.overflow = ""; handleClose(); },
-    // Automatic split — host gets 95%, FlexPass keeps 5%
+    onSuccess: handleSuccess,
+    onClose: () => {
+      setPaystackActive(false);
+      document.body.style.overflow = "";
+    },
     ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
   };
 
+  const canProceed = !!email && validateEmail(email) && !!fullName && !emailError;
+
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-white rounded-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-slate-900">
-            {eventTitle}
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      {/* Backdrop — hidden when Paystack is active so its own UI shows cleanly */}
+      {!paystackActive && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60"
+          onClick={() => onOpenChange(false)}
+        />
+      )}
 
-        <div className="space-y-6 py-4">
+      {/* Modal — hidden when Paystack is active to avoid visual interference */}
+      {!paystackActive && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
+          <div
+            className="relative w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden pointer-events-auto"
+            style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)", maxHeight: "92vh" }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Brand top bar */}
+            <div className="h-1 w-full grad-brand" />
 
-          {/* TIER SELECTION - Only show if > 1 tier */}
-          {tiers.length > 1 && (
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-slate-600">Select Ticket Type</label>
-              <div className="grid gap-3">
-                {tiers.map((tier) => {
-                  const soldOut = tier.remaining !== undefined && tier.remaining <= 0;
-                  return (
-                    <div
-                      key={tier.id}
-                      onClick={() => !soldOut && setSelectedTier(tier)}
-                      className={`p-3 rounded-xl border transition-all flex items-center justify-between ${
-                        soldOut
-                          ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
-                          : selectedTier?.id === tier.id
-                          ? "ring-1 cursor-pointer"
-                          : "border-slate-200 hover:border-purple-200 hover:bg-slate-50 cursor-pointer"
-                      }`}
-                      style={selectedTier?.id === tier.id && !soldOut ? {
-                        borderColor: "var(--brand-indigo)",
-                        backgroundColor: "rgba(72,0,130,0.05)",
-                        boxShadow: `0 0 0 1px var(--brand-indigo)`,
-                      } : {}}
-                    >
-                      <div>
-                        <p className="font-bold text-slate-900">{tier.name}</p>
-                        <p className="text-sm text-slate-500">₦{tier.price.toLocaleString()}</p>
-                        {soldOut ? (
-                          <p className="text-xs font-semibold text-red-500 mt-0.5">Sold out</p>
-                        ) : tier.remaining !== undefined && tier.remaining <= 20 ? (
-                          <p className="text-xs font-semibold text-orange-500 mt-0.5">{tier.remaining} left</p>
-                        ) : null}
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-4"
+              style={{ borderBottom: "1px solid var(--card-border)" }}>
+              <h2 className="font-display font-bold text-lg pr-4 truncate" style={{ color: "var(--text-primary)" }}>
+                {eventTitle}
+              </h2>
+              <button onClick={() => onOpenChange(false)}
+                className="p-2 rounded-xl transition hover:opacity-70 flex-shrink-0"
+                style={{ color: "var(--text-muted)" }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="overflow-y-auto px-6 pb-6" style={{ maxHeight: "calc(92vh - 80px)" }}>
+              <div className="space-y-5 pt-4">
+
+                {/* Tier selection */}
+                {tiers.length > 1 && (
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium" style={labelStyle}>Select Ticket Type</label>
+                    <div className="grid gap-2">
+                      {tiers.map(tier => {
+                        const soldOut = tier.remaining !== undefined && tier.remaining <= 0;
+                        const isSelected = selectedTier?.id === tier.id;
+                        return (
+                          <div key={tier.id}
+                            onClick={() => !soldOut && setSelectedTier(tier)}
+                            className="p-3 rounded-xl transition-all flex items-center justify-between"
+                            style={{
+                              border: isSelected && !soldOut
+                                ? `2px solid var(--brand-indigo)`
+                                : `1px solid var(--card-border)`,
+                              backgroundColor: isSelected && !soldOut
+                                ? "rgba(72,0,130,0.07)"
+                                : soldOut ? "rgba(0,0,0,0.03)" : "var(--surface-raised)",
+                              cursor: soldOut ? "not-allowed" : "pointer",
+                              opacity: soldOut ? 0.5 : 1,
+                            }}>
+                            <div>
+                              <p className="font-bold" style={{ color: "var(--text-primary)" }}>{tier.name}</p>
+                              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                                {tier.price === 0 ? "Free" : `₦${tier.price.toLocaleString()}`}
+                              </p>
+                              {soldOut
+                                ? <p className="text-xs font-semibold text-red-500 mt-0.5">Sold out</p>
+                                : tier.remaining !== undefined && tier.remaining <= 20
+                                ? <p className="text-xs font-semibold text-orange-500 mt-0.5">{tier.remaining} left</p>
+                                : null}
+                            </div>
+                            {isSelected && !soldOut && (
+                              <div className="text-white p-1 rounded-full flex-shrink-0" style={{ backgroundColor: "var(--brand-indigo)" }}>
+                                <Check className="h-3 w-3" />
+                              </div>
+                            )}
+                            {soldOut && (
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                style={{ border: "1px solid var(--card-border)", color: "var(--text-muted)" }}>
+                                Sold Out
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quantity + form */}
+                {(isLegacyEvent || selectedTier) && (
+                  <>
+                    {/* Quantity row */}
+                    <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="block font-semibold" style={{ color: "var(--text-primary)" }}>
+                            {selectedTier ? `${selectedTier.name} Ticket` : "Standard Ticket"}
+                          </span>
+                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {finalPrice === 0 ? "Free" : `₦${finalPrice.toLocaleString()} each`}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                            className="h-9 w-9 rounded-full flex items-center justify-center transition hover:opacity-80"
+                            style={{ border: "1px solid var(--card-border)", color: "var(--text-primary)", backgroundColor: "var(--card-bg)" }}>
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="text-xl font-bold w-6 text-center" style={{ color: "var(--text-primary)" }}>{quantity}</span>
+                          <button
+                            onClick={() => setQuantity(q => Math.min(isLegacyEvent ? Math.min(10, legacyRemaining ?? 10) : Math.min(10, selectedTier?.remaining ?? 10), q + 1))}
+                            disabled={isLegacyEvent ? quantity >= (legacyRemaining ?? 10) : quantity >= (selectedTier?.remaining ?? 10)}
+                            className="h-9 w-9 rounded-full flex items-center justify-center transition hover:opacity-80 disabled:opacity-40"
+                            style={{ border: "1px solid var(--card-border)", color: "var(--text-primary)", backgroundColor: "var(--card-bg)" }}>
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
-                      {selectedTier?.id === tier.id && !soldOut && (
-                        <div className="text-white p-1 rounded-full" style={{ backgroundColor: "var(--brand-indigo)" }}>
-                          <Check className="h-3 w-3" />
+                      {(() => {
+                        const rem = isLegacyEvent ? legacyRemaining : selectedTier?.remaining;
+                        if (!rem || rem > 20) return null;
+                        return rem <= 0
+                          ? <p className="text-xs font-semibold text-red-500 mt-2">This ticket type is sold out.</p>
+                          : <p className="text-xs font-semibold text-orange-500 mt-2">Only {rem} ticket{rem !== 1 ? "s" : ""} remaining!</p>;
+                      })()}
+                    </div>
+
+                    {/* Full Name */}
+                    <div>
+                      <label className="text-sm font-medium block mb-1.5" style={labelStyle}>Full Name</label>
+                      <input type="text" placeholder="Enter your full name" value={fullName}
+                        onChange={e => setFullName(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
+                        style={inputStyle} />
+                    </div>
+
+                    {/* Gender */}
+                    <div>
+                      <label className="text-sm font-medium block mb-1.5" style={labelStyle}>Gender</label>
+                      <select value={gender} onChange={e => setGender(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
+                        style={inputStyle}>
+                        <option value="">Select gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Non-binary">Non-binary</option>
+                        <option value="Prefer not to say">Prefer not to say</option>
+                      </select>
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                      <label className="text-sm font-medium block mb-1.5" style={labelStyle}>
+                        Where should we send your ticket?
+                      </label>
+                      <input type="email" placeholder="Enter your email" value={email}
+                        onChange={e => { setEmail(e.target.value); if (emailError) setEmailError(""); }}
+                        onBlur={() => { if (email && !validateEmail(email)) setEmailError("Please enter a valid email address"); }}
+                        className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
+                        style={{ ...inputStyle, border: emailError ? "1px solid #f87171" : "1px solid var(--input-border)" }} />
+                      {emailError && <p className="text-red-500 text-xs mt-1.5">{emailError}</p>}
+                    </div>
+
+                    {/* Price summary */}
+                    <div style={{ borderTop: "1px solid var(--card-border)", paddingTop: "16px" }}>
+                      {isFree ? (
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold" style={{ color: "var(--text-primary)" }}>Total</span>
+                          <span className="text-2xl font-bold text-green-500">Free</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm" style={{ color: "var(--text-muted)" }}>
+                            <span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between text-sm" style={{ color: "var(--text-muted)" }}>
+                            <span>Service Fee (5%)</span><span>₦{fee.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-2" style={{ borderTop: "1px solid var(--card-border)" }}>
+                            <span className="font-bold" style={{ color: "var(--text-primary)" }}>Total</span>
+                            <span className="text-2xl font-bold" style={{ color: "var(--brand-indigo)" }}>
+                              ₦{totalAmount.toLocaleString()}
+                            </span>
+                          </div>
                         </div>
                       )}
-                      {soldOut && (
-                        <span className="text-xs font-bold text-slate-400 border border-slate-200 px-2 py-0.5 rounded-full">Sold Out</span>
+                    </div>
+
+                    {/* Action button */}
+                    <div className="pb-2">
+                      {isSaving ? (
+                        <button disabled
+                          className="w-full text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 opacity-70"
+                          style={{ backgroundColor: "var(--brand-indigo)" }}>
+                          <Loader2 className="h-5 w-5 animate-spin" /> Processing...
+                        </button>
+                      ) : isFree ? (
+                        <button onClick={handleClaimFree} disabled={!canProceed}
+                          className="w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ backgroundColor: "var(--brand-indigo)" }}>
+                          Claim Free Ticket
+                        </button>
+                      ) : (
+                        // Paystack button rendered outside any overflow container
+                        <div className="w-full rounded-xl overflow-hidden" style={{ backgroundColor: "var(--brand-indigo)" }}>
+                          <PaystackButton
+                            {...componentProps}
+                            onClick={() => {
+                              if (!canProceed) return;
+                              // Hide our modal + backdrop before Paystack opens
+                              // so Paystack has a clean, unobstructed viewport
+                              setPaystackActive(true);
+                              document.body.style.overflow = "";
+                            }}
+                            disabled={!canProceed}
+                            className={`w-full py-4 font-bold text-lg text-white bg-transparent hover:opacity-90 transition ${!canProceed ? "opacity-50 cursor-not-allowed" : ""}`}
+                          />
+                        </div>
                       )}
                     </div>
-                  );
-                })}
+                  </>
+                )}
+
+                {!isLegacyEvent && !selectedTier && tiers.length > 0 && (
+                  <p className="text-center text-sm pb-2" style={{ color: "var(--text-muted)" }}>
+                    Please select a ticket type to continue.
+                  </p>
+                )}
               </div>
             </div>
-          )}
-
-          {/* QUANTITY & SUMMARY - Show if: (Legacy Event) OR (Tier Selected) */}
-          {(isLegacyEvent || selectedTier) && (
-            <>
-              <div className="rounded-xl p-4" style={{ backgroundColor: "var(--surface-raised)" }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="block font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {selectedTier ? `${selectedTier.name} Ticket` : "Standard Ticket"}
-                    </span>
-                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      ₦{finalPrice.toLocaleString()} each
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="h-11 w-11 rounded-full"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <span className="text-xl font-bold w-6 text-center" style={{ color: "var(--text-primary)" }}>{quantity}</span>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setQuantity(Math.min(
-                        isLegacyEvent
-                          ? Math.min(10, legacyRemaining ?? 10)
-                          : Math.min(10, selectedTier?.remaining ?? 10),
-                        quantity + 1
-                      ))}
-                      disabled={
-                        isLegacyEvent
-                          ? quantity >= (legacyRemaining ?? 10)
-                          : quantity >= (selectedTier?.remaining ?? 10)
-                      }
-                      className="h-11 w-11 rounded-full"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                {/* Tickets remaining count */}
-                {(() => {
-                  const rem = isLegacyEvent ? legacyRemaining : selectedTier?.remaining;
-                  if (rem === undefined) return null;
-                  if (rem <= 0) return (
-                    <p className="text-xs font-semibold text-red-500 mt-2">This ticket type is sold out.</p>
-                  );
-                  if (rem <= 20) return (
-                    <p className="text-xs font-semibold text-orange-500 mt-2">Only {rem} ticket{rem !== 1 ? "s" : ""} remaining!</p>
-                  );
-                  return (
-                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>{rem} tickets available</p>
-                  );
-                })()}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-600">Full Name</label>
-                <Input
-                  type="text"
-                  placeholder="Enter your full name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="rounded-xl h-12"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-600">Gender</label>
-                <select
-                  value={gender}
-                  onChange={e => setGender(e.target.value)}
-                  className="w-full rounded-xl h-12 px-3 border border-input bg-background text-sm focus:outline-none focus:ring-2"
-                >
-                  <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Non-binary">Non-binary</option>
-                  <option value="Prefer not to say">Prefer not to say</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-600">
-                  Where should we send your ticket?
-                </label>
-                <Input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={handleEmailChange}
-                  onBlur={handleEmailBlur}
-                  className={`rounded-xl h-12 ${emailError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                />
-                {emailError && (
-                  <p className="text-red-500 text-sm mt-1 animate-pulse">{emailError}</p>
-                )}
-              </div>
-
-              <div className="pt-2">
-                <div className="space-y-2 mb-4">
-                  {isFree ? (
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="font-bold" style={{ color: "var(--text-primary)" }}>Total</span>
-                      <span className="text-2xl font-bold text-green-600">Free</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between items-center text-sm text-slate-600">
-                        <span>Subtotal</span>
-                        <span>₦{subtotal.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm text-slate-600">
-                        <span>Service Fee (5%)</span>
-                        <span>₦{fee.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                        <span className="font-bold" style={{ color: "var(--text-primary)" }}>Total</span>
-                        <span className="text-2xl font-bold" style={{ color: "var(--brand-indigo)" }}>
-                          ₦{totalAmount.toLocaleString()}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {isSaving ? (
-                  <button
-                    disabled
-                    className="w-full text-white py-4 rounded-xl font-bold text-lg opacity-70 flex items-center justify-center gap-2"
-                    style={{ backgroundColor: "var(--brand-indigo)" }}
-                  >
-                    <Loader2 className="h-5 w-5 animate-spin" /> Processing...
-                  </button>
-                ) : isFree ? (
-                  // Free ticket — no Paystack, server verifies price=0 from DB
-                  <button
-                    onClick={handleClaimFree}
-                    disabled={!email || !fullName || !!emailError}
-                    className="w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: "var(--brand-indigo)" }}
-                  >
-                    Claim Free Ticket
-                  </button>
-                ) : (
-                  // Paid ticket — Paystack handles payment
-                  // The PaystackButton wrapper has no overflow/transform so Paystack iframe is never clipped
-                  <div className="w-full rounded-xl" style={{ backgroundColor: "var(--brand-indigo)" }}>
-                    <PaystackButton
-                      {...componentProps}
-                      onClick={() => {
-                        // Restore body scroll so Paystack iframe is fully interactive (fixes iOS Safari touch block)
-                        setPaystackActive(true);
-                        document.body.style.overflow = "";
-                      }}
-                      disabled={!email || !fullName || !!emailError}
-                      className={`w-full py-4 font-bold text-lg text-white hover:opacity-90 transition-opacity bg-transparent ${(!email || !fullName || emailError) ? "opacity-50 cursor-not-allowed" : ""}`}
-                    />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {!isLegacyEvent && !selectedTier && tiers.length > 0 && (
-            <p className="text-center text-slate-500 text-sm">Please select a ticket type to continue.</p>
-          )}
-
-          {/* This state should technically not happen if handled correctly upstream, but as fallback */}
-          {!isLegacyEvent && tiers.length === 0 && (
-            <p className="text-center text-red-500 font-medium">No tickets available for this event.</p>
-          )}
-
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      )}
+    </>
   );
 }
