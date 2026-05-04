@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import LayoutShell from "@/components/LayoutShell";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 // Brand typeface: Space Grotesk (body/UI) — Clash Display loaded via CSS @font-face
 const spaceGrotesk = Space_Grotesk({
@@ -33,6 +35,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body className={`${spaceGrotesk.variable} font-sans antialiased`}>
         <LayoutShell>{children}</LayoutShell>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
