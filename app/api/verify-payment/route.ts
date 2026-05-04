@@ -141,6 +141,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ticketId: data[0].id });
   } catch (err: any) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('[verify-payment] Unhandled error:', err);
+    return NextResponse.json({ error: 'Internal server error: ' + (err?.message || 'unknown') }, { status: 500 });
   }
 }
