@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import { Calendar, MapPin, Clock } from "lucide-react";
 import { Event } from "@/lib/types";
 
@@ -19,6 +22,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export default function EventCard({ event, variant = "default" }: EventCardProps) {
+  const [imgError, setImgError] = useState(false);
   const now = new Date();
   const eventDate = new Date(event.date);
   const isEnded = eventDate < now;
@@ -39,14 +43,16 @@ export default function EventCard({ event, variant = "default" }: EventCardProps
       >
         {/* Image */}
         <div className={`relative overflow-hidden ${variant === "featured" ? "h-52" : "h-44"}`}>
-          {event.image_url ? (
+          {event.image_url && !imgError ? (
             <Image
               src={event.image_url}
               alt={event.title}
               fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
               className={`object-cover transition-transform duration-500 ${
                 isEnded ? "grayscale" : "group-hover:scale-105"
               }`}
+              onError={() => setImgError(true)}
             />
           ) : (
             <div className="w-full h-full grad-brand flex items-center justify-center">

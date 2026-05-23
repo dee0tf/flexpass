@@ -84,7 +84,7 @@ export default function Footer() {
               { title: "Company", links: [["About", "/about"], ["FAQ", "/faq"], ["Privacy Policy", "/privacy"], ["Terms of Service", "/tos"], ["Refund Policy", "/refund"]] },
             ].map(col => (
               <div key={col.title}>
-                <h4 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">{col.title}</h4>
+                <h3 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">{col.title}</h3>
                 <ul className="space-y-3 text-sm">
                   {col.links.map(([label, href]) => (
                     <li key={label}>
@@ -98,7 +98,7 @@ export default function Footer() {
 
           {/* Resources — placeholder until pages are built */}
           <div>
-            <h4 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">Support</h4>
+            <h3 className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">Support</h3>
             <ul className="space-y-3 text-sm">
               <li>
                 <a href="mailto:admin@flexpasshq.com" className="hover:text-white transition-colors">
@@ -110,7 +110,7 @@ export default function Footer() {
 
           {/* Newsletter */}
           <div>
-            <h4 className="text-white font-display font-semibold mb-2 text-xs uppercase tracking-widest">Stay in the Loop</h4>
+            <h3 className="text-white font-display font-semibold mb-2 text-xs uppercase tracking-widest">Stay in the Loop</h3>
             <p className="text-sm mb-5" style={{ color: "rgba(240,238,248,0.35)" }}>Early access to the hottest events.</p>
             <form onSubmit={handleSubscribe} className="space-y-3">
               <div className="relative">
