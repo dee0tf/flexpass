@@ -51,6 +51,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://www.flexpasshq.com",
   },
+  verification: {
+    google: "o7yVYIA51ybJiWOsgVm6Fa3675C6PsfpGgTR4_B6x40",
+  },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
