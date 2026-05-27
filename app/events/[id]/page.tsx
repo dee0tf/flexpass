@@ -58,31 +58,34 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const event = await getEvent(id);
 
   if (!event) {
-    return {
-      title: "Event Not Found - FlexPass",
-    };
+    return { title: "Event Not Found" };
   }
 
+  const description = event.description?.slice(0, 160) || `Buy tickets for ${event.title} on FlexPass.`;
+
   return {
-    title: `${event.title} - FlexPass Nigeria`,
-    description: event.description?.slice(0, 160) || `Buy tickets for ${event.title} on FlexPass.`,
+    title: event.title,
+    description,
+    alternates: {
+      canonical: `/events/${id}`,
+    },
     openGraph: {
-      title: event.title,
-      description: event.description?.slice(0, 160),
-      images: [
-        {
-          url: event.image_url || "/placeholder.jpg",
-          width: 1200,
-          height: 630,
-          alt: event.title,
-        },
-      ],
+      type: "website",
+      locale: "en_NG",
+      siteName: "FlexPass",
+      url: `/events/${id}`,
+      title: `${event.title} — FlexPass`,
+      description,
+      images: event.image_url
+        ? [{ url: event.image_url, width: 1200, height: 630, alt: event.title }]
+        : undefined,
     },
     twitter: {
       card: "summary_large_image",
-      title: event.title,
-      description: event.description?.slice(0, 160),
-      images: [event.image_url || "/placeholder.jpg"],
+      title: `${event.title} — FlexPass`,
+      description,
+      site: "@flexpasshq",
+      images: event.image_url ? [event.image_url] : undefined,
     },
   };
 }
@@ -110,7 +113,53 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     minute: "2-digit",
   });
 
+  const eventSchema = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: event.title,
+    description: event.description || `Event: ${event.title}`,
+    startDate: event.date,
+    url: `https://www.flexpasshq.com/events/${id}`,
+    image: event.image_url || "https://www.flexpasshq.com/opengraph-image",
+    location: {
+      "@type": "Place",
+      name: event.location,
+      address: { "@type": "PostalAddress", addressLocality: event.location, addressCountry: "NG" },
+    },
+    organizer: { "@type": "Organization", name: "FlexPass", url: "https://www.flexpasshq.com" },
+    offers:
+      event.tiers?.length > 0
+        ? event.tiers.map((tier: any) => ({
+            "@type": "Offer",
+            name: tier.name,
+            price: String(tier.price),
+            priceCurrency: "NGN",
+            url: `https://www.flexpasshq.com/events/${id}`,
+            availability:
+              tier.remaining > 0 ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
+            validFrom: new Date().toISOString(),
+          }))
+        : [
+            {
+              "@type": "Offer",
+              price: String(event.price),
+              priceCurrency: "NGN",
+              url: `https://www.flexpasshq.com/events/${id}`,
+              availability:
+                event.legacyRemaining > 0
+                  ? "https://schema.org/InStock"
+                  : "https://schema.org/SoldOut",
+              validFrom: new Date().toISOString(),
+            },
+          ],
+  };
+
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }}
+      />
     <div className="min-h-screen bg-[#F8FAFC] pb-24">
       {/* Hero Image */}
       <div className="relative h-64 md:h-96 w-full">
@@ -164,5 +213,6 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         legacyRemaining={event.legacyRemaining}
       />
     </div>
+    </>
   );
 }

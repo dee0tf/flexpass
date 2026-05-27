@@ -1,8 +1,24 @@
+import type { Metadata } from "next";
 import EventCard from "@/components/EventCard";
 import { createServerSupabase } from "@/lib/supabase";
 import { Event } from "@/lib/types";
 import Link from "next/link";
 import SearchFilters from "@/components/SearchFilters";
+
+export const metadata: Metadata = {
+  title: "Browse Events",
+  description:
+    "Find upcoming concerts, tech summits, parties, and experiences across Nigeria. Filter by category and buy tickets instantly on FlexPass.",
+  alternates: {
+    canonical: "/events",
+  },
+  openGraph: {
+    title: "Browse Events in Nigeria | FlexPass",
+    description:
+      "Find upcoming concerts, tech summits, parties, and experiences across Nigeria.",
+    url: "/events",
+  },
+};
 
 export default async function EventsPage({
     searchParams,

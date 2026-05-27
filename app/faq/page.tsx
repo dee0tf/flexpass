@@ -137,8 +137,25 @@ function FAQItem({ q, a }: { q: string; a: string }) {
   );
 }
 
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.flatMap((group) =>
+    group.items.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    }))
+  ),
+};
+
 export default function FAQPage() {
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
     <main className="min-h-screen" style={{ backgroundColor: "var(--background)" }}>
 
       {/* Hero */}
@@ -225,5 +242,6 @@ export default function FAQPage() {
         </div>
       </section>
     </main>
+    </>
   );
 }

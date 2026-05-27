@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import EventCard from "@/components/EventCard";
 import { createServerSupabase } from "@/lib/supabase";
 import HomeSearchBar from "@/components/HomeSearchBar";
@@ -6,6 +7,17 @@ import Link from "next/link";
 import { ArrowRight, Zap, ShieldCheck, Smartphone } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: {
+    absolute: "FlexPass — Nigeria's Premier Ticketing Platform",
+  },
+  description:
+    "Discover concerts, tech summits, parties, and experiences across Nigeria. Buy tickets instantly and pay securely with Paystack.",
+  alternates: {
+    canonical: "/",
+  },
+};
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
