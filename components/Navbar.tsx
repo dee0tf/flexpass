@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Menu, X, User, LogOut, Ticket } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/lib/supabase";
 import Logo from "./Logo";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -17,12 +16,26 @@ export default function Navbar() {
   const isHome = pathname === "/";
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      if (event === "SIGNED_OUT") { setMobileMenuOpen(false); }
+    let subscription: { unsubscribe: () => void } | null = null;
+    let mounted = true;
+
+    import("@/lib/supabase").then(({ supabase }) => {
+      if (!mounted) return;
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (mounted) setUser(session?.user ?? null);
+      });
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        if (!mounted) return;
+        setUser(session?.user ?? null);
+        if (event === "SIGNED_OUT") setMobileMenuOpen(false);
+      });
+      subscription = data.subscription;
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
   }, [router]);
 
   useEffect(() => {
@@ -45,6 +58,7 @@ export default function Navbar() {
   }, [mobileMenuOpen]);
 
   const handleSignOut = async () => {
+    const { supabase } = await import("@/lib/supabase");
     await supabase.auth.signOut();
     setUser(null);
     setMobileMenuOpen(false);

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { Share2, Check } from "lucide-react";
-import { TicketTier } from "@/components/CheckoutModal";
+import type { TicketTier } from "@/components/CheckoutModal";
 
 const CheckoutModal = dynamic(
   () => import("@/components/CheckoutModal"),
