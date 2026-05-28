@@ -101,8 +101,8 @@ export default function Footer() {
             <p className="text-white font-display font-semibold mb-5 text-xs uppercase tracking-widest">Support</p>
             <ul className="space-y-3 text-sm">
               <li>
-                <a href="mailto:admin@flexpasshq.com" className="hover:text-white transition-colors">
-                  admin@flexpasshq.com
+                <a href="mailto:flexpasshome@gmail.com" className="hover:text-white transition-colors">
+                  flexpasshome@gmail.com
                 </a>
               </li>
             </ul>
