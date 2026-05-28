@@ -100,7 +100,7 @@ export default async function TicketPage({ params }: Props) {
                   title="Venue location" style={{ display: "block" }}
                 />
                 <a
-                  href={`https://www.openstreetmap.org/?mlat=${event.latitude}&mlon=${event.longitude}#map=16/${event.latitude}/${event.longitude}`}
+                  href={`https://www.google.com/maps?q=${event.latitude},${event.longitude}`}
                   target="_blank" rel="noopener noreferrer"
                   className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium hover:opacity-80 transition"
                   style={{ backgroundColor: "var(--surface-raised)", color: "var(--brand-indigo)" }}>

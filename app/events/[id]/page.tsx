@@ -217,7 +217,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                 title="Event location" style={{ display: "block" }}
               />
               <a
-                href={`https://www.openstreetmap.org/?mlat=${event.latitude}&mlon=${event.longitude}#map=16/${event.latitude}/${event.longitude}`}
+                href={`https://www.google.com/maps?q=${event.latitude},${event.longitude}`}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-[#480082] hover:bg-slate-100 transition bg-slate-50"
               >

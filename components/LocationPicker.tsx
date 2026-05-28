@@ -69,7 +69,7 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
     : null;
 
   const osmDirectionsUrl = value.lat && value.lng
-    ? `https://www.openstreetmap.org/?mlat=${value.lat}&mlon=${value.lng}#map=16/${value.lat}/${value.lng}`
+    ? `https://www.google.com/maps?q=${value.lat},${value.lng}`
     : null;
 
   const inputStyle = { backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
