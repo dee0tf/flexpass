@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 
 interface LogoProps {
     className?: string;
@@ -37,14 +38,14 @@ export default function Logo({ className = "", size = 40, type = "full", variant
                 flexShrink: 0,
             }}
         >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
                 src="/logo.png"
                 alt="FlexPass"
-                loading="lazy"
-                fetchPriority="low"
                 width={imageRenderSize}
                 height={imageRenderSize}
+                loading="lazy"
+                fetchPriority="low"
+                sizes={`${Math.round(imageRenderSize)}px`}
                 style={{
                     position: "absolute",
                     width: imageRenderSize,
