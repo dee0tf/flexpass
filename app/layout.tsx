@@ -108,19 +108,18 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <head>
-        {/* Clash Display — async load to avoid 800ms render block */}
+        {/* Clash Display — preconnect to both origins to reduce font chain latency */}
         <link rel="preconnect" href="https://api.fontshare.com" crossOrigin="anonymous" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){var l=document.createElement('link');l.rel='stylesheet';l.href='https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap';document.head.appendChild(l)})()`,
-          }}
+        <link rel="preconnect" href="https://cdn.fontshare.com" crossOrigin="anonymous" />
+        <link
+          rel="preload"
+          as="style"
+          href="https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap"
         />
-        <noscript>
-          <link
-            href="https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap"
-            rel="stylesheet"
-          />
-        </noscript>
+        <link
+          href="https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap"
+          rel="stylesheet"
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(siteSchema) }}

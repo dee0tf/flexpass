@@ -41,6 +41,10 @@ export default function Logo({ className = "", size = 40, type = "full", variant
             <img
                 src="/logo.png"
                 alt="FlexPass"
+                loading="lazy"
+                fetchPriority="low"
+                width={imageRenderSize}
+                height={imageRenderSize}
                 style={{
                     position: "absolute",
                     width: imageRenderSize,
