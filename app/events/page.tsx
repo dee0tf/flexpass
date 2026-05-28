@@ -68,8 +68,8 @@ export default async function EventsPage({
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {eventsList.map((event) => (
-                            <EventCard key={event.id} event={event} />
+                        {eventsList.map((event, index) => (
+                            <EventCard key={event.id} event={event} priority={index === 0} />
                         ))}
                     </div>
                 )}

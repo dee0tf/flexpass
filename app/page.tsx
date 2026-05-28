@@ -113,13 +113,13 @@ export default async function Home() {
                 <p className="text-[#FFB700] text-sm font-semibold uppercase tracking-widest mb-1">Hot Right Now</p>
                 <h2 className="font-display text-3xl font-bold text-white">Featured Events</h2>
               </div>
-              <Link href="/events" className="flex items-center gap-1 text-[#9F67FE] hover:text-white text-sm font-medium transition-colors">
+              <Link href="/events" className="flex items-center gap-1 text-white/70 hover:text-white text-sm font-medium transition-colors">
                 See all <ArrowRight size={16} />
               </Link>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {featured.map(event => (
-                <EventCard key={event.id} event={event} variant="featured" />
+              {featured.map((event, index) => (
+                <EventCard key={event.id} event={event} variant="featured" priority={index === 0} />
               ))}
             </div>
           </div>
@@ -131,7 +131,7 @@ export default async function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <p className="text-[#9F67FE] text-sm font-semibold uppercase tracking-widest mb-1">Don&apos;t Miss Out</p>
+              <p className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: "#6B32A8" }}>Don&apos;t Miss Out</p>
               <h2 className="font-display text-3xl font-bold text-[#0E0D0D]">Upcoming Events</h2>
             </div>
             <Link href="/events" className="flex items-center gap-1 text-[#480082] hover:text-[#9F67FE] text-sm font-medium transition-colors">

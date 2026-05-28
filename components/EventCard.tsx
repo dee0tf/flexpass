@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, MapPin, Clock } from "lucide-react";
 import { Event } from "@/lib/types";
 
 interface EventCardProps {
   event: Event;
   variant?: "default" | "featured";
+  priority?: boolean;
 }
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
@@ -21,12 +22,21 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
   Others:    { bg: "rgba(100,116,139,0.15)", text: "#64748b" },
 };
 
-export default function EventCard({ event, variant = "default" }: EventCardProps) {
+export default function EventCard({ event, variant = "default", priority = false }: EventCardProps) {
   const [imgError, setImgError] = useState(false);
-  const now = new Date();
   const eventDate = new Date(event.date);
-  const isEnded = eventDate < now;
-  const isSoon = !isEnded && (eventDate.getTime() - now.getTime()) < 7 * 24 * 60 * 60 * 1000;
+
+  // Computed client-side only to avoid SSR/hydration mismatch with new Date()
+  const [isEnded, setIsEnded] = useState(false);
+  const [isSoon, setIsSoon] = useState(false);
+
+  useEffect(() => {
+    const now = new Date();
+    const ended = eventDate < now;
+    setIsEnded(ended);
+    setIsSoon(!ended && (eventDate.getTime() - now.getTime()) < 7 * 24 * 60 * 60 * 1000);
+  }, [event.date]);
+
   const cat = CATEGORY_COLORS[event.category || "Others"] ?? CATEGORY_COLORS.Others;
 
   return (
@@ -49,6 +59,7 @@ export default function EventCard({ event, variant = "default" }: EventCardProps
               alt={event.title}
               fill
               sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+              priority={priority}
               className={`object-cover transition-transform duration-500 ${
                 isEnded ? "grayscale" : "group-hover:scale-105"
               }`}
@@ -101,17 +112,17 @@ export default function EventCard({ event, variant = "default" }: EventCardProps
             {event.title}
           </h3>
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
+            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
               <Calendar size={13} className="shrink-0" style={{ color: "var(--brand-lavender)" }} />
               <span>{eventDate.toLocaleDateString("en-NG", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</span>
             </div>
             {event.start_time && (
-              <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
+              <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
                 <Clock size={13} className="shrink-0" style={{ color: "var(--brand-lavender)" }} />
                 <span>{event.start_time}</span>
               </div>
             )}
-            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
+            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
               <MapPin size={13} className="shrink-0" style={{ color: "var(--brand-lavender)" }} />
               <span className="truncate">{event.location}</span>
             </div>
