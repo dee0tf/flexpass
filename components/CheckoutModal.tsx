@@ -12,6 +12,7 @@ export interface TicketTier {
   name: string;
   price: number;
   remaining?: number;
+  ends_at?: string | null;
 }
 
 interface CheckoutModalProps {
@@ -224,20 +225,22 @@ export default function CheckoutModal({
                     <div className="grid gap-2">
                       {tiers.map(tier => {
                         const soldOut = tier.remaining !== undefined && tier.remaining <= 0;
+                        const expired = tier.ends_at ? new Date(tier.ends_at) < new Date() : false;
+                        const unavailable = soldOut || expired;
                         const isSelected = selectedTier?.id === tier.id;
                         return (
                           <div key={tier.id}
-                            onClick={() => !soldOut && setSelectedTier(tier)}
+                            onClick={() => !unavailable && setSelectedTier(tier)}
                             className="p-3 rounded-xl transition-all flex items-center justify-between"
                             style={{
-                              border: isSelected && !soldOut
+                              border: isSelected && !unavailable
                                 ? `2px solid var(--brand-indigo)`
                                 : `1px solid var(--card-border)`,
-                              backgroundColor: isSelected && !soldOut
+                              backgroundColor: isSelected && !unavailable
                                 ? "rgba(72,0,130,0.07)"
-                                : soldOut ? "rgba(0,0,0,0.03)" : "var(--surface-raised)",
-                              cursor: soldOut ? "not-allowed" : "pointer",
-                              opacity: soldOut ? 0.5 : 1,
+                                : unavailable ? "rgba(0,0,0,0.03)" : "var(--surface-raised)",
+                              cursor: unavailable ? "not-allowed" : "pointer",
+                              opacity: unavailable ? 0.5 : 1,
                             }}>
                             <div>
                               <p className="font-bold" style={{ color: "var(--text-primary)" }}>{tier.name}</p>
@@ -246,11 +249,13 @@ export default function CheckoutModal({
                               </p>
                               {soldOut
                                 ? <p className="text-xs font-semibold text-red-500 mt-0.5">Sold out</p>
+                                : expired
+                                ? <p className="text-xs font-semibold mt-0.5" style={{ color: "var(--text-muted)" }}>Sale ended</p>
                                 : tier.remaining !== undefined && tier.remaining <= 20
                                 ? <p className="text-xs font-semibold text-orange-500 mt-0.5">{tier.remaining} left</p>
                                 : null}
                             </div>
-                            {isSelected && !soldOut && (
+                            {isSelected && !unavailable && (
                               <div className="text-white p-1 rounded-full flex-shrink-0" style={{ backgroundColor: "var(--brand-indigo)" }}>
                                 <Check className="h-3 w-3" />
                               </div>
@@ -259,6 +264,12 @@ export default function CheckoutModal({
                               <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0"
                                 style={{ border: "1px solid var(--card-border)", color: "var(--text-muted)" }}>
                                 Sold Out
+                              </span>
+                            )}
+                            {expired && !soldOut && (
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                style={{ border: "1px solid rgba(255,183,0,0.4)", color: "var(--brand-gold)" }}>
+                                Ended
                               </span>
                             )}
                           </div>

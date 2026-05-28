@@ -20,5 +20,6 @@ export interface TicketTier {
   name: string;
   price: number;
   quantity_available: number;
+  ends_at?: string | null;
 }
 

@@ -6,15 +6,16 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, MapPin, DollarSign,
   Image as ImageIcon, Type, Clock, User, Plus, Trash2,
-  CheckCircle2, AlertTriangle, Tag,
+  CheckCircle2, AlertTriangle, Tag, Mail,
 } from "lucide-react";
+import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
 import { use } from "react";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
 interface TierFormData {
-  id?: string; name: string; price: string; quantity: string; isNew?: boolean;
+  id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean;
 }
 
 // ── Branded success modal ──────────────────────────────────────────
@@ -177,10 +178,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         .from("ticket_tiers").select("*").eq("event_id", id).order("price", { ascending: true });
 
       setTiers(
-        (existingTiers || []).map((t: any) => ({ id: t.id, name: t.name, price: t.price.toString(), quantity: t.quantity_available.toString() }))
+        (existingTiers || []).map((t: any) => ({
+          id: t.id, name: t.name, price: t.price.toString(),
+          quantity: t.quantity_available.toString(),
+          ends_at: t.ends_at ? new Date(t.ends_at).toISOString().slice(0, 16) : "",
+        }))
       );
       if (!existingTiers || existingTiers.length === 0) {
-        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", isNew: true }]);
+        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true }]);
       }
 
       // Detect if category is custom (not in CATEGORIES standard list)
@@ -234,7 +239,13 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       if (error) throw error;
 
       const { error: tierError } = await supabase.from("ticket_tiers").upsert(
-        tiers.map(t => ({ ...(t.id ? { id: t.id } : {}), event_id: id, name: t.name, price: Number(t.price), quantity_available: Number(t.quantity) })),
+        tiers.map(t => ({
+          ...(t.id ? { id: t.id } : {}),
+          event_id: id, name: t.name,
+          price: Number(t.price),
+          quantity_available: Number(t.quantity),
+          ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
+        })),
         { onConflict: "id" }
       );
       if (tierError) throw tierError;
@@ -276,8 +287,15 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       )}
 
       <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-10">
+        <div className="flex items-center justify-between mb-10">
           <h1 className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>Edit Event</h1>
+          <Link
+            href={`/dashboard/events/${id}/email`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition hover:opacity-90"
+            style={{ backgroundColor: "var(--surface-raised)", color: "var(--brand-indigo)", border: "1px solid var(--card-border)" }}
+          >
+            <Mail size={15} /> Email Attendees
+          </Link>
         </div>
 
         <div className="rounded-3xl shadow-xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
@@ -364,6 +382,16 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                           required />
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--brand-amber)" }}>
+                      Early Bird Ends (optional)
+                    </label>
+                    <input type="datetime-local" value={tier.ends_at || ""}
+                      onChange={e => updateTier(i, "ends_at", e.target.value)}
+                      className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                      style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier auto-closes after this date/time.</p>
                   </div>
                   {tiers.length > 1 && (
                     <button type="button" onClick={() => removeTier(i)}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus } from "lucide-react";
+import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mail, TrendingUp } from "lucide-react";
 import SalesChart from "@/components/SalesChart";
 import Link from "next/link";
 
@@ -64,18 +64,40 @@ export default function DashboardPage() {
 
       const revenue = myTickets?.reduce((acc, t) => acc + (t.events?.price || 0), 0) || 0;
 
+      // Sales velocity: tickets sold per event in last 7 days
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const velocityMap = new Map<string, number>();
+      myTickets?.forEach(t => {
+        if (t.created_at >= sevenDaysAgo) {
+          velocityMap.set(t.event_id, (velocityMap.get(t.event_id) || 0) + 1);
+        }
+      });
+
+      // Ticket count per event (total)
+      const soldByEvent = new Map<string, number>();
+      myTickets?.forEach(t => {
+        soldByEvent.set(t.event_id, (soldByEvent.get(t.event_id) || 0) + 1);
+      });
+
       const chartDataMap = new Map<string, number>();
       myTickets?.forEach(t => {
         const title = t.events?.title || "Unknown";
         chartDataMap.set(title, (chartDataMap.get(title) || 0) + (t.events?.price || 0));
       });
 
+      // Attach velocity + sold count to each event
+      const eventsWithVelocity = myEvents.map(e => ({
+        ...e,
+        _sold: soldByEvent.get(e.id) || 0,
+        _velocity7d: velocityMap.get(e.id) || 0,
+      }));
+
       setStats({
         revenue,
         ticketsSold: myTickets?.length || 0,
         activeEvents: myEvents.length,
         recentSales: myTickets || [],
-        myEvents,
+        myEvents: eventsWithVelocity,
         chartData: Array.from(chartDataMap.entries()).map(([name, rev]) => ({
           name: name.length > 20 ? name.slice(0, 17) + "..." : name,
           revenue: rev,
@@ -88,22 +110,53 @@ export default function DashboardPage() {
     }
   }
 
-  const handleExport = () => {
-    if (!stats.recentSales.length) { alert("No data to export"); return; }
-    const headers = ["Ticket ID", "Event", "Customer Name", "Email", "Amount", "Status", "Date"];
-    const rows = stats.recentSales.map(t => [
-      t.id,
-      `"${(t.events?.title || "Unknown").replace(/"/g, '""')}"`,
-      `"${(t.user_name || "N/A").replace(/"/g, '""')}"`,
-      t.user_email, t.events?.price || 0, t.status,
-      new Date(t.created_at).toLocaleDateString(),
-    ].join(","));
-    const blob = new Blob([[headers.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+  function downloadCSV(rows: string[][], filename: string) {
+    const blob = new Blob([rows.map(r => r.join(",")).join("\n")], { type: "text/csv;charset=utf-8;" });
     const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(blob),
-      download: `flexpass_${new Date().toISOString().split("T")[0]}.csv`,
+      href: URL.createObjectURL(blob), download: filename,
     });
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  function csvCell(val: string | number) {
+    const s = String(val ?? "").replace(/"/g, '""');
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
+  }
+
+  const handleExport = () => {
+    if (!stats.recentSales.length) { alert("No data to export"); return; }
+    const sorted = [...stats.recentSales].sort((a, b) =>
+      (a.events?.title || "").localeCompare(b.events?.title || "")
+    );
+    const header = ["Event", "Ticket ID", "Tier", "Customer Name", "Email", "Amount (NGN)", "Status", "Date"];
+    const rows = sorted.map(t => [
+      csvCell(t.events?.title || "Unknown"),
+      csvCell(t.id),
+      csvCell(t.tier_name || "Standard"),
+      csvCell(t.user_name || "N/A"),
+      csvCell(t.user_email),
+      csvCell(t.events?.price ?? 0),
+      csvCell(t.status),
+      csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
+    ]);
+    downloadCSV([header, ...rows], `flexpass_all_events_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
+  const handleExportByEvent = (eventId: string, eventTitle: string) => {
+    const tickets = stats.recentSales.filter(t => t.event_id === eventId);
+    if (!tickets.length) { alert("No ticket sales for this event yet"); return; }
+    const header = ["Ticket ID", "Tier", "Customer Name", "Email", "Amount (NGN)", "Status", "Date"];
+    const rows = tickets.map(t => [
+      csvCell(t.id),
+      csvCell(t.tier_name || "Standard"),
+      csvCell(t.user_name || "N/A"),
+      csvCell(t.user_email),
+      csvCell(t.events?.price ?? 0),
+      csvCell(t.status),
+      csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
+    ]);
+    const safe = eventTitle.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    downloadCSV([header, ...rows], `flexpass_${safe}_${new Date().toISOString().split("T")[0]}.csv`);
   };
 
   if (loading) return (
@@ -175,26 +228,48 @@ export default function DashboardPage() {
             <h3 className="font-bold text-lg text-theme">My Events</h3>
           </div>
           <div className="divide-y" style={{ borderColor: "var(--card-border)" }}>
-            {stats.myEvents.map((event: any) => (
-              <div key={event.id} className="p-4 flex items-center justify-between hover:bg-[var(--surface-raised)] transition">
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="h-12 w-12 bg-slate-100 rounded-lg overflow-hidden shrink-0">
-                    {event.image_url && <img src={event.image_url} alt={event.title} className="object-cover w-full h-full" />}
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-theme truncate">{event.title}</h4>
-                    <div className="flex items-center gap-2 text-xs text-theme-2 mt-0.5">
-                      <Calendar size={11} /> {new Date(event.date).toLocaleDateString()}
+            {stats.myEvents.map((event: any) => {
+              const daily = (event._velocity7d / 7).toFixed(1);
+              const showVelocity = event._velocity7d > 0;
+              return (
+                <div key={event.id} className="p-4 flex items-center justify-between gap-3 hover:bg-[var(--surface-raised)] transition flex-wrap">
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <div className="h-12 w-12 bg-slate-100 rounded-lg overflow-hidden shrink-0">
+                      {event.image_url && <img src={event.image_url} alt={event.title} className="object-cover w-full h-full" />}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-theme truncate">{event.title}</h4>
+                      <div className="flex items-center gap-3 text-xs text-theme-2 mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-1"><Calendar size={11} /> {new Date(event.date).toLocaleDateString()}</span>
+                        <span className="flex items-center gap-1"><Ticket size={11} /> {event._sold} sold</span>
+                        {showVelocity && (
+                          <span className="flex items-center gap-1 font-semibold" style={{ color: "var(--brand-lavender)" }}>
+                            <TrendingUp size={11} /> {daily}/day (7d)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link href={`/dashboard/events/${event.id}/email`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}>
+                      <Mail size={12} /> Email
+                    </Link>
+                    <button onClick={() => handleExportByEvent(event.id, event.title)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}>
+                      <Download size={12} /> CSV
+                    </button>
+                    <button onClick={() => router.push(`/dashboard/events/${event.id}/edit`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}>
+                      <Edit size={13} /> Edit
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => router.push(`/dashboard/events/${event.id}/edit`)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shrink-0 ml-4"
-                  style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}>
-                  <Edit size={13} /> Edit
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

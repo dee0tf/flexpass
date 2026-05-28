@@ -23,9 +23,9 @@ export const metadata: Metadata = {
 export default async function EventsPage({
     searchParams,
 }: {
-    searchParams: Promise<{ q?: string; category?: string }>;
+    searchParams: Promise<{ q?: string; category?: string; city?: string }>;
 }) {
-    const { q, category } = await searchParams;
+    const { q, category, city } = await searchParams;
 
     const supabase = createServerSupabase();
     const now = new Date().toISOString();
@@ -33,10 +33,11 @@ export default async function EventsPage({
 
     if (q) query = query.ilike("title", `%${q}%`);
     if (category && category !== "All") query = query.eq("category", category);
+    if (city) query = query.ilike("location", `%${city}%`);
 
     const { data: events } = await query;
     const eventsList: Event[] = events || [];
-    const isFiltered = !!(q || (category && category !== "All"));
+    const isFiltered = !!(q || (category && category !== "All") || city);
 
     return (
         <main className="min-h-screen pt-20 pb-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: "var(--background)" }}>

@@ -23,6 +23,7 @@ interface TicketTier {
   name: string;
   price: string;
   quantity: string;
+  ends_at?: string;
 }
 
 function SuccessModal({ eventId, onClose }: { eventId: string; onClose: () => void }) {
@@ -85,7 +86,7 @@ export default function CreateEvent() {
     custom_category: "",
   });
 
-  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "" }]);
+  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "" }]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
@@ -113,7 +114,7 @@ export default function CreateEvent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "" }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "" }]);
   const removeTier = (i: number) => { if (tiers.length > 1) { const n = [...tiers]; n.splice(i, 1); setTiers(n); } };
   const updateTier = (i: number, field: keyof TicketTier, value: string) => {
     const n = [...tiers]; n[i][field] = value; setTiers(n);
@@ -159,7 +160,13 @@ export default function CreateEvent() {
       if (eventError) throw eventError;
 
       const { error: tierError } = await supabase.from("ticket_tiers").insert(
-        tiers.map(t => ({ event_id: eventData.id, name: t.name, price: Number(t.price), quantity_available: Number(t.quantity) }))
+        tiers.map(t => ({
+          event_id: eventData.id,
+          name: t.name,
+          price: Number(t.price),
+          quantity_available: Number(t.quantity),
+          ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
+        }))
       );
       if (tierError) throw tierError;
 
@@ -292,6 +299,16 @@ export default function CreateEvent() {
                               required />
                           </div>
                         ))}
+                      </div>
+                      <div className="mt-3">
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+                          Early Bird Ends (optional)
+                        </label>
+                        <input type="datetime-local" value={tier.ends_at || ""}
+                          onChange={e => updateTier(i, "ends_at", e.target.value)}
+                          className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                          style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
+                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier closes automatically after this date/time.</p>
                       </div>
                       {tiers.length > 1 && (
                         <button type="button" onClick={() => removeTier(i)}

@@ -91,9 +91,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 // FIX: params is defined as a Promise now
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
-  // FIX: We must await params before using the ID
   const { id } = await params;
+
+  if (!UUID_RE.test(id)) notFound();
 
   const event = await getEvent(id);
 
