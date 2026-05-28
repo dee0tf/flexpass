@@ -4,13 +4,14 @@ import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
-  Loader2, Calendar, MapPin, DollarSign,
+  Loader2, Calendar, DollarSign,
   Image as ImageIcon, Type, Clock,
   AlertCircle, User, Plus, Trash2, CheckCircle2, Tag,
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import AuthModal from "@/components/AuthModal";
 import Link from "next/link";
+import LocationPicker, { LocationData } from "@/components/LocationPicker";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,12 +79,18 @@ export default function CreateEvent() {
     description: "",
     date: "",
     start_time: "",
-    location: "",
     sales_end_date: "",
     organizer_name: "",
     image_url: "",
     category: "Music",
     custom_category: "",
+  });
+
+  const [locationData, setLocationData] = useState<LocationData>({
+    location: "",
+    lat: null,
+    lng: null,
+    locationReveal: false,
   });
 
   const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "" }]);
@@ -144,7 +151,10 @@ export default function CreateEvent() {
         description: formData.description,
         date: formData.date,
         start_time: formData.start_time,
-        location: formData.location,
+        location: locationData.location || "TBA",
+        latitude: locationData.lat,
+        longitude: locationData.lng,
+        location_reveal: locationData.locationReveal,
         price: minPrice,
         total_tickets: totalTickets,
         sales_end_date: formData.sales_end_date,
@@ -259,11 +269,7 @@ export default function CreateEvent() {
                   </div>
                   <div className="col-span-2">
                     <label className={labelClass} style={labelStyle}>Location / Venue</label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-3.5 h-5 w-5" style={{ color: "var(--text-muted)" }} />
-                      <input type="text" name="location" required placeholder="e.g. Eko Hotel & Suites, VI"
-                        className={`${inputClass} pl-10`} style={inputStyle} onChange={handleChange} />
-                    </div>
+                    <LocationPicker value={locationData} onChange={setLocationData} />
                   </div>
                 </div>
               </div>

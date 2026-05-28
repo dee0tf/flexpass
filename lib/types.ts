@@ -12,6 +12,9 @@ export interface Event {
   total_tickets?: number | null;
   sales_end_date?: string | null;
   user_id?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  location_reveal?: boolean | null;
 }
 
 export interface TicketTier {

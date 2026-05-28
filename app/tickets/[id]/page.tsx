@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, Calendar, MapPin } from "lucide-react";
+import { CheckCircle2, Calendar, MapPin, ExternalLink } from "lucide-react";
 import TicketQR from "@/components/TicketQR";
 import TicketActions from "@/components/TicketActions";
 
@@ -76,12 +76,38 @@ export default async function TicketPage({ params }: Props) {
               </div>
             </div>
             <div className="flex items-start gap-4">
-              <MapPin className="h-5 w-5 mt-0.5" style={{ color: "var(--brand-amber)" }} />
-              <div>
+              <MapPin className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--brand-amber)" }} />
+              <div className="flex-1 min-w-0">
                 <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Location</p>
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{event.location}</p>
+                {!event.location || event.location === "TBA" ? (
+                  <p className="text-sm text-orange-500">Venue TBA — host will update soon</p>
+                ) : (
+                  <>
+                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{event.location}</p>
+                    {event.location_reveal && (
+                      <p className="text-xs mt-0.5 font-medium text-green-600">🔓 Unlocked — you have a ticket</p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
+            {/* Map embed for ticket holders */}
+            {event.latitude && event.longitude && event.location && event.location !== "TBA" && (
+              <div className="rounded-2xl overflow-hidden ml-9" style={{ border: "1px solid var(--border-color)" }}>
+                <iframe
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${event.longitude - 0.008},${event.latitude - 0.008},${event.longitude + 0.008},${event.latitude + 0.008}&layer=mapnik&marker=${event.latitude},${event.longitude}`}
+                  width="100%" height="200" frameBorder="0" scrolling="no"
+                  title="Venue location" style={{ display: "block" }}
+                />
+                <a
+                  href={`https://www.openstreetmap.org/?mlat=${event.latitude}&mlon=${event.longitude}#map=16/${event.latitude}/${event.longitude}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium hover:opacity-80 transition"
+                  style={{ backgroundColor: "var(--surface-raised)", color: "var(--brand-indigo)" }}>
+                  <ExternalLink size={11} /> Get Directions
+                </a>
+              </div>
+            )}
           </div>
 
           {/* QR Code */}

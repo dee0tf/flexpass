@@ -142,11 +142,20 @@ export default function DashboardPage() {
     downloadCSV([header, ...rows], `flexpass_all_events_${new Date().toISOString().split("T")[0]}.csv`);
   };
 
-  const handleExportByEvent = (eventId: string, eventTitle: string) => {
-    const tickets = stats.recentSales.filter(t => t.event_id === eventId);
-    if (!tickets.length) { alert("No ticket sales for this event yet"); return; }
+  const handleExportByEvent = async (eventId: string, eventTitle: string) => {
+    const { data: tickets, error } = await supabase
+      .from("tickets")
+      .select("*, events(title, price)")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false });
+
+    if (error || !tickets?.length) {
+      alert("No ticket data for this event yet");
+      return;
+    }
+
     const header = ["Ticket ID", "Tier", "Customer Name", "Email", "Amount (NGN)", "Status", "Date"];
-    const rows = tickets.map(t => [
+    const rows = tickets.map((t: any) => [
       csvCell(t.id),
       csvCell(t.tier_name || "Standard"),
       csvCell(t.user_name || "N/A"),

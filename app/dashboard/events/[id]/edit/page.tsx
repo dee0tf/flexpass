@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import {
-  Loader2, Calendar, MapPin, DollarSign,
+  Loader2, Calendar, DollarSign,
   Image as ImageIcon, Type, Clock, User, Plus, Trash2,
   CheckCircle2, AlertTriangle, Tag, Mail,
 } from "lucide-react";
 import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
+import LocationPicker, { LocationData } from "@/components/LocationPicker";
 import { use } from "react";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -159,9 +160,12 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
   const [formData, setFormData] = useState({
     title: "", description: "", date: "", start_time: "",
-    location: "", price: "", total_tickets: "",
+    price: "", total_tickets: "",
     sales_end_date: "", organizer_name: "", image_url: "", category: "Music",
     custom_category: "",
+  });
+  const [locationData, setLocationData] = useState<LocationData>({
+    location: "", lat: null, lng: null, locationReveal: false,
   });
   const [tiers, setTiers] = useState<TierFormData[]>([]);
 
@@ -193,12 +197,17 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       const isCustom = event.category && !stdCats.includes(event.category) && event.category !== "Others";
 
       setEventTitle(event.title);
+      setLocationData({
+        location: event.location || "",
+        lat: event.latitude ?? null,
+        lng: event.longitude ?? null,
+        locationReveal: event.location_reveal ?? false,
+      });
       setFormData({
         title: event.title,
         description: event.description || "",
         date: event.date,
         start_time: event.start_time || "",
-        location: event.location,
         price: event.price?.toString() || "",
         total_tickets: event.total_tickets?.toString() || "",
         sales_end_date: event.sales_end_date ? new Date(event.sales_end_date).toISOString().slice(0, 16) : "",
@@ -231,7 +240,11 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       const { error } = await supabase.from("events").update({
         title: formData.title, description: formData.description,
         date: formData.date, start_time: formData.start_time,
-        location: formData.location, price: minPrice,
+        location: locationData.location || "TBA",
+        latitude: locationData.lat,
+        longitude: locationData.lng,
+        location_reveal: locationData.locationReveal,
+        price: minPrice,
         total_tickets: totalTickets, sales_end_date: formData.sales_end_date,
         organizer_name: formData.organizer_name, image_url: formData.image_url,
         category: finalCategory,
@@ -344,11 +357,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                 </div>
                 <div className="col-span-2">
                   <label className={labelClass} style={labelStyle}>Location / Venue</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-3.5 h-5 w-5" style={{ color: "var(--text-muted)" }} />
-                    <input type="text" name="location" value={formData.location} onChange={handleChange}
-                      className={`${inputClass} pl-10`} style={inputStyle} required />
-                  </div>
+                  <LocationPicker value={locationData} onChange={setLocationData} />
                 </div>
               </div>
             </div>
