@@ -94,7 +94,7 @@ export async function POST(request: Request) {
           <td style="padding:24px 40px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
             <p style="color:rgba(240,238,248,0.3);font-size:12px;margin:0;">
               &copy; ${new Date().getFullYear()} FlexPass &middot; Lagos, Nigeria<br/>
-              Questions? <a href="mailto:admin@flexpasshq.com" style="color:rgba(159,103,254,0.6);text-decoration:none;">admin@flexpasshq.com</a>
+              Questions? <a href="mailto:flexpasshome@gmail.com" style="color:rgba(159,103,254,0.6);text-decoration:none;">flexpasshome@gmail.com</a>
             </p>
           </td>
         </tr>
