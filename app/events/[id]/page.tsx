@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import { Calendar, MapPin, Clock, Lock, ExternalLink } from "lucide-react";
+import { Calendar, MapPin, Clock, Lock, ExternalLink, BadgeCheck } from "lucide-react";
 import ClientEventPage from "./ClientEventPage";
 
 import { Metadata } from "next";
@@ -179,7 +179,15 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       {/* Content Container */}
       <div className="max-w-3xl mx-auto px-6 -mt-16 relative z-10">
         <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">{event.title}</h1>
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h1 className="text-3xl font-bold text-slate-900">{event.title}</h1>
+            {event.organizer_verified && (
+              <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0 mt-1"
+                style={{ backgroundColor: "rgba(255,183,0,0.12)", color: "#d97706", border: "1px solid rgba(255,183,0,0.3)" }}>
+                <BadgeCheck size={13} /> Verified Organiser
+              </span>
+            )}
+          </div>
 
           <div className="flex flex-col gap-3 mt-4 text-slate-600">
             <div className="flex items-center gap-2">

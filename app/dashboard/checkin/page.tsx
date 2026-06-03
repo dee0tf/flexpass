@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { CheckCircle2, XCircle, AlertCircle, Loader2, Camera, Keyboard, ScanLine, ShieldAlert } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Loader2, Camera, Keyboard, ScanLine, ShieldAlert, WifiOff } from "lucide-react";
 
 interface ScanResult {
   valid: boolean | null;
@@ -13,6 +13,16 @@ interface ScanResult {
   checkedInAt?: string;
 }
 
+function extractTicketId(raw: string): string {
+  const trimmed = raw.trim().replace(/^#+/, ""); // strip leading #
+  try {
+    const url = new URL(trimmed);
+    return url.searchParams.get("t") || trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
 export default function CheckInPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string>("");
@@ -21,12 +31,26 @@ export default function CheckInPage() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
 
-  // Refs for synchronous guards — prevents race conditions that state can't stop
   const scannerRef = useRef<any>(null);
   const scannerStarted = useRef(false);
-  const isCheckingIn = useRef(false); // true while a request is in-flight
-  const scanPaused = useRef(false);   // true after a result — blocks new scans until "Scan Next"
+  const isCheckingIn = useRef(false);
+  const scanPaused = useRef(false);
+
+  // Online/offline detection
+  useEffect(() => {
+    const online = () => setIsOnline(true);
+    const offline = () => setIsOnline(false);
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    return () => {
+      window.removeEventListener("online", online);
+      window.removeEventListener("offline", offline);
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -42,19 +66,28 @@ export default function CheckInPage() {
     })();
   }, []);
 
-  const doCheckIn = useCallback(async (ticketId: string) => {
+  const doCheckIn = useCallback(async (rawId: string) => {
     if (!selectedEvent || isCheckingIn.current) return;
 
-    // Lock immediately (synchronous) before any await
+    const ticketId = extractTicketId(rawId);
+    if (!ticketId) return;
+
     isCheckingIn.current = true;
     scanPaused.current = true;
     setLoading(true);
     setResult(null);
 
+    if (!isOnline) {
+      setResult({ valid: false, reason: "You are offline. Re-scan detection requires an internet connection — do not admit this ticket until you reconnect." });
+      setLoading(false);
+      isCheckingIn.current = false;
+      return;
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      isCheckingIn.current = false;
       setLoading(false);
+      isCheckingIn.current = false;
       return;
     }
 
@@ -65,13 +98,20 @@ export default function CheckInPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ ticketId: ticketId.trim(), eventId: selectedEvent }),
+        body: JSON.stringify({ ticketId, eventId: selectedEvent }),
       });
       const data = await res.json();
-      const r: ScanResult = { valid: res.ok && data.valid, ...data };
+      // Map either `reason` or `error` field so the UI always has a message
+      const r: ScanResult = {
+        valid: res.ok && data.valid,
+        reason: data.reason || data.error,
+        holder: data.holder,
+        email: data.email,
+        tier: data.tier,
+        checkedInAt: data.checkedInAt,
+      };
       setResult(r);
 
-      // Haptic feedback — works on most Android / iOS devices
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         navigator.vibrate(r.valid ? [150] : [80, 60, 80]);
       }
@@ -80,11 +120,9 @@ export default function CheckInPage() {
     } finally {
       setLoading(false);
       isCheckingIn.current = false;
-      // scanPaused stays true until "Scan Next" is pressed
     }
-  }, [selectedEvent]);
+  }, [selectedEvent, isOnline]);
 
-  // Start / stop html5-qrcode camera
   useEffect(() => {
     if (mode !== "camera" || !selectedEvent || scannerStarted.current) return;
 
@@ -104,16 +142,9 @@ export default function CheckInPage() {
           { fps: 10, qrbox: { width: 260, height: 260 } },
           (decodedText: string) => {
             if (scanPaused.current || isCheckingIn.current) return;
-
-            let ticketId = decodedText;
-            try {
-              const url = new URL(decodedText);
-              ticketId = url.searchParams.get("t") || decodedText;
-            } catch { /* raw UUID — use as-is */ }
-
-            doCheckIn(ticketId);
+            doCheckIn(decodedText);
           },
-          () => { /* per-frame decode errors — suppress */ }
+          () => {}
         )
         .then(() => setScanning(true))
         .catch(() => {
@@ -161,6 +192,18 @@ export default function CheckInPage() {
         <h1 className="text-2xl font-bold text-theme">Check-In Scanner</h1>
         <p className="text-theme-2 text-sm mt-0.5">Each QR can only be admitted once — re-scans are blocked.</p>
       </div>
+
+      {/* Offline warning banner */}
+      {!isOnline && (
+        <div className="flex items-center gap-3 p-4 rounded-xl"
+          style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "2px solid rgba(239,68,68,0.3)" }}>
+          <WifiOff className="h-5 w-5 text-red-500 shrink-0" />
+          <div>
+            <p className="font-bold text-red-600 text-sm">You are offline</p>
+            <p className="text-red-500 text-xs mt-0.5">Do not admit anyone until you reconnect. Re-scan detection requires internet to verify tickets against the database.</p>
+          </div>
+        </div>
+      )}
 
       {/* Event selector */}
       <div>
@@ -219,32 +262,30 @@ export default function CheckInPage() {
                   Point camera at the ticket QR code
                 </div>
               )}
-              {scanPaused.current && result && !loading && (
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center" style={{ pointerEvents: "none" }}>
-                  <div className="text-white text-sm font-bold px-3 py-1.5 rounded-lg bg-black/50">
-                    Scanner paused
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           {/* Manual entry */}
           {mode === "manual" && (
-            <form onSubmit={handleManualSubmit} className="flex gap-2">
-              <input
-                value={manualId}
-                onChange={e => setManualId(e.target.value)}
-                placeholder="Paste ticket UUID…"
-                className="flex-1 p-3 rounded-xl text-sm font-mono"
-                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--text-primary)" }}
-              />
-              <button type="submit" disabled={loading || !manualId.trim()}
-                className="px-5 py-3 rounded-xl font-bold text-sm text-white hover:opacity-90 transition disabled:opacity-50"
-                style={{ backgroundColor: "var(--brand-indigo)" }}>
-                {loading ? <Loader2 size={16} className="animate-spin" /> : "Check In"}
-              </button>
-            </form>
+            <div className="space-y-2">
+              <form onSubmit={handleManualSubmit} className="flex gap-2">
+                <input
+                  value={manualId}
+                  onChange={e => setManualId(e.target.value)}
+                  placeholder="Paste ticket ID or full ticket URL…"
+                  className="flex-1 p-3 rounded-xl text-sm font-mono"
+                  style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--text-primary)" }}
+                />
+                <button type="submit" disabled={loading || !manualId.trim()}
+                  className="px-5 py-3 rounded-xl font-bold text-sm text-white hover:opacity-90 transition disabled:opacity-50"
+                  style={{ backgroundColor: "var(--brand-indigo)" }}>
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : "Check In"}
+                </button>
+              </form>
+              <p className="text-xs px-1" style={{ color: "var(--text-muted)" }}>
+                Paste the full ticket UUID (e.g. <span className="font-mono">xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</span>) or the ticket page URL.
+              </p>
+            </div>
           )}
 
           {/* Loading spinner */}
@@ -269,7 +310,7 @@ export default function CheckInPage() {
                     : "Access Denied ✗"}
                 </h2>
                 {result.reason && (
-                  <p className="text-sm mt-1 opacity-80">{result.reason}</p>
+                  <p className="text-sm mt-1 opacity-90">{result.reason}</p>
                 )}
                 {result.reason?.includes("Already") && result.checkedInAt && (
                   <p className="text-xs mt-1 opacity-70">
@@ -291,7 +332,7 @@ export default function CheckInPage() {
                     style={{ backgroundColor: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
                     <ShieldAlert size={14} className="text-amber-600 mt-0.5 shrink-0" />
                     <p className="text-xs text-amber-700">
-                      This ticket was already scanned. Do not admit this person — the QR code may be a duplicate or screenshot.
+                      This ticket was already scanned. Do not admit — the QR code may be a duplicate or screenshot.
                     </p>
                   </div>
                 )}
@@ -305,7 +346,6 @@ export default function CheckInPage() {
             </div>
           )}
 
-          {/* Anti-fraud note */}
           {!result && !loading && (
             <div className="flex items-start gap-2 p-3 rounded-xl text-xs"
               style={{ backgroundColor: "rgba(72,0,130,0.04)", border: "1px solid rgba(72,0,130,0.1)", color: "var(--text-muted)" }}>

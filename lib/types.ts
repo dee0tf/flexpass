@@ -15,6 +15,7 @@ export interface Event {
   latitude?: number | null;
   longitude?: number | null;
   location_reveal?: boolean | null;
+  organizer_verified?: boolean | null;
 }
 
 export interface TicketTier {

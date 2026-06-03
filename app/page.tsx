@@ -56,7 +56,7 @@ export default async function Home() {
           autoPlay loop muted playsInline
           className="absolute inset-0 w-full h-full object-cover"
         >
-          <source src="/hero-background.mp4" type="video/mp4" />
+          <source src="/flexpasshome.MP4" type="video/mp4" />
         </video>
 
         {/* Overlay */}

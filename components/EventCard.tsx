@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { Calendar, MapPin, Clock } from "lucide-react";
+import { Calendar, MapPin, Clock, BadgeCheck } from "lucide-react";
 import { Event } from "@/lib/types";
 
 interface EventCardProps {
@@ -90,6 +90,12 @@ export default function EventCard({ event, variant = "default", priority = false
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full animate-pulse"
                 style={{ backgroundColor: "var(--brand-amber)", color: "#0E0D0D" }}>
                 Soon
+              </span>
+            )}
+            {event.organizer_verified && (
+              <span className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full backdrop-blur-sm"
+                style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#FFB700", border: "1px solid rgba(255,183,0,0.3)" }}>
+                <BadgeCheck size={11} /> Verified
               </span>
             )}
           </div>

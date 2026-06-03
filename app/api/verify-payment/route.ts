@@ -64,6 +64,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Paid amount does not match order total' }, { status: 400 });
     }
 
+    // --- 5a. Anti-bulk-buying: max 6 tickets per email per event ---
+    const { count: alreadyOwned } = await supabase
+      .from('tickets')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+      .eq('user_email', email.toLowerCase())
+      .in('status', ['valid', 'scanned']);
+
+    if ((alreadyOwned || 0) + quantity > 6) {
+      const remaining = Math.max(0, 6 - (alreadyOwned || 0));
+      return NextResponse.json(
+        { error: remaining <= 0
+            ? 'You have already reached the maximum tickets allowed for this event (6 per person).'
+            : `You can only buy ${remaining} more ticket${remaining === 1 ? '' : 's'} for this event.` },
+        { status: 409 }
+      );
+    }
+
     // --- 5. Check ticket availability to prevent overselling ---
     if (tierId) {
       const { data: tier } = await supabase
