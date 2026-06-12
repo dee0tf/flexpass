@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
-const ADMIN_EMAIL = 'flexpasshome@gmail.com';
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -53,7 +51,7 @@ export async function POST(request: Request) {
     // Notify admin via email
     await resend.emails.send({
       from: 'FlexPass <noreply@flexpasshq.com>',
-      to: [ADMIN_EMAIL],
+      to: [process.env.ADMIN_EMAIL!],
       subject: `Delete Request: ${event.title}`,
       html: `
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">

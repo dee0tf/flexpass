@@ -4,11 +4,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   Loader2, CheckCircle2, XCircle, RefreshCw, Building2,
-  Users, Ticket, TrendingUp, Clock, AlertCircle, Trash2,
+  Users, Ticket, TrendingUp, Clock, AlertCircle, Trash2, BadgeCheck, ShieldOff,
 } from "lucide-react";
 import Logo from "@/components/Logo";
-
-const ADMIN_EMAIL = "flexpasshome@gmail.com";
 
 type Payout = {
   id: string; amount: number; status: string; created_at: string;
@@ -28,6 +26,11 @@ type Stats = {
   pendingDeletes: number;
 };
 
+type Host = {
+  user_id: string; email: string; organizer_name: string;
+  events: number; tickets: number; revenue: number; verified: boolean;
+};
+
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
@@ -37,11 +40,17 @@ export default function AdminPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [payoutTab, setPayoutTab] = useState<"pending" | "all">("pending");
-  const [mainTab, setMainTab] = useState<"withdrawals" | "deletes">("withdrawals");
+  const [mainTab, setMainTab] = useState<"withdrawals" | "deletes" | "hosts">("withdrawals");
+  const [hosts, setHosts] = useState<Host[]>([]);
+  const [hostsLoading, setHostsLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session || session.user.email !== ADMIN_EMAIL) { setLoading(false); return; }
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { setLoading(false); return; }
+      const res = await fetch("/api/admin/check-auth", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) { setLoading(false); return; }
       setAuthorized(true);
       loadData();
     });
@@ -120,6 +129,40 @@ export default function AdminPage() {
         loadData();
       }
     } finally { setProcessing(null); }
+  }
+
+  async function loadHosts() {
+    setHostsLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/admin/hosts", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (res.ok) setHosts(data.hosts || []);
+    } finally {
+      setHostsLoading(false);
+    }
+  }
+
+  async function handleToggleVerify(userId: string, currentVerified: boolean) {
+    setProcessing("verify-" + userId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/admin/hosts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ userId, verified: !currentVerified }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || "Action failed", "error"); return; }
+      setHosts(prev => prev.map(h => h.user_id === userId ? { ...h, verified: !currentVerified } : h));
+      showToast(!currentVerified ? "Host verified — badge now shows on all their events." : "Verification removed.", "success");
+    } finally {
+      setProcessing(null);
+    }
   }
 
   async function handleDeleteAction(requestId: string, eventId: string, action: "approve" | "deny") {
@@ -225,8 +268,12 @@ export default function AdminPage() {
               {([
                 { key: "withdrawals", label: `Withdrawals${stats?.pendingPayouts ? ` (${stats.pendingPayouts})` : ""}` },
                 { key: "deletes", label: `Delete Requests${stats?.pendingDeletes ? ` (${stats.pendingDeletes})` : ""}` },
+                { key: "hosts", label: "Hosts" },
               ] as const).map(t => (
-                <button key={t.key} onClick={() => setMainTab(t.key)}
+                <button key={t.key} onClick={() => {
+                  setMainTab(t.key);
+                  if (t.key === "hosts" && hosts.length === 0) loadHosts();
+                }}
                   className="px-5 py-2 rounded-xl text-sm font-semibold transition"
                   style={{ backgroundColor: mainTab === t.key ? "var(--brand-indigo)" : "transparent", color: mainTab === t.key ? "#fff" : "var(--text-muted)" }}>
                   {t.label}
@@ -358,6 +405,87 @@ export default function AdminPage() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Hosts & Verification */}
+            {mainTab === "hosts" && (
+              <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                <div className="px-6 py-4 flex items-center justify-between border-b" style={{ borderColor: "var(--card-border)" }}>
+                  <div>
+                    <h2 className="font-display font-bold text-lg" style={{ color: "var(--text-primary)" }}>Host Management</h2>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Toggle the Verified badge shown on a host's events and event cards.</p>
+                  </div>
+                  <button onClick={loadHosts} className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
+                    style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+                    <RefreshCw size={13} /> Refresh
+                  </button>
+                </div>
+
+                {hostsLoading ? (
+                  <div className="flex justify-center py-16">
+                    <Loader2 className="h-7 w-7 animate-spin" style={{ color: "var(--brand-indigo)" }} />
+                  </div>
+                ) : hosts.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <Users className="h-10 w-10 mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>No hosts yet</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid var(--card-border)", backgroundColor: "var(--background)" }}>
+                          {["Host", "Email", "Events", "Tickets", "Revenue", "Status", "Action"].map(h => (
+                            <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hosts.map((h, i) => (
+                          <tr key={h.user_id} style={{ borderBottom: i < hosts.length - 1 ? "1px solid var(--card-border)" : "none" }}
+                            className="hover:bg-[var(--surface-raised)] transition">
+                            <td className="px-5 py-4">
+                              <p className="font-semibold" style={{ color: "var(--text-primary)" }}>{h.organizer_name}</p>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="text-xs font-mono" style={{ color: "var(--text-secondary)" }}>{h.email}</span>
+                            </td>
+                            <td className="px-5 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>{h.events}</td>
+                            <td className="px-5 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>{h.tickets}</td>
+                            <td className="px-5 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>₦{h.revenue.toLocaleString()}</td>
+                            <td className="px-5 py-4">
+                              {h.verified ? (
+                                <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full w-fit"
+                                  style={{ backgroundColor: "rgba(255,183,0,0.12)", color: "#d97706", border: "1px solid rgba(255,183,0,0.3)" }}>
+                                  <BadgeCheck size={11} /> Verified
+                                </span>
+                              ) : (
+                                <span className="text-xs font-medium px-2.5 py-1 rounded-full w-fit"
+                                  style={{ backgroundColor: "var(--surface-raised)", color: "var(--text-muted)" }}>
+                                  Unverified
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-4">
+                              <button
+                                onClick={() => handleToggleVerify(h.user_id, h.verified)}
+                                disabled={processing === "verify-" + h.user_id}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition hover:opacity-80 disabled:opacity-50"
+                                style={{ backgroundColor: h.verified ? "#6b7280" : "var(--brand-indigo)" }}>
+                                {processing === "verify-" + h.user_id
+                                  ? <Loader2 size={12} className="animate-spin" />
+                                  : h.verified
+                                  ? <><ShieldOff size={12} /> Remove</>
+                                  : <><BadgeCheck size={12} /> Verify</>
+                                }
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>

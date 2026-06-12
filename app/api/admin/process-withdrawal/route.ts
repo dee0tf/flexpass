@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const ADMIN_EMAIL = 'flexpasshome@gmail.com';
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -16,7 +14,7 @@ export async function POST(request: Request) {
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user || user.email !== ADMIN_EMAIL) {
+    if (authError || !user || user.email !== process.env.ADMIN_EMAIL) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
