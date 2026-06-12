@@ -17,12 +17,14 @@ export default function LoginPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  // If user is already logged in, redirect to dashboard immediately
+  // If user is already logged in, redirect to appropriate page
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        window.location.replace("/dashboard");
-      }
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return;
+      const res = await fetch("/api/admin/check-auth", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      window.location.replace(res.ok ? "/admin" : "/dashboard");
     });
   }, []);
 
@@ -43,9 +45,12 @@ export default function LoginPage() {
       // Confirm the session is set before navigating
       if (data.session) {
         setSuccess(true);
-        // Small delay to ensure localStorage is flushed, then navigate
+        // Check if admin, then route accordingly
+        const res = await fetch("/api/admin/check-auth", {
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+        });
         setTimeout(() => {
-          window.location.href = "/dashboard";
+          window.location.href = res.ok ? "/admin" : "/dashboard";
         }, 100);
       } else {
         throw new Error("Login succeeded but no session was returned.");
