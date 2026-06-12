@@ -64,48 +64,33 @@ export default function AdminPage() {
   async function loadData() {
     setLoading(true);
     try {
-      // Payouts
-      const { data: payoutData } = await supabase
-        .from("payouts")
-        .select("*, bank_accounts(bank_name, account_number, account_name)")
-        .order("created_at", { ascending: false });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const token = session.access_token;
 
-      const enriched: Payout[] = (payoutData || []).map((p: any) => ({
+      const [payoutRes, delRes, statsRes] = await Promise.all([
+        supabase
+          .from("payouts")
+          .select("*, bank_accounts(bank_name, account_number, account_name)")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("delete_requests")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        fetch("/api/admin/stats", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      const enriched: Payout[] = ((payoutRes.data) || []).map((p: any) => ({
         ...p,
         user_email: p.user_id.slice(0, 8) + "...",
       }));
       setPayouts(enriched);
+      setDeleteRequests(delRes.data || []);
 
-      // Delete requests
-      const { data: delData } = await supabase
-        .from("delete_requests")
-        .select("*")
-        .order("created_at", { ascending: false });
-      setDeleteRequests(delData || []);
-
-      // Stats
-      const [{ count: totalUsers }, { count: totalEvents }, { count: totalTickets }] = await Promise.all([
-        supabase.from("profiles").select("*", { count: "exact", head: true }),
-        supabase.from("events").select("*", { count: "exact", head: true }),
-        supabase.from("tickets").select("*", { count: "exact", head: true }).eq("status", "valid"),
-      ]);
-
-      const { data: ticketRevenue } = await supabase
-        .from("tickets").select("events(price)").eq("status", "valid");
-
-      const totalRevenue = ticketRevenue?.reduce((acc: number, t: any) => acc + (t.events?.price || 0), 0) || 0;
-      const pending = enriched.filter(p => p.status === "pending");
-      const pendingDeletes = (delData || []).filter((d: DeleteRequest) => d.status === "pending").length;
-
-      setStats({
-        totalUsers: totalUsers || 0,
-        totalEvents: totalEvents || 0,
-        totalTickets: totalTickets || 0,
-        totalRevenue,
-        pendingPayouts: pending.length,
-        pendingPayoutAmount: pending.reduce((acc, p) => acc + p.amount, 0),
-        pendingDeletes,
-      });
+      if (statsRes.ok) {
+        const s = await statsRes.json();
+        setStats(s);
+      }
     } finally {
       setLoading(false);
     }
