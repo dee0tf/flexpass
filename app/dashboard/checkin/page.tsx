@@ -173,10 +173,19 @@ export default function CheckInPage() {
 
     return () => {
       if (html5QrCode) {
-        html5QrCode.stop().catch(() => {}).finally(() => {
+        try {
+          html5QrCode.stop()
+            .catch(() => {})
+            .finally(() => {
+              scannerStarted.current = false;
+              setScanning(false);
+            });
+        } catch {
+          // stop() throws synchronously when scanner never fully started
+          // (e.g. camera permission denied) — reset state manually
           scannerStarted.current = false;
           setScanning(false);
-        });
+        }
       }
     };
   }, [mode, selectedEvent, doCheckIn]);
