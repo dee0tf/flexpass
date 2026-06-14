@@ -184,7 +184,7 @@ export default function DashboardPage() {
             <p className="text-theme-2 text-sm">{user?.email}</p>
             {stats.myEvents.some((e: any) => e.organizer_verified) && (
               <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706", border: "1px solid rgba(255,183,0,0.3)" }}>
+                style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
                 <BadgeCheck size={12} /> Verified Host
               </span>
             )}

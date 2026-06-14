@@ -190,7 +190,7 @@ export default function SettingsPage() {
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>{email}</p>
               {verified && (
                 <span className="inline-flex items-center gap-1 mt-1.5 text-xs font-bold px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706", border: "1px solid rgba(255,183,0,0.3)" }}>
+                  style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
                   <BadgeCheck size={11} /> Verified Host
                 </span>
               )}

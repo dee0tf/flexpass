@@ -94,7 +94,7 @@ export default function EventCard({ event, variant = "default", priority = false
             )}
             {event.organizer_verified && (
               <span className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full backdrop-blur-sm"
-                style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#FFB700", border: "1px solid rgba(255,183,0,0.3)" }}>
+                style={{ backgroundColor: "rgba(22,163,74,0.15)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.35)" }}>
                 <BadgeCheck size={11} /> Verified
               </span>
             )}

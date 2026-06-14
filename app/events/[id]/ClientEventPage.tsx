@@ -23,6 +23,12 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
+  // Capture promoter ref code from URL and persist for checkout
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) sessionStorage.setItem(`ref_${eventId}`, ref);
+  }, [eventId]);
+
   const handleShare = async () => {
     const url = typeof window !== "undefined" ? window.location.href : "";
     if (navigator.share) {

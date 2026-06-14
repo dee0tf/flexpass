@@ -183,7 +183,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             <h1 className="text-3xl font-bold text-slate-900">{event.title}</h1>
             {event.organizer_verified && (
               <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0 mt-1"
-                style={{ backgroundColor: "rgba(255,183,0,0.12)", color: "#d97706", border: "1px solid rgba(255,183,0,0.3)" }}>
+                style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
                 <BadgeCheck size={13} /> Verified Organiser
               </span>
             )}

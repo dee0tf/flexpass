@@ -60,7 +60,13 @@ export default function CheckoutModal({
   const [paystackActive, setPaystackActive] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const code = sessionStorage.getItem(`ref_${eventId}`);
+    if (code) setReferralCode(code);
+  }, [eventId]);
 
   useEffect(() => {
     fetch(`/api/event-subaccount?eventId=${eventId}`)
@@ -107,6 +113,7 @@ export default function CheckoutModal({
           eventId, email, fullName, gender, quantity,
           tierId: selectedTier?.id || null,
           tierName: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
+          referralCode: referralCode || null,
         }),
       });
       const result = await res.json();
@@ -142,6 +149,7 @@ export default function CheckoutModal({
           tierId: selectedTier?.id || null,
           tierName: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
           price: finalPrice, fee,
+          referralCode: referralCode || null,
         }),
       });
       const result = await res.json();

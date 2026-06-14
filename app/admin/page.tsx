@@ -238,7 +238,7 @@ export default function AdminPage() {
                   {[
                     { label: "Registered Users", value: stats.totalUsers, icon: <Users size={16} />, color: "#480082", bg: "rgba(72,0,130,0.06)" },
                     { label: "Active Hosts", value: stats.totalHosts, icon: <CalendarDays size={16} />, color: "#9F67FE", bg: "rgba(159,103,254,0.06)" },
-                    { label: "Verified Hosts", value: stats.verifiedHosts, icon: <BadgeCheck size={16} />, color: "#d97706", bg: "rgba(255,183,0,0.07)" },
+                    { label: "Verified Hosts", value: stats.verifiedHosts, icon: <BadgeCheck size={16} />, color: "#16a34a", bg: "rgba(22,163,74,0.07)" },
                     { label: "Total Events", value: stats.totalEvents, icon: <Ticket size={16} />, color: "#0ea5e9", bg: "rgba(14,165,233,0.06)" },
                   ].map(s => (
                     <div key={s.label} className="rounded-2xl p-5" style={{ backgroundColor: s.bg, border: "1px solid var(--card-border)" }}>
@@ -464,7 +464,7 @@ export default function AdminPage() {
                             <td className="px-5 py-4">
                               {h.verified ? (
                                 <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full w-fit"
-                                  style={{ backgroundColor: "rgba(255,183,0,0.12)", color: "#d97706", border: "1px solid rgba(255,183,0,0.3)" }}>
+                                  style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
                                   <BadgeCheck size={11} /> Verified
                                 </span>
                               ) : (

@@ -9,7 +9,7 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { reference, eventId, email, fullName, gender, quantity, tierId, tierName, price, fee } = body;
+    const { reference, eventId, email, fullName, gender, quantity, tierId, tierName, price, fee, referralCode } = body;
 
     // --- 1. Input validation ---
     if (!reference || !eventId || !email || !fullName || !quantity || price == null) {
@@ -148,6 +148,7 @@ export async function POST(request: Request) {
       total_amount_paid: price + perTicketFee,
       tier_id: tierId || null,
       tier_name: tierName || 'Standard',
+      referral_code: referralCode || null,
     }));
 
     const { data, error } = await supabase

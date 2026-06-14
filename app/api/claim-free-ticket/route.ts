@@ -11,7 +11,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { eventId, email, fullName, gender, quantity, tierId, tierName } = body;
+    const { eventId, email, fullName, gender, quantity, tierId, tierName, referralCode } = body;
 
     // --- 1. Input validation ---
     if (!eventId || !email || !fullName || !quantity) {
@@ -147,6 +147,7 @@ export async function POST(request: Request) {
       total_amount_paid: 0,
       tier_id: tierId || null,
       tier_name: tierName || 'Free',
+      referral_code: referralCode || null,
     }));
 
     const { data, error } = await supabase

@@ -54,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <p className="text-xs" style={{color:"var(--text-muted)"}}>Host Dashboard</p>
           {isVerified && (
             <span className="flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded-full"
-              style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706" }}>
+              style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a" }}>
               <BadgeCheck size={11} /> Verified
             </span>
           )}
