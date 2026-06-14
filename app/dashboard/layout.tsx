@@ -43,7 +43,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: "Settings",   href: "/dashboard/settings",  icon: Settings },
   ];
 
-  const SidebarContent = () => (
+  // Build sidebar JSX as a variable (not a component) to avoid React unmounting/remounting
+  // on every re-render — defining it as `const Foo = () =>` inside a component creates a new
+  // component type each render, causing full subtree unmounts that can trigger error boundaries.
+  const sidebarContent = (
     <>
       <div className="p-6" style={{borderBottom:"1px solid var(--sidebar-border)"}}>
         <Logo size={40} variant="gradient" />
@@ -93,7 +96,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-[#F9F8FF] flex">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-64 fixed h-full z-10" style={{backgroundColor:"var(--sidebar-bg)",borderRight:"1px solid var(--sidebar-border)"}}>
-        <SidebarContent />
+        {sidebarContent}
       </aside>
 
       {/* Mobile header */}
@@ -109,7 +112,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="fixed inset-0 z-30 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
           <div className="absolute top-0 left-0 h-full w-64 flex flex-col" style={{backgroundColor:"var(--sidebar-bg)"}}>
-            <SidebarContent />
+            {sidebarContent}
           </div>
         </div>
       )}

@@ -96,7 +96,13 @@ export default function CheckInPage() {
       return;
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
+    let session: any = null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data?.session;
+    } catch {
+      // getSession failure — treat as logged out
+    }
     if (!session) {
       setLoading(false);
       isCheckingIn.current = false;
@@ -190,7 +196,11 @@ export default function CheckInPage() {
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (manualId.trim()) doCheckIn(manualId.trim());
+    if (manualId.trim()) doCheckIn(manualId.trim()).catch(() => {
+      setResult({ valid: false, reason: "Unexpected error — please try again." });
+      setLoading(false);
+      isCheckingIn.current = false;
+    });
   };
 
   const resultColor =
