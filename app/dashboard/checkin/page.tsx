@@ -13,14 +13,26 @@ interface ScanResult {
   checkedInAt?: string;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function extractTicketId(raw: string): string {
-  const trimmed = raw.trim().replace(/^#+/, ""); // strip leading #
+  const trimmed = raw.trim().replace(/^#+/, "");
+  // If it's already a plain UUID, return it directly
+  if (UUID_RE.test(trimmed)) return trimmed;
   try {
     const url = new URL(trimmed);
-    return url.searchParams.get("t") || trimmed;
+    // QR code format: /checkin/verify?t=UUID
+    const t = url.searchParams.get("t");
+    if (t && UUID_RE.test(t)) return t;
+    // Ticket page URL format: /tickets/UUID
+    const segments = url.pathname.split("/").filter(Boolean);
+    for (let i = segments.length - 1; i >= 0; i--) {
+      if (UUID_RE.test(segments[i])) return segments[i];
+    }
   } catch {
-    return trimmed;
+    // not a URL, return as-is
   }
+  return trimmed;
 }
 
 export default function CheckInPage() {

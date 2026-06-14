@@ -68,19 +68,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ valid: false, reason: 'Ticket is for a different event' }, { status: 400 });
     }
 
-    if (ticket.status !== 'valid') {
-      return NextResponse.json({ valid: false, reason: `Ticket status: ${ticket.status}` }, { status: 400 });
-    }
-
-    // Already checked in — return the original timestamp so the host can see when
-    if (ticket.checked_in_at) {
+    // Check re-entry first — catches both status='scanned' and any lingering checked_in_at
+    if (ticket.status === 'scanned' || ticket.checked_in_at) {
       return NextResponse.json({
         valid: false,
         reason: 'Already checked in',
         checkedInAt: ticket.checked_in_at,
         holder: ticket.user_name,
+        email: ticket.user_email,
         tier: ticket.tier_name || 'Standard',
       }, { status: 409 });
+    }
+
+    if (ticket.status !== 'valid') {
+      return NextResponse.json({ valid: false, reason: `Ticket is ${ticket.status} — cannot admit` }, { status: 400 });
     }
 
     // Mark as checked in (service-role bypasses RLS — always succeeds)
