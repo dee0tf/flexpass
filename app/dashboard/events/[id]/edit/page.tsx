@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
   Image as ImageIcon, Type, Clock, User, Plus, Trash2,
-  CheckCircle2, AlertTriangle, Tag, Mail, Share2, Copy, Check, X,
+  CheckCircle2, AlertTriangle, Tag, Mail,
 } from "lucide-react";
 import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
@@ -169,11 +169,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   });
   const [tiers, setTiers] = useState<TierFormData[]>([]);
 
-  // Promoters
-  const [promoters, setPromoters] = useState<any[]>([]);
-  const [newPromoterName, setNewPromoterName] = useState("");
-  const [addingPromoter, setAddingPromoter] = useState(false);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -224,66 +219,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       });
       setIsLoading(false);
 
-      // Load promoters with stats via API (includes ticket counts)
-      const promoRes = await fetch(`/api/promoters?eventId=${id}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (promoRes.ok) {
-        const promoJson = await promoRes.json();
-        setPromoters(promoJson.promoters || []);
-      }
     }
     loadData();
   }, [id, router]);
-
-  async function refreshPromoters() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    const res = await fetch(`/api/promoters?eventId=${id}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setPromoters(data.promoters || []);
-    }
-  }
-
-  async function handleAddPromoter() {
-    if (!newPromoterName.trim()) return;
-    setAddingPromoter(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const res = await fetch("/api/promoters", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ eventId: id, name: newPromoterName.trim() }),
-      });
-      if (res.ok) {
-        setNewPromoterName("");
-        await refreshPromoters();
-      }
-    } finally {
-      setAddingPromoter(false);
-    }
-  }
-
-  async function handleDeletePromoter(promoterId: string) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    await fetch(`/api/promoters/${promoterId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    setPromoters(prev => prev.filter(p => p.id !== promoterId));
-  }
-
-  function copyPromoterLink(code: string) {
-    const link = `${window.location.origin}/events/${id}?ref=${code}`;
-    navigator.clipboard.writeText(link);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  }
 
   const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true }]);
   const removeTier = (i: number) => { if (tiers.length > 1) setTiers(tiers.filter((_, idx) => idx !== i)); };
@@ -510,93 +448,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Promoters */}
-            <div className="space-y-4 pt-4">
-              <div className="pb-2" style={{ borderBottom: "1px solid var(--card-border)" }}>
-                <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
-                  <Share2 className="h-5 w-5" style={{ color: "var(--brand-indigo)" }} /> Promoter Links
-                </h2>
-                <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-                  Generate a unique tracking link per promoter. Each ticket sold via their link is counted separately.
-                </p>
-              </div>
-
-              {/* Add promoter */}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newPromoterName}
-                  onChange={e => setNewPromoterName(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddPromoter(); } }}
-                  placeholder="Promoter name (e.g. Kemi, Tunde Lagos)"
-                  className="flex-1 p-3 rounded-xl text-sm focus:outline-none focus:ring-2 transition"
-                  style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                />
-                <button
-                  type="button"
-                  onClick={handleAddPromoter}
-                  disabled={addingPromoter || !newPromoterName.trim()}
-                  className="px-5 py-3 rounded-xl font-bold text-sm text-white hover:opacity-90 transition disabled:opacity-50 flex items-center gap-1.5"
-                  style={{ backgroundColor: "var(--brand-indigo)" }}>
-                  {addingPromoter ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-                  Add
-                </button>
-              </div>
-
-              {/* Promoters table */}
-              {promoters.length > 0 && (
-                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--card-border)" }}>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr style={{ backgroundColor: "var(--surface-raised)", borderBottom: "1px solid var(--card-border)" }}>
-                        <th className="text-left px-4 py-3 font-semibold" style={{ color: "var(--text-muted)" }}>Name</th>
-                        <th className="text-center px-4 py-3 font-semibold" style={{ color: "var(--text-muted)" }}>Tickets</th>
-                        <th className="text-right px-4 py-3 font-semibold" style={{ color: "var(--text-muted)" }}>Revenue</th>
-                        <th className="text-right px-4 py-3 font-semibold" style={{ color: "var(--text-muted)" }}>Link</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {promoters.map((p, i) => (
-                        <tr key={p.id} style={{ borderTop: i === 0 ? "none" : "1px solid var(--card-border)" }}>
-                          <td className="px-4 py-3 font-semibold" style={{ color: "var(--text-primary)" }}>{p.name}</td>
-                          <td className="px-4 py-3 text-center font-bold" style={{ color: p.tickets > 0 ? "var(--brand-indigo)" : "var(--text-muted)" }}>
-                            {p.tickets}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold" style={{ color: "var(--text-primary)" }}>
-                            {p.revenue > 0 ? `₦${p.revenue.toLocaleString()}` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                type="button"
-                                onClick={() => copyPromoterLink(p.code)}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition hover:opacity-80"
-                                style={{ backgroundColor: copiedCode === p.code ? "rgba(22,163,74,0.12)" : "rgba(72,0,130,0.08)", color: copiedCode === p.code ? "#16a34a" : "var(--brand-indigo)" }}>
-                                {copiedCode === p.code ? <Check size={12} /> : <Copy size={12} />}
-                                {copiedCode === p.code ? "Copied!" : "Copy Link"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePromoter(p.id)}
-                                className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition">
-                                <X size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {promoters.length === 0 && (
-                <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
-                  No promoters yet — add one above to get started.
-                </p>
-              )}
             </div>
 
             <div className="flex gap-4 pt-6">
