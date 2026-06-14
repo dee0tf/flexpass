@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import {
   Loader2, CheckCircle2, XCircle, RefreshCw, Building2,
   Users, Ticket, TrendingUp, Clock, AlertCircle, Trash2, BadgeCheck, ShieldOff,
+  ScanLine, ArrowDownToLine, CalendarDays,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 
@@ -21,8 +22,10 @@ type DeleteRequest = {
 };
 
 type Stats = {
-  totalUsers: number; totalEvents: number; totalTickets: number;
-  totalRevenue: number; pendingPayouts: number; pendingPayoutAmount: number;
+  totalUsers: number; totalHosts: number; verifiedHosts: number;
+  totalEvents: number; totalTickets: number; scannedTickets: number;
+  totalRevenue: number; totalPaidOut: number;
+  pendingPayouts: number; pendingPayoutAmount: number;
   pendingDeletes: number;
 };
 
@@ -229,22 +232,40 @@ export default function AdminPage() {
           <>
             {/* Stats */}
             {stats && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                {[
-                  { label: "Users", value: stats.totalUsers, icon: <Users size={18} />, color: "#480082" },
-                  { label: "Events", value: stats.totalEvents, icon: <Ticket size={18} />, color: "#9F67FE" },
-                  { label: "Tickets Sold", value: stats.totalTickets, icon: <Ticket size={18} />, color: "#22c55e" },
-                  { label: "Revenue", value: `₦${stats.totalRevenue.toLocaleString()}`, icon: <TrendingUp size={18} />, color: "#f59e0b" },
-                  { label: "Pending Payouts", value: stats.pendingPayouts, icon: <Clock size={18} />, color: "#ef4444", highlight: stats.pendingPayouts > 0 },
-                  { label: "Payout Amount", value: `₦${stats.pendingPayoutAmount.toLocaleString()}`, icon: <Building2 size={18} />, color: "#ef4444", highlight: stats.pendingPayoutAmount > 0 },
-                  { label: "Delete Requests", value: stats.pendingDeletes, icon: <Trash2 size={18} />, color: "#ef4444", highlight: stats.pendingDeletes > 0 },
-                ].map(s => (
-                  <div key={s.label} className="rounded-2xl p-4 space-y-2"
-                    style={{ backgroundColor: (s as any).highlight ? "rgba(239,68,68,0.06)" : "var(--card-bg)", border: `1px solid ${(s as any).highlight ? "rgba(239,68,68,0.2)" : "var(--card-border)"}` }}>
-                    <div className="flex items-center gap-1.5" style={{ color: s.color }}>{s.icon}<span className="text-xs font-semibold">{s.label}</span></div>
-                    <p className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{s.value}</p>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {/* Row 1 — People */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: "Registered Users", value: stats.totalUsers, icon: <Users size={16} />, color: "#480082", bg: "rgba(72,0,130,0.06)" },
+                    { label: "Active Hosts", value: stats.totalHosts, icon: <CalendarDays size={16} />, color: "#9F67FE", bg: "rgba(159,103,254,0.06)" },
+                    { label: "Verified Hosts", value: stats.verifiedHosts, icon: <BadgeCheck size={16} />, color: "#d97706", bg: "rgba(255,183,0,0.07)" },
+                    { label: "Total Events", value: stats.totalEvents, icon: <Ticket size={16} />, color: "#0ea5e9", bg: "rgba(14,165,233,0.06)" },
+                  ].map(s => (
+                    <div key={s.label} className="rounded-2xl p-5" style={{ backgroundColor: s.bg, border: "1px solid var(--card-border)" }}>
+                      <div className="flex items-center gap-1.5 mb-3" style={{ color: s.color }}>
+                        {s.icon}<span className="text-xs font-semibold uppercase tracking-wide">{s.label}</span>
+                      </div>
+                      <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>{s.value.toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+                {/* Row 2 — Money & Ops */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: "Tickets Admitted", sublabel: `${stats.scannedTickets.toLocaleString()} scanned`, value: stats.totalTickets.toLocaleString(), icon: <ScanLine size={16} />, color: "#22c55e", bg: "rgba(34,197,94,0.06)", highlight: false },
+                    { label: "Gross Revenue", sublabel: "all ticket sales", value: `₦${stats.totalRevenue.toLocaleString()}`, icon: <TrendingUp size={16} />, color: "#f59e0b", bg: "rgba(245,158,11,0.06)", highlight: false },
+                    { label: "Total Paid Out", sublabel: "approved withdrawals", value: `₦${stats.totalPaidOut.toLocaleString()}`, icon: <ArrowDownToLine size={16} />, color: "#0ea5e9", bg: "rgba(14,165,233,0.06)", highlight: false },
+                    { label: "Pending Payouts", sublabel: `₦${stats.pendingPayoutAmount.toLocaleString()} waiting`, value: stats.pendingPayouts.toLocaleString(), icon: <Clock size={16} />, color: stats.pendingPayouts > 0 ? "#ef4444" : "#6b7280", bg: stats.pendingPayouts > 0 ? "rgba(239,68,68,0.06)" : "var(--card-bg)", highlight: stats.pendingPayouts > 0 },
+                  ].map(s => (
+                    <div key={s.label} className="rounded-2xl p-5" style={{ backgroundColor: s.bg, border: `1px solid ${s.highlight ? "rgba(239,68,68,0.25)" : "var(--card-border)"}` }}>
+                      <div className="flex items-center gap-1.5 mb-1" style={{ color: s.color }}>
+                        {s.icon}<span className="text-xs font-semibold uppercase tracking-wide">{s.label}</span>
+                      </div>
+                      <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>{s.sublabel}</p>
+                      <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>{s.value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
