@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /signup
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://www.flexpasshq.com/sitemap.xml
