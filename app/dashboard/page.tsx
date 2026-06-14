@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mail, TrendingUp } from "lucide-react";
+import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mail, TrendingUp, BadgeCheck } from "lucide-react";
 import SalesChart from "@/components/SalesChart";
 import Link from "next/link";
 
@@ -180,7 +180,15 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-theme">Dashboard Overview</h2>
-          <p className="text-theme-2 text-sm mt-0.5">{user?.email}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-theme-2 text-sm">{user?.email}</p>
+            {stats.myEvents.some((e: any) => e.organizer_verified) && (
+              <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706", border: "1px solid rgba(255,183,0,0.3)" }}>
+                <BadgeCheck size={12} /> Verified Host
+              </span>
+            )}
+          </div>
         </div>
         <Link href="/create">
           <button className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm text-white hover:opacity-90 transition"

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon
+  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -14,6 +14,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return;
+      const { data } = await supabase
+        .from("events")
+        .select("organizer_verified")
+        .eq("user_id", session.user.id)
+        .eq("organizer_verified", true)
+        .limit(1);
+      setIsVerified((data?.length || 0) > 0);
+    });
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -33,7 +47,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <>
       <div className="p-6" style={{borderBottom:"1px solid var(--sidebar-border)"}}>
         <Logo size={40} variant="gradient" />
-        <p className="text-xs mt-1.5" style={{color:"var(--text-muted)"}}>Host Dashboard</p>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <p className="text-xs" style={{color:"var(--text-muted)"}}>Host Dashboard</p>
+          {isVerified && (
+            <span className="flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded-full"
+              style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706" }}>
+              <BadgeCheck size={11} /> Verified
+            </span>
+          )}
+        </div>
       </div>
 
       <nav className="flex-1 p-4 space-y-1">
