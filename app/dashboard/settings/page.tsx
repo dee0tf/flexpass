@@ -61,6 +61,95 @@ function Toast({ message, type }: { message: string; type: "success" | "error" }
   );
 }
 
+function BrowserNotificationsCard() {
+  const [permission, setPermission] = useState<NotificationPermission>("default");
+  const [requesting, setRequesting] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setPermission(Notification.permission);
+    }
+  }, []);
+
+  const handleEnable = async () => {
+    if (!("Notification" in window)) return;
+    setRequesting(true);
+    const result = await Notification.requestPermission();
+    setPermission(result);
+    setRequesting(false);
+
+    if (result === "granted") {
+      new Notification("🎟️ Notifications enabled!", {
+        body: "You'll get an alert the moment someone buys a ticket to your event.",
+        icon: "/icon.png",
+      });
+    }
+  };
+
+  const statusLabel = {
+    granted: "Enabled",
+    denied:  "Blocked by browser",
+    default: "Not enabled yet",
+  }[permission];
+
+  const statusColor = {
+    granted: "#16a34a",
+    denied:  "#ef4444",
+    default: "var(--text-muted)",
+  }[permission];
+
+  return (
+    <SectionCard
+      title="Browser Notifications"
+      description="Get an instant pop-up alert the moment someone buys a ticket — works in any tab while your dashboard is open."
+    >
+      <div className="space-y-4">
+        <div className="flex items-center justify-between p-4 rounded-xl"
+          style={{ backgroundColor: "var(--surface-raised)" }}>
+          <div>
+            <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Ticket sale alerts</p>
+            <p className="text-xs mt-0.5" style={{ color: statusColor }}>
+              Status: <strong>{statusLabel}</strong>
+            </p>
+          </div>
+
+          {permission === "granted" ? (
+            <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl"
+              style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a" }}>
+              <CheckCircle2 size={13} /> Active
+            </span>
+          ) : permission === "denied" ? (
+            <div className="text-right">
+              <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl"
+                style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                <XCircle size={13} /> Blocked
+              </span>
+              <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
+                Allow in browser site settings
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={handleEnable}
+              disabled={requesting}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+              style={{ backgroundColor: "var(--brand-indigo)" }}
+            >
+              {requesting ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
+              Enable
+            </button>
+          )}
+        </div>
+
+        <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+          Notifications appear as browser pop-ups while your dashboard is open — no app install needed.
+          If you close the dashboard tab, you won&apos;t receive alerts until you reopen it.
+        </p>
+      </div>
+    </SectionCard>
+  );
+}
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [verified, setVerified] = useState(false);
@@ -275,18 +364,20 @@ export default function SettingsPage() {
         </div>
       </SectionCard>
 
-      {/* ── Notifications ── */}
-      <SectionCard title="Notification Preferences" description="Choose which email notifications you receive.">
+      {/* ── Browser Notifications ── */}
+      <BrowserNotificationsCard />
+
+      {/* ── Email Notification Preferences ── */}
+      <SectionCard title="Email Notification Preferences" description="Choose which email notifications you receive from FlexPass.">
         <div className="space-y-4">
           {[
-            { key: "sale", label: "New ticket sale", desc: "Get an email each time someone buys a ticket to your event.", value: notifySale, set: setNotifySale },
-            { key: "payout", label: "Payout updates", desc: "Get notified when a withdrawal is approved or rejected.", value: notifyPayout, set: setNotifyPayout },
+            { key: "sale",   label: "New ticket sale",   desc: "Get an email each time someone buys a ticket to your event.", value: notifySale,   set: setNotifySale },
+            { key: "payout", label: "Payout updates",    desc: "Get notified when a withdrawal is approved or rejected.",    value: notifyPayout, set: setNotifyPayout },
           ].map(item => (
             <label key={item.key} className="flex items-start gap-4 cursor-pointer p-4 rounded-xl transition"
               style={{ backgroundColor: "var(--surface-raised)" }}>
               <div className="mt-0.5">
-                <input type="checkbox" checked={item.value} onChange={e => item.set(e.target.checked)}
-                  className="sr-only" />
+                <input type="checkbox" checked={item.value} onChange={e => item.set(e.target.checked)} className="sr-only" />
                 <div onClick={() => item.set(!item.value)}
                   className="h-5 w-9 rounded-full relative transition-colors cursor-pointer"
                   style={{ backgroundColor: item.value ? "var(--brand-indigo)" : "var(--card-border)" }}>

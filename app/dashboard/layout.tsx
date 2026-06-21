@@ -6,7 +6,7 @@ import {
   LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -15,18 +15,73 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const notifChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return;
+      const userId = session.user.id;
+
+      // Check verified status
       const { data } = await supabase
         .from("events")
         .select("organizer_verified")
-        .eq("user_id", session.user.id)
+        .eq("user_id", userId)
         .eq("organizer_verified", true)
         .limit(1);
       setIsVerified((data?.length || 0) > 0);
+
+      // Browser notifications — subscribe to new ticket inserts on this host's events
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        const { data: myEvents } = await supabase
+          .from("events")
+          .select("id, title")
+          .eq("user_id", userId);
+
+        if (myEvents && myEvents.length > 0) {
+          const eventIds = myEvents.map(e => e.id);
+          const titleMap = Object.fromEntries(myEvents.map(e => [e.id, e.title]));
+
+          // Clean up any previous channel
+          if (notifChannelRef.current) {
+            supabase.removeChannel(notifChannelRef.current);
+          }
+
+          const channel = supabase
+            .channel("ticket-sale-notifications")
+            .on(
+              "postgres_changes",
+              { event: "INSERT", schema: "public", table: "tickets" },
+              (payload) => {
+                const ticket = payload.new as any;
+                if (!eventIds.includes(ticket.event_id)) return;
+                const eventTitle = titleMap[ticket.event_id] || "your event";
+                const tierLabel = ticket.tier_name && ticket.tier_name !== "Standard"
+                  ? ` (${ticket.tier_name})`
+                  : "";
+                new Notification("🎟️ New ticket sold!", {
+                  body: `${ticket.user_name || ticket.user_email} just bought a ticket to ${eventTitle}${tierLabel}.`,
+                  icon: "/icon.png",
+                  tag: ticket.id,
+                });
+              }
+            )
+            .subscribe();
+
+          notifChannelRef.current = channel;
+        }
+      }
     });
+
+    return () => {
+      if (notifChannelRef.current) {
+        supabase.removeChannel(notifChannelRef.current);
+      }
+    };
   }, []);
 
   const handleLogout = async () => {
