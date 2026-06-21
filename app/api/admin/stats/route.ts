@@ -49,8 +49,17 @@ export async function GET(request: Request) {
   const hostSet = new Set((hostRows || []).map((e: any) => e.user_id));
   const verifiedHostSet = new Set((hostRows || []).filter((e: any) => e.organizer_verified).map((e: any) => e.user_id));
 
-  // Total registered users via auth admin (service role bypasses RLS)
-  const { count: totalUsers } = await db.from("profiles").select("*", { count: "exact", head: true });
+  // Total registered users from auth.users (profiles only holds users who set up bank details)
+  let totalUsers = 0;
+  {
+    let page = 1;
+    while (true) {
+      const { data: { users } } = await db.auth.admin.listUsers({ page, perPage: 1000 });
+      totalUsers += (users || []).length;
+      if (!users || users.length < 1000) break;
+      page++;
+    }
+  }
 
   const totalRevenue = (soldTickets || []).reduce((acc, t) => acc + (t.total_amount_paid || 0), 0);
   const pendingPayoutAmount = (pendingPayoutRows || []).reduce((acc, p) => acc + (p.amount || 0), 0);

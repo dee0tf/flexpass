@@ -152,6 +152,24 @@ export default function AdminPage() {
     } finally { setProcessing(null); }
   }
 
+  async function refreshData() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const token = session.access_token;
+      const [payoutsRes, deletesRes, statsRes] = await Promise.all([
+        fetch("/api/admin/payouts", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/admin/delete-requests", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/admin/stats", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (payoutsRes.ok) setPayouts((await payoutsRes.json()).payouts || []);
+      if (deletesRes.ok) setDeleteRequests((await deletesRes.json()).requests || []);
+      if (statsRes.ok) setStats(await statsRes.json());
+    } catch (e) {
+      console.error("[admin] background refresh failed:", e);
+    }
+  }
+
   async function handleDeleteAction(requestId: string, eventId: string, action: "approve" | "deny") {
     setProcessing(requestId + action);
     try {
@@ -174,10 +192,8 @@ export default function AdminPage() {
       }
 
       showToast(data.message, "success");
-      const newStatus = action === "approve" ? "approved" : "denied";
-      setDeleteRequests(prev =>
-        prev.map(r => r.id === requestId ? { ...r, status: newStatus } : r)
-      );
+      // Refresh from server so the Deleted tab shows accurate state
+      await refreshData();
     } catch {
       showToast("Action failed. Please try again.", "error");
     } finally {
