@@ -19,6 +19,7 @@ type DeleteRequest = {
   id: string; event_id: string; event_title: string;
   reason: string; status: string; created_at: string;
   user_id: string; user_email: string;
+  event_exists: boolean;
 };
 
 type Stats = {
@@ -203,12 +204,14 @@ export default function AdminPage() {
     ? payouts.filter(p => p.status === "pending")
     : payouts;
 
-  const pendingDeleteCount  = deleteRequests.filter(d => d.status === "pending").length;
-  const approvedDeleteCount = deleteRequests.filter(d => d.status === "approved").length;
+  // "pending" = waiting for action AND event still exists
+  // "approved" = explicitly approved OR event already gone (orphaned from old failed deletes)
+  const pendingDeleteCount  = deleteRequests.filter(d => d.status === "pending" && d.event_exists).length;
+  const approvedDeleteCount = deleteRequests.filter(d => d.status === "approved" || !d.event_exists).length;
 
   const displayedDeletes =
-    deleteTab === "pending"  ? deleteRequests.filter(d => d.status === "pending")  :
-    deleteTab === "approved" ? deleteRequests.filter(d => d.status === "approved") :
+    deleteTab === "pending"  ? deleteRequests.filter(d => d.status === "pending" && d.event_exists) :
+    deleteTab === "approved" ? deleteRequests.filter(d => d.status === "approved" || !d.event_exists) :
     deleteRequests;
 
   const statusColor: Record<string, string> = {
@@ -488,56 +491,68 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="divide-y" style={{ borderColor: "var(--card-border)" }}>
-                    {displayedDeletes.map(r => (
-                      <div key={r.id} className="p-6 space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <p className="font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                              {r.event_title}
-                            </p>
-                            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                              {new Date(r.created_at).toLocaleDateString("en-GB", {
-                                day: "numeric", month: "short", year: "numeric",
-                              })}
-                              {" · "}
-                              <span className="font-medium" style={{ color: "var(--brand-indigo)" }}>
-                                {r.user_email}
-                              </span>
-                            </p>
+                    {displayedDeletes.map(r => {
+                      const isOrphan = !r.event_exists && r.status === "pending";
+                      return (
+                        <div key={r.id} className="p-6 space-y-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                                  {r.event_title}
+                                </p>
+                                {isOrphan && (
+                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 whitespace-nowrap">
+                                    ✓ Event deleted
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                                {new Date(r.created_at).toLocaleDateString("en-GB", {
+                                  day: "numeric", month: "short", year: "numeric",
+                                })}
+                                {" · "}
+                                <span className="font-medium" style={{ color: "var(--brand-indigo)" }}>
+                                  {r.user_email}
+                                </span>
+                              </p>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
+                              isOrphan ? "bg-green-100 text-green-700" : (statusColor[r.status] || "bg-slate-100 text-slate-600")
+                            }`}>
+                              {isOrphan ? "approved" : r.status}
+                            </span>
                           </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${statusColor[r.status] || "bg-slate-100 text-slate-600"}`}>
-                            {r.status}
-                          </span>
-                        </div>
 
-                        <div className="rounded-xl p-3" style={{ backgroundColor: "var(--surface-raised)" }}>
-                          <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>REASON</p>
-                          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{r.reason}</p>
-                        </div>
-
-                        {r.status === "pending" && (
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() => handleDeleteAction(r.id, r.event_id, "approve")}
-                              disabled={!!processing}
-                              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition hover:opacity-80 disabled:opacity-50 bg-red-600">
-                              {processing === r.id + "approve"
-                                ? <Loader2 size={13} className="animate-spin" />
-                                : <Trash2 size={13} />} Approve & Delete
-                            </button>
-                            <button
-                              onClick={() => handleDeleteAction(r.id, r.event_id, "deny")}
-                              disabled={!!processing}
-                              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition hover:opacity-80 disabled:opacity-50"
-                              style={{ backgroundColor: "var(--surface-raised)", color: "var(--text-secondary)" }}>
-                              {processing === r.id + "deny"
-                                ? <Loader2 size={13} className="animate-spin" />
-                                : <XCircle size={13} />} Deny
-                            </button>
+                          <div className="rounded-xl p-3" style={{ backgroundColor: "var(--surface-raised)" }}>
+                            <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>REASON</p>
+                            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{r.reason}</p>
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          {r.status === "pending" && r.event_exists && (
+                            <div className="flex gap-3">
+                              <button
+                                onClick={() => handleDeleteAction(r.id, r.event_id, "approve")}
+                                disabled={!!processing}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition hover:opacity-80 disabled:opacity-50 bg-red-600">
+                                {processing === r.id + "approve"
+                                  ? <Loader2 size={13} className="animate-spin" />
+                                  : <Trash2 size={13} />} Approve & Delete
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAction(r.id, r.event_id, "deny")}
+                                disabled={!!processing}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition hover:opacity-80 disabled:opacity-50"
+                                style={{ backgroundColor: "var(--surface-raised)", color: "var(--text-secondary)" }}>
+                                {processing === r.id + "deny"
+                                  ? <Loader2 size={13} className="animate-spin" />
+                                  : <XCircle size={13} />} Deny
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

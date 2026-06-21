@@ -43,9 +43,19 @@ export async function GET(request: Request) {
     })
   );
 
+  // Check which events still exist so we can surface orphaned pending requests
+  const eventIds = [...new Set((requests || []).map((r: any) => r.event_id as string))];
+  const { data: existingEvents } = await db
+    .from("events")
+    .select("id")
+    .in("id", eventIds.length > 0 ? eventIds : ["__none__"]);
+
+  const existingEventIds = new Set((existingEvents || []).map((e: any) => e.id));
+
   const enriched = (requests || []).map((r: any) => ({
     ...r,
     user_email: emailMap.get(r.user_id) || `${r.user_id.slice(0, 8)}…`,
+    event_exists: existingEventIds.has(r.event_id),
   }));
 
   return NextResponse.json({ requests: enriched });

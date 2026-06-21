@@ -59,11 +59,11 @@ export async function POST(request: Request) {
     }
   }
 
-  // Update the request status
+  // Update the request status (only columns that exist in the schema)
   const newStatus = action === "approve" ? "approved" : "denied";
   const { error: updateErr } = await db
     .from("delete_requests")
-    .update({ status: newStatus, resolved_at: new Date().toISOString() })
+    .update({ status: newStatus })
     .eq("id", requestId);
 
   if (updateErr) {
