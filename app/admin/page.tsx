@@ -43,7 +43,7 @@ export default function AdminPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [payoutTab, setPayoutTab] = useState<"pending" | "all">("pending");
-  const [deleteTab, setDeleteTab] = useState<"pending" | "all">("pending");
+  const [deleteTab, setDeleteTab] = useState<"pending" | "approved" | "all">("pending");
   const [mainTab, setMainTab] = useState<"withdrawals" | "deletes" | "hosts">("withdrawals");
   const [hosts, setHosts] = useState<Host[]>([]);
   const [hostsLoading, setHostsLoading] = useState(false);
@@ -154,37 +154,34 @@ export default function AdminPage() {
   async function handleDeleteAction(requestId: string, eventId: string, action: "approve" | "deny") {
     setProcessing(requestId + action);
     try {
-      const newStatus = action === "approve" ? "approved" : "denied";
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-      if (action === "approve") {
-        const { error: delErr } = await supabase.from("events").delete().eq("id", eventId);
-        if (delErr) {
-          showToast("Failed to delete event: " + delErr.message, "error");
-          return;
-        }
-      }
+      const res = await fetch("/api/admin/delete-event", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ requestId, eventId, action }),
+      });
 
-      const { error: updateErr } = await supabase
-        .from("delete_requests")
-        .update({ status: newStatus })
-        .eq("id", requestId);
-
-      if (updateErr) {
-        showToast("Failed to update request status.", "error");
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || "Action failed.", "error");
         return;
       }
 
-      showToast(
-        action === "approve" ? "Event deleted and request approved." : "Request denied.",
-        "success"
-      );
+      showToast(data.message, "success");
+      const newStatus = action === "approve" ? "approved" : "denied";
       setDeleteRequests(prev =>
         prev.map(r => r.id === requestId ? { ...r, status: newStatus } : r)
       );
-      loadData();
     } catch {
       showToast("Action failed. Please try again.", "error");
-    } finally { setProcessing(null); }
+    } finally {
+      setProcessing(null);
+    }
   }
 
   if (!loading && !authorized) {
@@ -206,11 +203,13 @@ export default function AdminPage() {
     ? payouts.filter(p => p.status === "pending")
     : payouts;
 
-  const displayedDeletes = deleteTab === "pending"
-    ? deleteRequests.filter(d => d.status === "pending")
-    : deleteRequests;
+  const pendingDeleteCount  = deleteRequests.filter(d => d.status === "pending").length;
+  const approvedDeleteCount = deleteRequests.filter(d => d.status === "approved").length;
 
-  const pendingDeleteCount = deleteRequests.filter(d => d.status === "pending").length;
+  const displayedDeletes =
+    deleteTab === "pending"  ? deleteRequests.filter(d => d.status === "pending")  :
+    deleteTab === "approved" ? deleteRequests.filter(d => d.status === "approved") :
+    deleteRequests;
 
   const statusColor: Record<string, string> = {
     pending:    "bg-yellow-100 text-yellow-700",
@@ -454,29 +453,24 @@ export default function AdminPage() {
             {mainTab === "deletes" && (
               <div className="rounded-2xl overflow-hidden"
                 style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-                <div className="px-6 py-4 flex items-center justify-between border-b"
+                <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b"
                   style={{ borderColor: "var(--card-border)" }}>
-                  <div className="flex items-center gap-3">
-                    <h2 className="font-display font-bold text-lg" style={{ color: "var(--text-primary)" }}>
-                      Event Deletion Requests
-                    </h2>
-                    {pendingDeleteCount > 0 && (
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
-                        {pendingDeleteCount} pending
-                      </span>
-                    )}
-                  </div>
+                  <h2 className="font-display font-bold text-lg" style={{ color: "var(--text-primary)" }}>
+                    Event Deletion Requests
+                  </h2>
                   <div className="flex gap-1 p-1 rounded-xl" style={{ backgroundColor: "var(--background)" }}>
-                    {(["pending", "all"] as const).map(tab => (
-                      <button key={tab} onClick={() => setDeleteTab(tab)}
-                        className="px-4 py-1.5 rounded-lg text-sm font-semibold capitalize transition"
+                    {([
+                      { key: "pending",  label: pendingDeleteCount  ? `Pending (${pendingDeleteCount})`  : "Pending",  color: pendingDeleteCount  ? "#ef4444" : undefined },
+                      { key: "approved", label: approvedDeleteCount ? `Deleted (${approvedDeleteCount})` : "Deleted",  color: approvedDeleteCount ? "#16a34a" : undefined },
+                      { key: "all",      label: `All (${deleteRequests.length})`, color: undefined },
+                    ] as const).map(tab => (
+                      <button key={tab.key} onClick={() => setDeleteTab(tab.key)}
+                        className="px-4 py-1.5 rounded-lg text-sm font-semibold transition"
                         style={{
-                          backgroundColor: deleteTab === tab ? "var(--brand-indigo)" : "transparent",
-                          color: deleteTab === tab ? "#fff" : "var(--text-muted)",
+                          backgroundColor: deleteTab === tab.key ? "var(--brand-indigo)" : "transparent",
+                          color: deleteTab === tab.key ? "#fff" : (tab.color ?? "var(--text-muted)"),
                         }}>
-                        {tab === "pending"
-                          ? `Pending${pendingDeleteCount ? ` (${pendingDeleteCount})` : ""}`
-                          : `All (${deleteRequests.length})`}
+                        {tab.label}
                       </button>
                     ))}
                   </div>
@@ -486,7 +480,9 @@ export default function AdminPage() {
                   <div className="py-16 text-center">
                     <CheckCircle2 className="h-10 w-10 mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
                     <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {deleteTab === "pending" ? "No pending delete requests" : "No delete requests yet"}
+                      {deleteTab === "pending"  ? "No pending delete requests" :
+                       deleteTab === "approved" ? "No deleted events yet" :
+                       "No delete requests yet"}
                     </p>
                     <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>All clear.</p>
                   </div>
