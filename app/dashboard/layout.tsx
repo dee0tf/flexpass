@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2
+  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useState, useEffect } from "react";
@@ -42,6 +42,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: "Promoters",  href: "/dashboard/promoters", icon: Share2 },
     { name: "Wallet",     href: "/dashboard/wallet",    icon: Wallet },
     { name: "Settings",   href: "/dashboard/settings",  icon: Settings },
+    { name: "Guide",      href: "/dashboard/guide",     icon: BookOpen },
   ];
 
   // Build sidebar JSX as a variable (not a component) to avoid React unmounting/remounting

@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mail, TrendingUp, BadgeCheck } from "lucide-react";
+import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mail, TrendingUp, BadgeCheck, BookOpen, X, ChevronRight } from "lucide-react";
 import SalesChart from "@/components/SalesChart";
 import Link from "next/link";
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [guideDismissed, setGuideDismissed] = useState(false);
   const [stats, setStats] = useState<{
     revenue: number; ticketsSold: number; activeEvents: number;
     recentSales: any[]; myEvents: any[]; chartData: any[];
@@ -197,6 +198,64 @@ export default function DashboardPage() {
           </button>
         </Link>
       </div>
+
+      {/* ── Creator Guide welcome banner ── */}
+      {!guideDismissed && (
+        <div
+          className="relative rounded-2xl overflow-hidden"
+          style={{ border: "1px solid rgba(72,0,130,0.25)" }}
+        >
+          {/* Gradient background */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: "linear-gradient(135deg, rgba(72,0,130,0.08) 0%, rgba(159,103,254,0.05) 50%, rgba(255,183,0,0.05) 100%)" }}
+          />
+          <div className="relative z-10 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            {/* Icon */}
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+              style={{ background: "linear-gradient(135deg, #480082, #9F67FE)" }}
+            >
+              <BookOpen size={22} className="text-white" />
+            </div>
+            {/* Text */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>
+                  New to FlexPass? Read the Creator Guide
+                </p>
+                <span
+                  className="text-xs font-bold px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#FFB700" }}
+                >
+                  Recommended
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                Video walkthroughs and step-by-step instructions for creating events, managing promoters, running check-in, and getting paid.
+              </p>
+            </div>
+            {/* Actions */}
+            <div className="flex items-center gap-3 shrink-0">
+              <Link
+                href="/dashboard/guide"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white hover:opacity-90 transition"
+                style={{ backgroundColor: "var(--brand-indigo)" }}
+              >
+                Open Guide <ChevronRight size={14} />
+              </Link>
+              <button
+                onClick={() => setGuideDismissed(true)}
+                className="p-2 rounded-xl transition-colors hover:bg-black/5"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Dismiss"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
