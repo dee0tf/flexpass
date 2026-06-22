@@ -43,8 +43,10 @@ export async function GET(request: Request) {
     })
   );
 
-  // Check which events still exist so we can surface orphaned pending requests
-  const eventIds = [...new Set((requests || []).map((r: any) => r.event_id as string))];
+  // Check which events still exist (filter out null event_ids — those are already gone)
+  const eventIds = [...new Set(
+    (requests || []).map((r: any) => r.event_id).filter((id: any) => id != null)
+  )];
   const { data: existingEvents } = await db
     .from("events")
     .select("id")
