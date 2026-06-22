@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Calendar, MapPin, Clock, Lock, ExternalLink, BadgeCheck } from "lucide-react";
 import ClientEventPage from "./ClientEventPage";
+import CountdownTimer from "@/components/CountdownTimer";
 
 import { Metadata } from "next";
 
@@ -246,6 +247,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           )}
+
+          {/* Countdown timer — visible within 7 days of the event */}
+          <CountdownTimer eventDate={event.date} />
         </div>
 
         {/* Description */}
