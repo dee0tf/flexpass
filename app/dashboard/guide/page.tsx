@@ -9,7 +9,7 @@ import {
 
 // ── Swap these YouTube video IDs once you've recorded your walkthroughs ──
 const VIDEO_IDS: Record<string, string> = {
-  "getting-started": "REPLACE_VIDEO_ID",
+  "getting-started": "1sHi300ZQHs",
   "creating-event":  "REPLACE_VIDEO_ID",
   "ticket-tiers":    "REPLACE_VIDEO_ID",
   "promoters":       "REPLACE_VIDEO_ID",
