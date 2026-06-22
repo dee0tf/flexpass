@@ -32,22 +32,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing or invalid parameters" }, { status: 400 });
   }
 
-  // Save the request record upfront — needed if cascade deletion removes it when we delete the event
-  const { data: reqRecord } = await db
+  // Mark the request FIRST — before touching the event.
+  // With the FK set to ON DELETE SET NULL, deleting the event will null the event_id
+  // on this row but leave the row itself intact with status = "approved".
+  const newStatus = action === "approve" ? "approved" : "denied";
+  const { error: updateErr } = await db
     .from("delete_requests")
-    .select("*")
-    .eq("id", requestId)
-    .maybeSingle();
+    .update({ status: newStatus })
+    .eq("id", requestId);
+
+  if (updateErr) {
+    console.error("[delete-event] request update error:", updateErr);
+    return NextResponse.json({ error: "Failed to update request status: " + updateErr.message }, { status: 500 });
+  }
 
   if (action === "approve") {
     if (!eventId) {
       return NextResponse.json({ error: "eventId required for approval" }, { status: 400 });
     }
-
-    // Break potential CASCADE DELETE: null the event_id FK before deleting the event.
-    // If event_id is nullable this prevents the delete_request row from being cascade-deleted.
-    // If event_id is NOT NULL this silently fails — handled via re-insert below.
-    await db.from("delete_requests").update({ event_id: null }).eq("id", requestId);
 
     // Delete related tickets first (foreign key constraint)
     const { error: ticketErr } = await db
@@ -60,7 +62,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to delete tickets: " + ticketErr.message }, { status: 500 });
     }
 
-    // Delete the event
+    // Delete the event — with ON DELETE SET NULL the delete_request row survives
+    // with event_id nulled out and status already set to "approved" above.
     const { error: eventErr } = await db
       .from("events")
       .delete()
@@ -69,50 +72,6 @@ export async function POST(request: Request) {
     if (eventErr) {
       console.error("[delete-event] event delete error:", eventErr);
       return NextResponse.json({ error: "Failed to delete event: " + eventErr.message }, { status: 500 });
-    }
-  }
-
-  // Update the request status
-  const newStatus = action === "approve" ? "approved" : "denied";
-  const { data: updateResult, error: updateErr } = await db
-    .from("delete_requests")
-    .update({ status: newStatus })
-    .eq("id", requestId)
-    .select("id");
-
-  if (updateErr) {
-    // Log but don't fail — the event was already successfully deleted
-    console.error("[delete-event] request update error:", updateErr);
-  }
-
-  // If update matched 0 rows the record was cascade-deleted when we deleted the event.
-  // Re-insert it as an audit record so it appears in the Deleted tab.
-  const wasDeleted = Array.isArray(updateResult) && updateResult.length === 0;
-  if (action === "approve" && wasDeleted && reqRecord) {
-    console.log("[delete-event] Cascade deleted the request record — re-inserting audit record");
-
-    // Try with event_id = null (breaks the FK so insert succeeds even though event is gone)
-    const { error: insertErr } = await db.from("delete_requests").insert({
-      id: reqRecord.id,
-      user_id: reqRecord.user_id,
-      event_id: null,
-      event_title: reqRecord.event_title,
-      reason: reqRecord.reason,
-      status: "approved",
-      created_at: reqRecord.created_at,
-    });
-
-    if (insertErr) {
-      // event_id is NOT NULL — insert without it
-      console.error("[delete-event] null event_id insert failed:", insertErr.message);
-      const { error: fallbackErr } = await db.from("delete_requests").insert({
-        user_id: reqRecord.user_id,
-        event_title: reqRecord.event_title,
-        reason: reqRecord.reason,
-        status: "approved",
-        created_at: reqRecord.created_at,
-      });
-      if (fallbackErr) console.error("[delete-event] fallback insert also failed:", fallbackErr.message);
     }
   }
 
