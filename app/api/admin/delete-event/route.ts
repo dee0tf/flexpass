@@ -105,13 +105,14 @@ export async function POST(request: Request) {
     if (insertErr) {
       // event_id is NOT NULL — insert without it
       console.error("[delete-event] null event_id insert failed:", insertErr.message);
-      await db.from("delete_requests").insert({
+      const { error: fallbackErr } = await db.from("delete_requests").insert({
         user_id: reqRecord.user_id,
         event_title: reqRecord.event_title,
         reason: reqRecord.reason,
         status: "approved",
         created_at: reqRecord.created_at,
-      }).catch((e: any) => console.error("[delete-event] fallback insert also failed:", e));
+      });
+      if (fallbackErr) console.error("[delete-event] fallback insert also failed:", fallbackErr.message);
     }
   }
 
