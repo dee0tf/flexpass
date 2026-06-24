@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import {
   Loader2, CheckCircle2, XCircle, RefreshCw, Building2,
   Users, Ticket, TrendingUp, Clock, AlertCircle, Trash2, BadgeCheck, ShieldOff,
-  ScanLine, ArrowDownToLine, CalendarDays,
+  ScanLine, ArrowDownToLine, CalendarDays, ChevronDown, ChevronUp, CreditCard, Share2,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 
@@ -33,6 +33,20 @@ type Stats = {
 type Host = {
   user_id: string; email: string; organizer_name: string;
   events: number; tickets: number; revenue: number; verified: boolean;
+  promoters: number;
+  bank: { bank_name: string; account_number: string; account_name: string } | null;
+};
+
+type AdminEvent = {
+  id: string; title: string; date: string; image_url: string | null;
+  organizer_name: string; verified: boolean;
+  host_email: string; tickets: number; revenue: number;
+};
+
+type AdminTicket = {
+  id: string; user_name: string; user_email: string;
+  tier_name: string | null; total_amount_paid: number;
+  status: string; created_at: string; referral_code: string | null;
 };
 
 export default function AdminPage() {
@@ -45,9 +59,14 @@ export default function AdminPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [payoutTab, setPayoutTab] = useState<"pending" | "all">("pending");
   const [deleteTab, setDeleteTab] = useState<"pending" | "approved" | "all">("pending");
-  const [mainTab, setMainTab] = useState<"withdrawals" | "deletes" | "hosts">("withdrawals");
+  const [mainTab, setMainTab] = useState<"withdrawals" | "deletes" | "hosts" | "events">("withdrawals");
   const [hosts, setHosts] = useState<Host[]>([]);
   const [hostsLoading, setHostsLoading] = useState(false);
+  const [adminEvents, setAdminEvents] = useState<AdminEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [eventTickets, setEventTickets] = useState<Record<string, AdminTicket[]>>({});
+  const [eventTicketsLoading, setEventTicketsLoading] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -128,6 +147,42 @@ export default function AdminPage() {
       const data = await res.json();
       if (res.ok) setHosts(data.hosts || []);
     } finally { setHostsLoading(false); }
+  }
+
+  async function loadEvents() {
+    setEventsLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/admin/events", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (res.ok) setAdminEvents(data.events || []);
+    } finally { setEventsLoading(false); }
+  }
+
+  async function loadEventTickets(eventId: string) {
+    if (eventTickets[eventId]) return; // already loaded
+    setEventTicketsLoading(eventId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/admin/events?eventId=${eventId}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (res.ok) setEventTickets(prev => ({ ...prev, [eventId]: data.tickets || [] }));
+    } finally { setEventTicketsLoading(null); }
+  }
+
+  function toggleEvent(eventId: string) {
+    if (expandedEventId === eventId) {
+      setExpandedEventId(null);
+    } else {
+      setExpandedEventId(eventId);
+      loadEventTickets(eventId);
+    }
   }
 
   async function handleToggleVerify(userId: string, currentVerified: boolean) {
@@ -335,16 +390,18 @@ export default function AdminPage() {
             )}
 
             {/* ── Main tab switcher ── */}
-            <div className="flex gap-2 p-1 rounded-2xl w-fit" style={{ backgroundColor: "var(--surface-raised)" }}>
+            <div className="flex flex-wrap gap-2 p-1 rounded-2xl w-fit" style={{ backgroundColor: "var(--surface-raised)" }}>
               {([
                 { key: "withdrawals", label: `Withdrawals${stats?.pendingPayouts ? ` (${stats.pendingPayouts})` : ""}` },
                 { key: "deletes",     label: `Delete Requests${pendingDeleteCount ? ` (${pendingDeleteCount})` : ""}` },
                 { key: "hosts",       label: "Hosts" },
+                { key: "events",      label: "Events" },
               ] as const).map(t => (
                 <button key={t.key}
                   onClick={() => {
                     setMainTab(t.key);
-                    if (t.key === "hosts" && hosts.length === 0) loadHosts();
+                    if (t.key === "hosts"  && hosts.length === 0)       loadHosts();
+                    if (t.key === "events" && adminEvents.length === 0)  loadEvents();
                   }}
                   className="px-5 py-2 rounded-xl text-sm font-semibold transition"
                   style={{
@@ -609,8 +666,8 @@ export default function AdminPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr style={{ borderBottom: "1px solid var(--card-border)", backgroundColor: "var(--background)" }}>
-                          {["Host", "Email", "Events", "Tickets", "Revenue", "Status", "Action"].map(h => (
-                            <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider"
+                          {["Host", "Email", "Events", "Tickets", "Revenue", "Promoters", "Bank Details", "Status", "Action"].map(h => (
+                            <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
                               style={{ color: "var(--text-muted)" }}>{h}</th>
                           ))}
                         </tr>
@@ -620,18 +677,45 @@ export default function AdminPage() {
                           <tr key={h.user_id}
                             style={{ borderBottom: i < hosts.length - 1 ? "1px solid var(--card-border)" : "none" }}
                             className="hover:bg-[var(--surface-raised)] transition">
-                            <td className="px-5 py-4">
+                            <td className="px-4 py-4">
                               <p className="font-semibold" style={{ color: "var(--text-primary)" }}>{h.organizer_name}</p>
                             </td>
-                            <td className="px-5 py-4">
+                            <td className="px-4 py-4">
                               <span className="text-xs font-mono" style={{ color: "var(--text-secondary)" }}>{h.email}</span>
                             </td>
-                            <td className="px-5 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>{h.events}</td>
-                            <td className="px-5 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>{h.tickets}</td>
-                            <td className="px-5 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>
+                            <td className="px-4 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>{h.events}</td>
+                            <td className="px-4 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>{h.tickets}</td>
+                            <td className="px-4 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>
                               ₦{h.revenue.toLocaleString()}
                             </td>
-                            <td className="px-5 py-4">
+                            <td className="px-4 py-4">
+                              {h.promoters > 0 ? (
+                                <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full w-fit"
+                                  style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+                                  <Share2 size={10} /> {h.promoters}
+                                </span>
+                              ) : (
+                                <span className="text-xs" style={{ color: "var(--text-muted)" }}>—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4">
+                              {h.bank ? (
+                                <div>
+                                  <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                                    {h.bank.account_name}
+                                  </p>
+                                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                                    {h.bank.bank_name} · ****{h.bank.account_number.slice(-4)}
+                                  </p>
+                                </div>
+                              ) : (
+                                <span className="text-xs px-2 py-0.5 rounded-full"
+                                  style={{ backgroundColor: "rgba(239,68,68,0.08)", color: "#ef4444" }}>
+                                  Not set
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4">
                               {h.verified ? (
                                 <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full w-fit"
                                   style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
@@ -644,7 +728,7 @@ export default function AdminPage() {
                                 </span>
                               )}
                             </td>
-                            <td className="px-5 py-4">
+                            <td className="px-4 py-4">
                               <button
                                 onClick={() => handleToggleVerify(h.user_id, h.verified)}
                                 disabled={processing === "verify-" + h.user_id}
@@ -662,6 +746,153 @@ export default function AdminPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Events ── */}
+            {mainTab === "events" && (
+              <div className="rounded-2xl overflow-hidden"
+                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                <div className="px-6 py-4 flex items-center justify-between border-b"
+                  style={{ borderColor: "var(--card-border)" }}>
+                  <div>
+                    <h2 className="font-display font-bold text-lg" style={{ color: "var(--text-primary)" }}>All Events</h2>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      Click any row to see the ticket buyers for that event.
+                    </p>
+                  </div>
+                  <button onClick={loadEvents}
+                    className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
+                    style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+                    <RefreshCw size={13} /> Refresh
+                  </button>
+                </div>
+
+                {eventsLoading ? (
+                  <div className="flex justify-center py-16">
+                    <Loader2 className="h-7 w-7 animate-spin" style={{ color: "var(--brand-indigo)" }} />
+                  </div>
+                ) : adminEvents.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <CalendarDays className="h-10 w-10 mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>No events yet</p>
+                  </div>
+                ) : (
+                  <div className="divide-y" style={{ borderColor: "var(--card-border)" }}>
+                    {adminEvents.map(ev => {
+                      const isExpanded = expandedEventId === ev.id;
+                      const buyers = eventTickets[ev.id] || [];
+                      return (
+                        <div key={ev.id}>
+                          {/* Event row */}
+                          <button
+                            onClick={() => toggleEvent(ev.id)}
+                            className="w-full text-left px-6 py-4 flex items-center gap-4 hover:opacity-80 transition"
+                            style={{ backgroundColor: isExpanded ? "var(--surface-raised)" : "transparent" }}>
+                            {ev.image_url && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={ev.image_url} alt={ev.title}
+                                className="h-12 w-16 rounded-xl object-cover shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-bold truncate" style={{ color: "var(--text-primary)" }}>{ev.title}</p>
+                                {ev.verified && (
+                                  <BadgeCheck size={13} className="shrink-0" style={{ color: "#16a34a" }} />
+                                )}
+                              </div>
+                              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                                {new Date(ev.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                {" · "}
+                                <span style={{ color: "var(--brand-indigo)" }}>{ev.host_email}</span>
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-6 shrink-0 text-sm">
+                              <div className="text-center hidden sm:block">
+                                <p className="font-bold" style={{ color: "var(--text-primary)" }}>{ev.tickets}</p>
+                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Tickets</p>
+                              </div>
+                              <div className="text-center hidden sm:block">
+                                <p className="font-bold" style={{ color: "var(--text-primary)" }}>₦{ev.revenue.toLocaleString()}</p>
+                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Revenue</p>
+                              </div>
+                              {isExpanded
+                                ? <ChevronUp size={16} style={{ color: "var(--text-muted)" }} />
+                                : <ChevronDown size={16} style={{ color: "var(--text-muted)" }} />}
+                            </div>
+                          </button>
+
+                          {/* Buyer list */}
+                          {isExpanded && (
+                            <div className="border-t" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--background)" }}>
+                              {eventTicketsLoading === ev.id ? (
+                                <div className="flex justify-center py-8">
+                                  <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--brand-indigo)" }} />
+                                </div>
+                              ) : buyers.length === 0 ? (
+                                <p className="text-center py-8 text-sm" style={{ color: "var(--text-muted)" }}>
+                                  No tickets sold yet.
+                                </p>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead>
+                                      <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
+                                        {["Buyer", "Email", "Tier", "Amount", "Via Promoter", "Status", "Date"].map(col => (
+                                          <th key={col} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider"
+                                            style={{ color: "var(--text-muted)" }}>{col}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {buyers.map((b, bi) => (
+                                        <tr key={b.id}
+                                          style={{ borderBottom: bi < buyers.length - 1 ? "1px solid var(--card-border)" : "none" }}>
+                                          <td className="px-5 py-3 font-medium" style={{ color: "var(--text-primary)" }}>
+                                            {b.user_name || "—"}
+                                          </td>
+                                          <td className="px-5 py-3 text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
+                                            {b.user_email}
+                                          </td>
+                                          <td className="px-5 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+                                            {b.tier_name || "Standard"}
+                                          </td>
+                                          <td className="px-5 py-3 font-semibold" style={{ color: "var(--text-primary)" }}>
+                                            {b.total_amount_paid === 0 ? "Free" : `₦${b.total_amount_paid.toLocaleString()}`}
+                                          </td>
+                                          <td className="px-5 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                                            {b.referral_code ? (
+                                              <span className="font-mono px-2 py-0.5 rounded"
+                                                style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+                                                {b.referral_code}
+                                              </span>
+                                            ) : "—"}
+                                          </td>
+                                          <td className="px-5 py-3">
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                              b.status === "scanned" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                                            }`}>
+                                              {b.status}
+                                            </span>
+                                          </td>
+                                          <td className="px-5 py-3 text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
+                                            {new Date(b.created_at).toLocaleDateString("en-GB", {
+                                              day: "numeric", month: "short", year: "numeric",
+                                            })}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

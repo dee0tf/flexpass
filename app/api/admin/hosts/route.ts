@@ -20,7 +20,6 @@ async function verifyAdmin(request: Request) {
   return user;
 }
 
-// GET — list all registered users with event count, ticket count, revenue, verified status
 export async function GET(request: Request) {
   if (!await verifyAdmin(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,16 +35,29 @@ export async function GET(request: Request) {
     page++;
   }
 
-  // All events
-  const { data: events } = await db
-    .from("events")
-    .select("id, user_id, organizer_name, organizer_verified");
+  const [
+    { data: events },
+    { data: tickets },
+    { data: bankAccounts },
+    { data: promoterRows },
+  ] = await Promise.all([
+    db.from("events").select("id, user_id, organizer_name, organizer_verified"),
+    db.from("tickets").select("event_id, total_amount_paid").in("status", ["valid", "scanned"]),
+    db.from("bank_accounts").select("user_id, bank_name, account_number, account_name"),
+    db.from("event_promoters").select("host_user_id"),
+  ]);
 
-  // All sold tickets
-  const { data: tickets } = await db
-    .from("tickets")
-    .select("event_id, total_amount_paid")
-    .in("status", ["valid", "scanned"]);
+  // Bank details map (one bank account per user)
+  const bankMap = new Map<string, { bank_name: string; account_number: string; account_name: string }>();
+  for (const b of bankAccounts || []) {
+    bankMap.set(b.user_id, { bank_name: b.bank_name, account_number: b.account_number, account_name: b.account_name });
+  }
+
+  // Promoter count per host user
+  const promoterCountMap = new Map<string, number>();
+  for (const p of promoterRows || []) {
+    promoterCountMap.set(p.host_user_id, (promoterCountMap.get(p.host_user_id) || 0) + 1);
+  }
 
   // Build event/ticket stats per user
   const statsMap = new Map<string, {
@@ -61,7 +73,7 @@ export async function GET(request: Request) {
     statsMap.set(e.user_id, s);
   }
 
-  const eventOwner = new Map((events || []).map(e => [e.id, e.user_id]));
+  const eventOwner = new Map((events || []).map((e: any) => [e.id, e.user_id]));
   for (const t of tickets || []) {
     const userId = eventOwner.get(t.event_id);
     if (!userId) continue;
@@ -69,17 +81,18 @@ export async function GET(request: Request) {
     if (s) { s.tickets += 1; s.revenue += t.total_amount_paid || 0; }
   }
 
-  // Build final list from ALL auth users
   const hosts = allAuthUsers.map((u: any) => {
     const s = statsMap.get(u.id);
     return {
-      user_id: u.id,
-      email: u.email || "unknown",
+      user_id:        u.id,
+      email:          u.email || "unknown",
       organizer_name: s?.organizer_name || u.user_metadata?.full_name || "—",
-      events: s?.events || 0,
-      tickets: s?.tickets || 0,
-      revenue: s?.revenue || 0,
-      verified: s?.verified || false,
+      events:         s?.events   || 0,
+      tickets:        s?.tickets  || 0,
+      revenue:        s?.revenue  || 0,
+      verified:       s?.verified || false,
+      promoters:      promoterCountMap.get(u.id) || 0,
+      bank:           bankMap.get(u.id) || null,
     };
   }).sort((a, b) => b.events - a.events || a.email.localeCompare(b.email));
 
