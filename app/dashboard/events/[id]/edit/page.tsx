@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import {
@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
 import LocationPicker, { LocationData } from "@/components/LocationPicker";
+import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { use } from "react";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -157,6 +158,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const [showSaved, setShowSaved] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [eventTitle, setEventTitle] = useState("");
+  const [toast, setToast] = useState<ToastState>(null);
+  const showToast = useCallback((message: string, type: ToastType = "error") => {
+    setToast({ message, type });
+  }, []);
 
   const [formData, setFormData] = useState({
     title: "", description: "", date: "", start_time: "",
@@ -269,7 +274,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";
       // Show inline error instead of browser alert
-      alert("Failed to save: " + msg);
+      showToast("Failed to save: " + msg, "error");
     } finally {
       setIsSaving(false);
     }
@@ -292,6 +297,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
   return (
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: "var(--background)" }}>
+      <Toast toast={toast} onClose={() => setToast(null)} />
       {showSaved && <SavedModal onClose={() => { setShowSaved(false); router.push("/dashboard"); }} />}
       {showDeleteModal && (
         <DeleteRequestModal

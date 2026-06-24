@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     // 2. Get the payout record
     const { data: payout, error: payoutError } = await supabase
       .from('payouts')
-      .select('*, bank_accounts(*)')
+      .select('id, amount, status, user_id')
       .eq('id', payout_id)
       .eq('status', 'pending')
       .single();
@@ -46,8 +46,14 @@ export async function POST(request: Request) {
     const secretKey = process.env.PAYSTACK_SECRET_KEY;
     if (!secretKey) return NextResponse.json({ error: 'Paystack not configured' }, { status: 503 });
 
-    const bank = payout.bank_accounts;
-    if (!bank) return NextResponse.json({ error: 'No bank account on record' }, { status: 400 });
+    // Look up bank account via user_id (payouts doesn't store bank_account_id)
+    const { data: bank, error: bankErr } = await supabase
+      .from('bank_accounts')
+      .select('*')
+      .eq('user_id', payout.user_id)
+      .single();
+
+    if (bankErr || !bank) return NextResponse.json({ error: 'No bank account on record for this user' }, { status: 400 });
 
     // Create or reuse transfer recipient
     let recipientCode = bank.recipient_code;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
@@ -12,6 +12,7 @@ import ImageUpload from "@/components/ImageUpload";
 import AuthModal from "@/components/AuthModal";
 import Link from "next/link";
 import LocationPicker, { LocationData } from "@/components/LocationPicker";
+import { Toast, ToastState, ToastType } from "@/components/Toast";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,6 +74,10 @@ export default function CreateEvent() {
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [successEventId, setSuccessEventId] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+  const showToast = useCallback((message: string, type: ToastType = "error") => {
+    setToast({ message, type });
+  }, []);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -182,7 +187,7 @@ export default function CreateEvent() {
 
       setSuccessEventId(eventData.id);
     } catch (error: any) {
-      alert("Failed to create event: " + error.message);
+      showToast("Failed to create event: " + error.message, "error");
     } finally {
       setIsLoading(false);
     }
@@ -205,6 +210,7 @@ export default function CreateEvent() {
 
   return (
     <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: "var(--background)" }}>
+      <Toast toast={toast} onClose={() => setToast(null)} />
       {successEventId && (
         <SuccessModal
           eventId={successEventId}

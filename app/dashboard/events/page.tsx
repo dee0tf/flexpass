@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Loader2, Calendar, MapPin, ExternalLink, Copy, Check, Edit } from "lucide-react";
+import { Toast, ToastState, ToastType } from "@/components/Toast";
 
 export default function MyEventsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [duplicated, setDuplicated] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+  const showToast = useCallback((message: string, type: ToastType = "error") => {
+    setToast({ message, type });
+  }, []);
   const router = useRouter();
 
   useEffect(() => {
@@ -51,13 +56,13 @@ export default function MyEventsPage() {
       if (res.ok && data.newEventId) {
         setDuplicated(eventId);
         setTimeout(() => setDuplicated(null), 2000);
-        await loadEvents(); // refresh list
+        await loadEvents();
         router.push(`/dashboard/events/${data.newEventId}/edit`);
       } else {
-        alert(data.error || "Failed to duplicate event");
+        showToast(data.error || "Failed to duplicate event", "error");
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.", "error");
     } finally {
       setDuplicating(null);
     }
@@ -67,6 +72,7 @@ export default function MyEventsPage() {
 
   return (
     <div>
+      <Toast toast={toast} onClose={() => setToast(null)} />
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-theme">My Events</h1>

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Plus, Minus, Loader2, Check, X } from "lucide-react";
+import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { PaystackButton } from "react-paystack";
 import { useRouter } from "next/navigation";
 
@@ -61,6 +62,10 @@ export default function CheckoutModal({
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+  const showToast = useCallback((message: string, type: ToastType = "error") => {
+    setToast({ message, type });
+  }, []);
   const router = useRouter();
 
   useEffect(() => {
@@ -129,7 +134,7 @@ export default function CheckoutModal({
       resetForm();
       router.push(`/tickets/${result.ticketId}`);
     } catch (err: any) {
-      alert("Could not claim ticket: " + err.message);
+      showToast("Could not claim ticket: " + err.message, "error");
     } finally {
       setIsSaving(false);
     }
@@ -165,7 +170,7 @@ export default function CheckoutModal({
       resetForm();
       router.push(`/tickets/${result.ticketId}`);
     } catch (error: any) {
-      alert("Ticket processing failed: " + error.message);
+      showToast("Ticket processing failed: " + error.message, "error");
     } finally {
       setIsSaving(false);
     }
@@ -190,6 +195,7 @@ export default function CheckoutModal({
 
   return (
     <>
+      <Toast toast={toast} onClose={() => setToast(null)} />
       {/* Backdrop — hidden when Paystack is active so its own UI shows cleanly */}
       {!paystackActive && (
         <div

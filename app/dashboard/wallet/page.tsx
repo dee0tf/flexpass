@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Loader2, RefreshCw, AlertCircle, DollarSign, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import BankSettings from "@/components/BankSettings";
+import { Toast, ToastState, ToastType } from "@/components/Toast";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:    { label: "Pending Review", color: "bg-yellow-100 text-yellow-700" },
@@ -25,6 +26,10 @@ export default function WalletPage() {
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
   const [payouts, setPayouts] = useState<any[]>([]);
+  const [toast, setToast] = useState<ToastState>(null);
+  const showToast = useCallback((message: string, type: ToastType = "error") => {
+    setToast({ message, type });
+  }, []);
 
   useEffect(() => {
     loadWalletData();
@@ -73,39 +78,48 @@ export default function WalletPage() {
   }
 
   const handleWithdraw = async () => {
-    if (!bankingDetails) { alert("Please save your bank details first."); return; }
+    if (!bankingDetails) {
+      showToast("Please save your bank details first.", "warning");
+      return;
+    }
 
     const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount < 1000) { alert("Minimum withdrawal is ₦1,000"); return; }
-    if (amount > balance) { alert("Insufficient balance"); return; }
+    if (isNaN(amount) || amount < 1000) {
+      showToast("Minimum withdrawal is ₦1,000", "warning");
+      return;
+    }
+    if (amount > balance) {
+      showToast("Insufficient balance", "warning");
+      return;
+    }
 
     setWithdrawLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { alert("Please log in again."); return; }
+      if (!session) {
+        showToast("Session expired. Please log in again.", "error");
+        return;
+      }
 
       const { error } = await supabase.from("payouts").insert({
-        user_id:         session.user.id,
+        user_id: session.user.id,
         amount,
-        status:          "pending",
-        bank_account_id: bankingDetails.id,
+        status:  "pending",
       });
 
       if (error) throw error;
 
-      // Await the reload so the new row is visible before the modal closes
       await loadWalletData();
 
       setWithdrawSuccess(true);
       setWithdrawAmount("");
 
-      // Auto-close modal after showing success state
       setTimeout(() => {
         setIsWithdrawOpen(false);
         setWithdrawSuccess(false);
       }, 2200);
     } catch (err: any) {
-      alert("Request failed: " + err.message);
+      showToast("Request failed: " + err.message, "error");
     } finally {
       setWithdrawLoading(false);
     }
@@ -115,6 +129,7 @@ export default function WalletPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      <Toast toast={toast} onClose={() => setToast(null)} />
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Wallet & Payouts</h1>
         <p style={{ color: "var(--text-muted)" }}>Manage your earnings and withdraw to your bank.</p>

@@ -18,8 +18,10 @@ interface ImageUploadProps {
 export default function ImageUpload({ onUpload, defaultValue = "" }: ImageUploadProps) {
     const [imageUrl, setImageUrl] = useState(defaultValue);
     const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState("");
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        setUploadError("");
         try {
             setUploading(true);
 
@@ -60,7 +62,7 @@ export default function ImageUpload({ onUpload, defaultValue = "" }: ImageUpload
             setImageUrl(data.publicUrl);
             onUpload(data.publicUrl);
         } catch (error: any) {
-            alert("Error uploading image: " + error.message);
+            setUploadError("Upload failed: " + error.message);
         } finally {
             setUploading(false);
         }
@@ -123,6 +125,11 @@ export default function ImageUpload({ onUpload, defaultValue = "" }: ImageUpload
                     </label>
                 )}
             </div>
+            {uploadError && (
+                <p className="text-sm font-medium px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-200">
+                    {uploadError}
+                </p>
+            )}
         </div>
     );
 }

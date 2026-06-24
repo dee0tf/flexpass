@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mail, TrendingUp, BadgeCheck, BookOpen, X, ChevronRight } from "lucide-react";
+import { Toast, ToastState, ToastType } from "@/components/Toast";
 import SalesChart from "@/components/SalesChart";
 import Link from "next/link";
 
@@ -11,6 +12,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [guideDismissed, setGuideDismissed] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
+  const showToast = useCallback((message: string, type: ToastType = "error") => {
+    setToast({ message, type });
+  }, []);
   const [stats, setStats] = useState<{
     revenue: number; ticketsSold: number; activeEvents: number;
     recentSales: any[]; myEvents: any[]; chartData: any[];
@@ -125,7 +130,7 @@ export default function DashboardPage() {
   }
 
   const handleExport = () => {
-    if (!stats.recentSales.length) { alert("No data to export"); return; }
+    if (!stats.recentSales.length) { showToast("No data to export yet", "warning"); return; }
     const sorted = [...stats.recentSales].sort((a, b) =>
       (a.events?.title || "").localeCompare(b.events?.title || "")
     );
@@ -151,7 +156,7 @@ export default function DashboardPage() {
       .order("created_at", { ascending: false });
 
     if (error || !tickets?.length) {
-      alert("No ticket data for this event yet");
+      showToast("No ticket data for this event yet", "warning");
       return;
     }
 
@@ -178,6 +183,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <Toast toast={toast} onClose={() => setToast(null)} />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-theme">Dashboard Overview</h2>
