@@ -231,7 +231,7 @@ export default function CreateEvent() {
 
           <div className="rounded-3xl shadow-xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
             <div className="h-1.5 w-full grad-brand" />
-            <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-8 space-y-8">
 
               {/* Event Details */}
               <div className="space-y-6">
@@ -262,15 +262,17 @@ export default function CreateEvent() {
                         className={`${inputClass} pl-10`} style={inputStyle} onChange={handleChange} />
                     </div>
                   </div>
-                  <div>
-                    <label className={labelClass} style={labelStyle}>Date</label>
-                    <input type="date" name="date" required className={inputClass} style={inputStyle} onChange={handleChange} />
-                  </div>
-                  <div>
-                    <label className={labelClass} style={labelStyle}>Start Time</label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-3.5 h-5 w-5" style={{ color: "var(--text-muted)" }} />
-                      <input type="time" name="start_time" required className={`${inputClass} pl-10`} style={inputStyle} onChange={handleChange} />
+                  <div className="col-span-2 grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelClass} style={labelStyle}>Date</label>
+                      <input type="date" name="date" required className={inputClass} style={inputStyle} onChange={handleChange} />
+                    </div>
+                    <div>
+                      <label className={labelClass} style={labelStyle}>Start Time</label>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-3.5 h-5 w-5" style={{ color: "var(--text-muted)" }} />
+                        <input type="time" name="start_time" required className={`${inputClass} pl-10`} style={inputStyle} onChange={handleChange} />
+                      </div>
                     </div>
                   </div>
                   <div className="col-span-2">
@@ -294,23 +296,34 @@ export default function CreateEvent() {
                 </div>
                 <div className="space-y-4">
                   {tiers.map((tier, i) => (
-                    <div key={i} className="p-4 rounded-xl relative group" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[
-                          { label: "Class Name", field: "name" as const, placeholder: "e.g. VIP, Regular", type: "text" },
-                          { label: "Price (₦)", field: "price" as const, placeholder: "0", type: "number" },
-                          { label: "Quantity", field: "quantity" as const, placeholder: "100", type: "number" },
-                        ].map(f => (
-                          <div key={f.field}>
-                            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>{f.label}</label>
-                            <input type={f.type} placeholder={f.placeholder} value={tier[f.field]}
-                              onChange={e => updateTier(i, f.field, e.target.value)}
-                              min={f.type === "number" ? "0" : undefined}
-                              className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                              style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                              required />
-                          </div>
-                        ))}
+                    <div key={i} className="p-4 rounded-xl" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Class Name</label>
+                          <input type="text" placeholder="e.g. VIP, Regular" value={tier.name}
+                            onChange={e => updateTier(i, "name", e.target.value)}
+                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                            style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
+                            required />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Price (₦)</label>
+                          <input type="number" placeholder="0" value={tier.price}
+                            onChange={e => updateTier(i, "price", e.target.value)}
+                            min="0"
+                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                            style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
+                            required />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Quantity</label>
+                          <input type="number" placeholder="100" value={tier.quantity}
+                            onChange={e => updateTier(i, "quantity", e.target.value)}
+                            min="0"
+                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                            style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
+                            required />
+                        </div>
                       </div>
                       <div className="mt-3">
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
@@ -318,22 +331,24 @@ export default function CreateEvent() {
                         </label>
                         <input type="datetime-local" value={tier.ends_at || ""}
                           onChange={e => updateTier(i, "ends_at", e.target.value)}
-                          className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                          className="w-full sm:w-1/2 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
                           style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
                         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier closes automatically after this date/time.</p>
                       </div>
                       {tiers.length > 1 && (
-                        <button type="button" onClick={() => removeTier(i)}
-                          className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1.5 rounded-full hover:bg-red-200 transition opacity-0 group-hover:opacity-100">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        <div className="mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid var(--card-border)" }}>
+                          <button type="button" onClick={() => removeTier(i)}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 transition px-3 py-1.5 rounded-lg hover:bg-red-50">
+                            <Trash2 className="h-3.5 w-3.5" /> Remove Ticket Class
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}
                 </div>
                 <div className="pt-2">
                   <label className={labelClass} style={labelStyle}>Stop Selling Tickets On</label>
-                  <div className="relative">
+                  <div className="relative w-full sm:w-1/2">
                     <AlertCircle className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none z-10" style={{ color: "var(--text-muted)" }} />
                     <input type="datetime-local" name="sales_end_date" required
                       className={`${inputClass} pl-10`} style={{ ...inputStyle, colorScheme: "dark" }} onChange={handleChange} />
