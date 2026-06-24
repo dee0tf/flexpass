@@ -27,25 +27,38 @@ export async function GET(request: Request) {
 
   const { data: payouts, error } = await db
     .from("payouts")
-    .select("*, bank_accounts(bank_name, account_number, account_name)")
+    .select("id, amount, status, created_at, transfer_code, user_id")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Resolve host emails via admin API
-  const userIds = [...new Set((payouts || []).map((p: any) => p.user_id as string))];
-  const emailMap = new Map<string, string>();
+  const userIds = [...new Set((payouts || []).map((p: any) => p.user_id as string).filter(Boolean))];
 
-  await Promise.all(
-    userIds.map(async (uid) => {
-      const { data: { user } } = await db.auth.admin.getUserById(uid);
-      if (user?.email) emailMap.set(uid, user.email);
-    })
-  );
+  // Resolve emails and bank accounts in parallel, keyed by user_id
+  const emailMap = new Map<string, string>();
+  const bankMap = new Map<string, { bank_name: string; account_number: string; account_name: string } | null>();
+
+  await Promise.all([
+    ...userIds.map(async (uid) => {
+      try {
+        const { data: { user } } = await db.auth.admin.getUserById(uid);
+        if (user?.email) emailMap.set(uid, user.email);
+      } catch { /* skip */ }
+    }),
+    db.from("bank_accounts")
+      .select("user_id, bank_name, account_number, account_name")
+      .in("user_id", userIds.length > 0 ? userIds : ["__none__"])
+      .then(({ data }) => {
+        for (const b of data || []) {
+          bankMap.set(b.user_id, { bank_name: b.bank_name, account_number: b.account_number, account_name: b.account_name });
+        }
+      }),
+  ]);
 
   const enriched = (payouts || []).map((p: any) => ({
     ...p,
-    user_email: emailMap.get(p.user_id) || `${p.user_id.slice(0, 8)}…`,
+    user_email:   emailMap.get(p.user_id) || `${String(p.user_id).slice(0, 8)}…`,
+    bank_accounts: bankMap.get(p.user_id) || null,
   }));
 
   return NextResponse.json({ payouts: enriched });
