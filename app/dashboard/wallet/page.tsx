@@ -203,7 +203,7 @@ export default function WalletPage() {
             <div>
               <h4 className="font-bold text-orange-800 text-sm">Payout Schedule</h4>
               <p className="text-orange-700 text-sm mt-1">
-                FlexPass processes payouts every Friday. Ensure your bank details are correct.
+                FlexPass processes payouts T+1 (next business day after request approval). Ensure your bank details are correct.
               </p>
             </div>
           </div>
