@@ -184,23 +184,23 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <Toast toast={toast} onClose={() => setToast(null)} />
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-theme">Dashboard Overview</h2>
-          <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-theme-2 text-sm">{user?.email}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-theme">Dashboard Overview</h2>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <p className="text-theme-2 text-sm truncate max-w-[200px] sm:max-w-none">{user?.email}</p>
             {stats.myEvents.some((e: any) => e.organizer_verified) && (
-              <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full"
+              <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full shrink-0"
                 style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
                 <BadgeCheck size={12} /> Verified Host
               </span>
             )}
           </div>
         </div>
-        <Link href="/create">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm text-white hover:opacity-90 transition"
+        <Link href="/create" className="shrink-0">
+          <button className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl font-bold text-sm text-white hover:opacity-90 transition"
             style={{ backgroundColor: "var(--brand-indigo)" }}>
-            <Plus size={16} /> New Event
+            <Plus size={16} /> <span className="hidden sm:inline">New Event</span><span className="sm:hidden">New</span>
           </button>
         </Link>
       </div>
@@ -273,7 +273,7 @@ export default function DashboardPage() {
           <div key={s.label} className="p-6 rounded-2xl shadow-sm" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
             <div className={`p-2 ${s.bg} rounded-lg w-fit mb-4`}>{s.icon}</div>
             <p className="text-theme-2 text-sm">{s.label}</p>
-            <h3 className="text-3xl font-bold text-theme mt-1">{s.value}</h3>
+            <h3 className="text-2xl sm:text-3xl font-bold text-theme mt-1 truncate">{s.value}</h3>
           </div>
         ))}
       </div>
@@ -314,39 +314,42 @@ export default function DashboardPage() {
               const daily = (event._velocity7d / 7).toFixed(1);
               const showVelocity = event._velocity7d > 0;
               return (
-                <div key={event.id} className="p-4 flex items-center justify-between gap-3 hover:bg-[var(--surface-raised)] transition flex-wrap">
-                  <div className="flex items-center gap-4 min-w-0 flex-1">
-                    <div className="h-12 w-12 bg-slate-100 rounded-lg overflow-hidden shrink-0">
+                <div key={event.id} className="p-4 flex items-center justify-between gap-3 hover:bg-[var(--surface-raised)] transition">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="h-10 w-10 sm:h-12 sm:w-12 bg-slate-100 rounded-lg overflow-hidden shrink-0">
                       {event.image_url && <img src={event.image_url} alt={event.title} className="object-cover w-full h-full" />}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-bold text-theme truncate">{event.title}</h4>
-                      <div className="flex items-center gap-3 text-xs text-theme-2 mt-0.5 flex-wrap">
+                      <h4 className="font-bold text-theme truncate text-sm sm:text-base">{event.title}</h4>
+                      <div className="flex items-center gap-2 sm:gap-3 text-xs text-theme-2 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1"><Calendar size={11} /> {new Date(event.date).toLocaleDateString()}</span>
                         <span className="flex items-center gap-1"><Ticket size={11} /> {event._sold} sold</span>
                         {showVelocity && (
-                          <span className="flex items-center gap-1 font-semibold" style={{ color: "var(--brand-lavender)" }}>
+                          <span className="hidden sm:flex items-center gap-1 font-semibold" style={{ color: "var(--brand-lavender)" }}>
                             <TrendingUp size={11} /> {daily}/day (7d)
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <Link href={`/dashboard/events/${event.id}/email`}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}>
-                      <Mail size={12} /> Email
+                      className="flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}
+                      title="Email attendees">
+                      <Mail size={13} /> <span className="hidden sm:inline">Email</span>
                     </Link>
                     <button onClick={() => handleExportByEvent(event.id, event.title)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}>
-                      <Download size={12} /> CSV
+                      className="flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}
+                      title="Export CSV">
+                      <Download size={13} /> <span className="hidden sm:inline">CSV</span>
                     </button>
                     <button onClick={() => router.push(`/dashboard/events/${event.id}/edit`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}>
-                      <Edit size={13} /> Edit
+                      className="flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                      style={{ border: "1px solid var(--card-border)", color: "var(--text-secondary)" }}
+                      title="Edit event">
+                      <Edit size={13} /> <span className="hidden sm:inline">Edit</span>
                     </button>
                   </div>
                 </div>
@@ -359,30 +362,32 @@ export default function DashboardPage() {
       {/* Recent Sales */}
       {stats.recentSales.length > 0 && (
         <div className="rounded-2xl shadow-sm overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-          <div className="p-6 flex items-center justify-between" style={{ borderBottom: "1px solid var(--card-border)" }}>
-            <h3 className="font-bold text-lg text-theme">Recent Transactions</h3>
-            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          <div className="px-4 sm:px-6 py-4 flex items-center justify-between gap-3" style={{ borderBottom: "1px solid var(--card-border)" }}>
+            <h3 className="font-bold text-base sm:text-lg text-theme">Recent Transactions</h3>
+            <button onClick={handleExport} className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors"
               style={{ backgroundColor: "var(--surface-raised)", color: "var(--text-secondary)" }}>
-              <Download size={15} /> Export CSV
+              <Download size={14} /> <span className="hidden sm:inline">Export </span>CSV
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase font-medium" style={{ backgroundColor: "var(--surface-raised)", color: "var(--text-muted)" }}>
                 <tr>
-                  {["Event", "Customer", "Date", "Amount", "Status"].map(h => (
-                    <th key={h} className="px-6 py-4">{h}</th>
-                  ))}
+                  <th className="px-4 sm:px-6 py-3">Event</th>
+                  <th className="hidden sm:table-cell px-6 py-3">Customer</th>
+                  <th className="hidden md:table-cell px-6 py-3">Date</th>
+                  <th className="px-4 sm:px-6 py-3">Amount</th>
+                  <th className="px-4 sm:px-6 py-3">Status</th>
                 </tr>
               </thead>
               <tbody style={{ color: "var(--text-secondary)" }}>
                 {stats.recentSales.slice(0, 5).map(ticket => (
                   <tr key={ticket.id} className="border-t hover:bg-[var(--surface-raised)] transition" style={{ borderColor: "var(--card-border)" }}>
-                    <td className="px-6 py-4 font-medium text-theme">{ticket.events?.title || "Unknown"}</td>
-                    <td className="px-6 py-4">{ticket.user_email}</td>
-                    <td className="px-6 py-4">{new Date(ticket.created_at).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 font-bold">₦{(ticket.events?.price ?? 0).toLocaleString()}</td>
-                    <td className="px-6 py-4"><span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">Paid</span></td>
+                    <td className="px-4 sm:px-6 py-3 font-medium text-theme max-w-[120px] sm:max-w-none truncate">{ticket.events?.title || "Unknown"}</td>
+                    <td className="hidden sm:table-cell px-6 py-3 max-w-[160px] truncate">{ticket.user_email}</td>
+                    <td className="hidden md:table-cell px-6 py-3">{new Date(ticket.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 sm:px-6 py-3 font-bold whitespace-nowrap">₦{(ticket.events?.price ?? 0).toLocaleString()}</td>
+                    <td className="px-4 sm:px-6 py-3"><span className="px-2 sm:px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">Paid</span></td>
                   </tr>
                 ))}
               </tbody>

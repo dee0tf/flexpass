@@ -73,14 +73,14 @@ export default function MyEventsPage() {
   return (
     <div>
       <Toast toast={toast} onClose={() => setToast(null)} />
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-theme">My Events</h1>
+      <div className="flex justify-between items-center mb-6 gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-theme">My Events</h1>
           <p className="text-theme-2 text-sm mt-1">{events.length} event{events.length !== 1 ? "s" : ""} created</p>
         </div>
-        <Link href="/create">
-          <button className="bg-[#480082] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#3a006b] transition">
-            + New Event
+        <Link href="/create" className="shrink-0">
+          <button className="bg-[#480082] text-white px-3 sm:px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#3a006b] transition">
+            + <span className="hidden sm:inline">New </span>Event
           </button>
         </Link>
       </div>

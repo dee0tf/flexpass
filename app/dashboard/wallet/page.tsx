@@ -142,11 +142,11 @@ export default function WalletPage() {
         {/* LEFT: Balance & History */}
         <div className="space-y-8">
           {/* Balance Card */}
-          <div className="bg-gradient-to-r from-[#480082] to-[#9F67FE] text-white p-8 rounded-2xl shadow-xl">
+          <div className="bg-gradient-to-r from-[#480082] to-[#9F67FE] text-white p-6 sm:p-8 rounded-2xl shadow-xl">
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-[#9F67FE]/70 font-medium mb-1">Available Balance</p>
-                <h2 className="text-4xl font-bold">₦{balance.toLocaleString()}</h2>
+                <h2 className="text-3xl sm:text-4xl font-bold">₦{balance.toLocaleString()}</h2>
               </div>
               <button onClick={loadWalletData} className="text-purple-300 hover:text-white transition">
                 <RefreshCw size={20} />
