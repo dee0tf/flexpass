@@ -114,7 +114,7 @@ export default function AdminPage() {
     }
   }
 
-  async function handlePayoutAction(payoutId: string, action: "approve" | "reject") {
+  async function handlePayoutAction(payoutId: string, action: "approve" | "reject" | "mark_paid") {
     setProcessing(payoutId + action);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -128,8 +128,9 @@ export default function AdminPage() {
       if (!res.ok) showToast(data.error || "Something went wrong.", "error");
       else {
         showToast(data.message, "success");
+        const nextStatus = action === "approve" ? "processing" : action === "mark_paid" ? "paid" : "rejected";
         setPayouts(prev => prev.map(p =>
-          p.id === payoutId ? { ...p, status: action === "approve" ? "processing" : "rejected" } : p
+          p.id === payoutId ? { ...p, status: nextStatus } : p
         ));
         loadData();
       }
@@ -515,10 +516,18 @@ export default function AdminPage() {
                                       : <XCircle size={13} />} Reject
                                   </button>
                                 </div>
+                              ) : p.status === "processing" ? (
+                                <button
+                                  onClick={() => handlePayoutAction(p.id, "mark_paid")}
+                                  disabled={!!processing}
+                                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition hover:opacity-80 disabled:opacity-50"
+                                  style={{ backgroundColor: "#480082" }}>
+                                  {processing === p.id + "mark_paid"
+                                    ? <Loader2 size={13} className="animate-spin" />
+                                    : <CheckCircle2 size={13} />} Mark Paid
+                                </button>
                               ) : (
-                                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                                  {p.transfer_code ? p.transfer_code.slice(0, 16) + "…" : "—"}
-                                </span>
+                                <span className="text-xs" style={{ color: "var(--text-muted)" }}>—</span>
                               )}
                             </td>
                           </tr>
