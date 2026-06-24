@@ -101,13 +101,16 @@ export default function WalletPage() {
         return;
       }
 
-      const { error } = await supabase.from("payouts").insert({
-        user_id: session.user.id,
-        amount,
-        status:  "pending",
+      const res = await fetch("/api/request-withdrawal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ amount }),
       });
-
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
 
       await loadWalletData();
 
