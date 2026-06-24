@@ -705,7 +705,10 @@ export default function AdminPage() {
                                     {h.bank.account_name}
                                   </p>
                                   <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                                    {h.bank.bank_name} · ****{h.bank.account_number.slice(-4)}
+                                    {h.bank.bank_name}
+                                  </p>
+                                  <p className="text-xs font-mono font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
+                                    {h.bank.account_number}
                                   </p>
                                 </div>
                               ) : (
