@@ -57,7 +57,7 @@ export default function Footer() {
                 </svg>
               </a>
               {/* TikTok */}
-              <a href="https://www.tiktok.com/@flexpass__?_r=1&_t=ZP-95oqPw9GQZi" target="_blank" rel="noopener noreferrer"
+              <a href="https://vt.tiktok.com/ZSCN2CUg9/" target="_blank" rel="noopener noreferrer"
                 className="p-2.5 rounded-xl border transition-all hover:text-white hover:border-white/20"
                 style={{ backgroundColor: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.08)", color: "rgba(240,238,248,0.4)" }}
                 aria-label="TikTok">
