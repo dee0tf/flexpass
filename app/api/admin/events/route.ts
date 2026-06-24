@@ -61,13 +61,17 @@ export async function GET(request: Request) {
     ticketStats.set(t.event_id, s);
   }
 
-  // Resolve host emails
-  const userIds = [...new Set((events || []).map((e: any) => e.user_id as string))];
+  // Resolve host emails — filter nulls to avoid getUserById(null) throwing
+  const userIds = [...new Set(
+    (events || []).map((e: any) => e.user_id).filter((uid: any) => uid != null)
+  )];
   const emailMap = new Map<string, string>();
   await Promise.all(
     userIds.map(async (uid) => {
-      const { data: { user } } = await db.auth.admin.getUserById(uid);
-      if (user?.email) emailMap.set(uid, user.email);
+      try {
+        const { data: { user } } = await db.auth.admin.getUserById(uid);
+        if (user?.email) emailMap.set(uid, user.email);
+      } catch { /* skip if user lookup fails */ }
     })
   );
 
@@ -78,7 +82,7 @@ export async function GET(request: Request) {
     image_url:      e.image_url,
     organizer_name: e.organizer_name || "—",
     verified:       e.organizer_verified || false,
-    host_email:     emailMap.get(e.user_id) || `${e.user_id.slice(0, 8)}…`,
+    host_email:     emailMap.get(e.user_id) ?? (e.user_id ? `${String(e.user_id).slice(0, 8)}…` : "unknown"),
     tickets:        ticketStats.get(e.id)?.count   || 0,
     revenue:        ticketStats.get(e.id)?.revenue || 0,
   }));

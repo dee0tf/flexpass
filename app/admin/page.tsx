@@ -158,7 +158,12 @@ export default function AdminPage() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const data = await res.json();
-      if (res.ok) setAdminEvents(data.events || []);
+      if (res.ok) {
+        setAdminEvents(data.events || []);
+      } else {
+        console.error("[admin] events API error:", data.error);
+        showToast("Failed to load events: " + (data.error || "unknown error"), "error");
+      }
     } finally { setEventsLoading(false); }
   }
 
