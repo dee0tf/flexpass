@@ -53,9 +53,8 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
     : legacyRemaining;
 
   const soldOut = totalRemaining === 0;
-  // Date-only strings are parsed as UTC midnight; append end-of-day to keep the event active all day locally
-  const endedDate = eventDate.includes("T") ? new Date(eventDate) : new Date(eventDate + "T23:59:59");
-  const ended = endedDate < new Date();
+  // Slice to YYYY-MM-DD so Supabase timestamp formats don't get parsed as UTC midnight
+  const ended = new Date(eventDate.slice(0, 10) + "T23:59:59") < new Date();
 
   // Nearest active early bird tier
   const now = Date.now();

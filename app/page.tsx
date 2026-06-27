@@ -28,12 +28,13 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export default async function Home() {
   const supabase = createServerSupabase();
-  const now = new Date().toISOString();
+  // Use date-only "YYYY-MM-DD" so today's events aren't excluded when comparing against a date column
+  const now = new Date().toISOString().split("T")[0];
 
   const { data: events } = await supabase
     .from("events")
     .select("*")
-    .gte("date", now)                        // full timestamp — excludes anything already past
+    .gte("date", now)
     .order("date", { ascending: true })
     .limit(9);
 
