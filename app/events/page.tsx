@@ -28,7 +28,8 @@ export default async function EventsPage({
     const { q, category, city } = await searchParams;
 
     const supabase = createServerSupabase();
-    const now = new Date().toISOString();
+    // Use date-only "YYYY-MM-DD" so today's events aren't excluded when comparing against a date column
+    const now = new Date().toISOString().split("T")[0];
     let query = supabase.from("events").select("*").gte("date", now).order("date", { ascending: true });
 
     if (q) query = query.ilike("title", `%${q}%`);

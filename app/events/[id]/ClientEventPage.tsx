@@ -53,7 +53,9 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
     : legacyRemaining;
 
   const soldOut = totalRemaining === 0;
-  const ended = new Date(eventDate) < new Date();
+  // Date-only strings are parsed as UTC midnight; append end-of-day to keep the event active all day locally
+  const endedDate = eventDate.includes("T") ? new Date(eventDate) : new Date(eventDate + "T23:59:59");
+  const ended = endedDate < new Date();
 
   // Nearest active early bird tier
   const now = Date.now();

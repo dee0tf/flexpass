@@ -32,9 +32,15 @@ export default function EventCard({ event, variant = "default", priority = false
 
   useEffect(() => {
     const now = new Date();
-    const ended = eventDate < now;
+    // Date-only strings (e.g. "2026-06-27") are parsed as UTC midnight by JS,
+    // which in UTC+ timezones means the event "ends" at 1 AM local on the event day.
+    // Treat them as end-of-day local time so the event stays active all day.
+    const cmpDate = event.date.includes("T")
+      ? eventDate
+      : new Date(event.date + "T23:59:59");
+    const ended = cmpDate < now;
     setIsEnded(ended);
-    setIsSoon(!ended && (eventDate.getTime() - now.getTime()) < 7 * 24 * 60 * 60 * 1000);
+    setIsSoon(!ended && (cmpDate.getTime() - now.getTime()) < 7 * 24 * 60 * 60 * 1000);
   }, [event.date]);
 
   const cat = CATEGORY_COLORS[event.category || "Others"] ?? CATEGORY_COLORS.Others;
