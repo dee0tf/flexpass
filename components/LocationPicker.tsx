@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MapPin, Lock, Clock, Search, Loader2, X, ExternalLink } from "lucide-react";
 
 type LocationMode = "public" | "hidden" | "tba";
@@ -23,10 +23,51 @@ function getMode(value: LocationData): LocationMode {
   return "public";
 }
 
+interface AddressSuggestion { display_name: string; lat: string; lon: string }
+
 export default function LocationPicker({ value, onChange }: LocationPickerProps) {
   const [mode, setMode] = useState<LocationMode>(() => getMode(value));
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
+
+  const fetchSuggestions = async (q: string) => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setSuggestLoading(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=0`,
+        { headers: { "Accept-Language": "en" }, signal: controller.signal }
+      );
+      const data = await res.json();
+      setSuggestions(data);
+      setShowSuggestions(true);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name !== "AbortError") setSuggestions([]);
+    } finally {
+      setSuggestLoading(false);
+    }
+  };
+
+  const selectSuggestion = (s: AddressSuggestion) => {
+    onChange({ ...value, location: s.display_name, lat: parseFloat(s.lat), lng: parseFloat(s.lon) });
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setSearchError("");
+  };
 
   const handleMode = (m: LocationMode) => {
     setMode(m);
@@ -39,7 +80,16 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
   };
 
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ ...value, location: e.target.value });
+    const q = e.target.value;
+    onChange({ ...value, location: q });
+    setSearchError("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (q.trim().length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => fetchSuggestions(q.trim()), 350);
   };
 
   const handlePin = async () => {
@@ -114,9 +164,38 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
           <div className="relative">
             <MapPin className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none" style={{ color: "var(--text-muted)" }} />
             <input type="text" value={value.location} onChange={handleAddressChange}
+              onFocus={() => { if (suggestions.length) setShowSuggestions(true); }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               placeholder="e.g. Eko Hotel & Suites, Victoria Island, Lagos"
+              autoComplete="off"
               className="w-full pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
               style={inputStyle} />
+            {suggestLoading && (
+              <Loader2 className="absolute right-3 top-3.5 h-5 w-5 animate-spin" style={{ color: "var(--text-muted)" }} />
+            )}
+            {showSuggestions && (suggestions.length > 0 || suggestLoading) && (
+              <div className="absolute z-20 top-full left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-lg max-h-60 overflow-y-auto"
+                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                {suggestLoading && suggestions.length === 0 && (
+                  <div className="px-4 py-3 text-sm flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
+                    <Loader2 size={13} className="animate-spin" /> Searching…
+                  </div>
+                )}
+                {suggestions.map((s, idx) => (
+                  <button key={`${s.lat}-${s.lon}-${idx}`} type="button"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => selectSuggestion(s)}
+                    className="w-full text-left px-4 py-2.5 text-sm transition hover:opacity-80"
+                    style={{
+                      color: "var(--text-primary)",
+                      backgroundColor: "transparent",
+                      borderBottom: idx < suggestions.length - 1 ? "1px solid var(--card-border)" : "none",
+                    }}>
+                    {s.display_name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

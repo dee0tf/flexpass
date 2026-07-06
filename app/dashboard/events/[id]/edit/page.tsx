@@ -173,6 +173,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     location: "", lat: null, lng: null, locationReveal: false,
   });
   const [tiers, setTiers] = useState<TierFormData[]>([]);
+  const [removedTierIds, setRemovedTierIds] = useState<string[]>([]);
 
 
   useEffect(() => {
@@ -229,7 +230,12 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   }, [id, router]);
 
   const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true }]);
-  const removeTier = (i: number) => { if (tiers.length > 1) setTiers(tiers.filter((_, idx) => idx !== i)); };
+  const removeTier = (i: number) => {
+    if (tiers.length <= 1) return;
+    const removed = tiers[i];
+    if (removed.id) setRemovedTierIds(prev => [...prev, removed.id!]);
+    setTiers(tiers.filter((_, idx) => idx !== i));
+  };
   const updateTier = (i: number, field: keyof TierFormData, value: string) => {
     const u = [...tiers]; u[i] = { ...u[i], [field]: value }; setTiers(u);
   };
@@ -258,17 +264,44 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       }).eq("id", id);
       if (error) throw error;
 
-      const { error: tierError } = await supabase.from("ticket_tiers").upsert(
-        tiers.map(t => ({
-          ...(t.id ? { id: t.id } : {}),
+      // Split into two batches: PostgREST requires every row in a bulk
+      // insert/upsert to have the SAME set of keys. Mixing existing tiers
+      // (with `id`) and new tiers (without `id`) in one call fails, which is
+      // why adding a new ticket class errored on save.
+      const existingTiers = tiers
+        .filter(t => t.id)
+        .map(t => ({
+          id: t.id,
           event_id: id, name: t.name,
           price: Number(t.price),
           quantity_available: Number(t.quantity),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
-        })),
-        { onConflict: "id" }
-      );
-      if (tierError) throw tierError;
+        }));
+      const newTiers = tiers
+        .filter(t => !t.id)
+        .map(t => ({
+          event_id: id, name: t.name,
+          price: Number(t.price),
+          quantity_available: Number(t.quantity),
+          ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
+        }));
+
+      if (existingTiers.length) {
+        const { error: upsertError } = await supabase
+          .from("ticket_tiers").upsert(existingTiers, { onConflict: "id" });
+        if (upsertError) throw upsertError;
+      }
+      if (newTiers.length) {
+        const { error: insertError } = await supabase
+          .from("ticket_tiers").insert(newTiers);
+        if (insertError) throw insertError;
+      }
+      if (removedTierIds.length) {
+        const { error: deleteError } = await supabase
+          .from("ticket_tiers").delete().in("id", removedTierIds).eq("event_id", id);
+        if (deleteError) throw deleteError;
+        setRemovedTierIds([]);
+      }
 
       setShowSaved(true);
     } catch (error: unknown) {
