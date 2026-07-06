@@ -217,22 +217,16 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             )}
           </div>
 
-          {/* Map embed — only when location is public and coordinates exist */}
-          {!event.location_reveal && event.latitude && event.longitude && (
-            <div className="mt-5 rounded-2xl overflow-hidden border border-slate-100">
-              <iframe
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${event.longitude - 0.008},${event.latitude - 0.008},${event.longitude + 0.008},${event.latitude + 0.008}&layer=mapnik&marker=${event.latitude},${event.longitude}`}
-                width="100%" height="220" frameBorder="0" scrolling="no"
-                title="Event location" style={{ display: "block" }}
-              />
-              <a
-                href={`https://www.google.com/maps?q=${event.latitude},${event.longitude}`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-[#480082] hover:bg-slate-100 transition bg-slate-50"
-              >
-                <ExternalLink size={11} /> Get Directions
-              </a>
-            </div>
+          {/* Search-on-map link — uses the venue text itself, so it works even for
+              venues too small/new to have coordinates on file */}
+          {!event.location_reveal && event.location && event.location !== "TBA" && (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+              target="_blank" rel="noopener noreferrer"
+              className="mt-4 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-[#480082] hover:bg-slate-100 transition bg-slate-50 border border-slate-100"
+            >
+              <ExternalLink size={13} /> Search on Map
+            </a>
           )}
 
           {/* Hidden location reveal card */}

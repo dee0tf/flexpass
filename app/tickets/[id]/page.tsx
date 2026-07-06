@@ -91,22 +91,16 @@ export default async function TicketPage({ params }: Props) {
                 )}
               </div>
             </div>
-            {/* Map embed for ticket holders */}
-            {event.latitude && event.longitude && event.location && event.location !== "TBA" && (
-              <div className="rounded-2xl overflow-hidden ml-9" style={{ border: "1px solid var(--border-color)" }}>
-                <iframe
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${event.longitude - 0.008},${event.latitude - 0.008},${event.longitude + 0.008},${event.latitude + 0.008}&layer=mapnik&marker=${event.latitude},${event.longitude}`}
-                  width="100%" height="200" frameBorder="0" scrolling="no"
-                  title="Venue location" style={{ display: "block" }}
-                />
-                <a
-                  href={`https://www.google.com/maps?q=${event.latitude},${event.longitude}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 py-2 text-xs font-medium hover:opacity-80 transition"
-                  style={{ backgroundColor: "var(--surface-raised)", color: "var(--brand-indigo)" }}>
-                  <ExternalLink size={11} /> Get Directions
-                </a>
-              </div>
+            {/* Search-on-map link for ticket holders — uses the venue text itself, so
+                it works even for venues too small/new to have coordinates on file */}
+            {event.location && event.location !== "TBA" && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="ml-9 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium hover:opacity-80 transition"
+                style={{ backgroundColor: "var(--surface-raised)", color: "var(--brand-indigo)" }}>
+                <ExternalLink size={13} /> Search on Map
+              </a>
             )}
           </div>
 
