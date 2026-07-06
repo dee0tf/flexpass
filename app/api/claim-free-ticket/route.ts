@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendTicketEmail } from '@/lib/sendTicketEmail';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -158,6 +159,20 @@ export async function POST(request: Request) {
     if (error) {
       console.error('[claim-free-ticket] Insert error:', error);
       throw error;
+    }
+
+    // Send confirmation email server-side (must await — see verify-payment for why).
+    const { data: eventRow } = await supabase.from('events').select('title').eq('id', eventId).single();
+    try {
+      const { error: emailError } = await sendTicketEmail({
+        email,
+        eventTitle: eventRow?.title || 'your event',
+        ticketId: data[0].id,
+        amount: 0,
+      });
+      if (emailError) console.error('[claim-free-ticket] Ticket email failed:', emailError);
+    } catch (emailErr) {
+      console.error('[claim-free-ticket] Ticket email threw:', emailErr);
     }
 
     return NextResponse.json({ ticketId: data[0].id });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { sendTicketEmail } from '@/lib/sendTicketEmail';
 
 // Service role — needed to bypass RLS when updating payouts/tickets
 const supabase = createClient(
@@ -30,25 +31,55 @@ export async function POST(request: Request) {
     // --- 2. Handle charge.success (belt-and-suspenders: ticket should already exist from verify-payment) ---
     if (event.event === 'charge.success') {
       const { reference, metadata, amount, customer } = event.data;
+      const quantity = metadata?.quantity && Number(metadata.quantity) > 0 ? Number(metadata.quantity) : 1;
 
-      // Only create ticket if it wasn't already created by verify-payment
-      const { data: existing } = await supabase
+      // verify-payment stores a bare reference for a single ticket, or
+      // `${reference}-1`, `${reference}-2`, ... for multi-ticket purchases.
+      // Checking both catches either case without needing quantity upfront.
+      const { data: existingTickets } = await supabase
         .from('tickets')
         .select('id')
-        .eq('purchase_reference', reference)
-        .maybeSingle();
+        .in('purchase_reference', [reference, `${reference}-1`]);
 
-      if (!existing && metadata?.event_id) {
-        await supabase.from('tickets').insert({
+      // Only create ticket(s) if verify-payment never ran for this reference
+      // (e.g. the buyer's connection dropped right after paying).
+      if ((!existingTickets || existingTickets.length === 0) && metadata?.event_id) {
+        const perTicketAmount = (amount / 100) / quantity;
+        const ticketsToCreate = Array.from({ length: quantity }, (_, i) => ({
           event_id: metadata.event_id,
           user_email: customer.email,
           user_name: metadata.full_name || customer.email,
+          user_gender: metadata.gender || null,
           status: 'valid',
-          purchase_reference: reference,
-          total_amount_paid: amount / 100,
+          purchase_reference: quantity > 1 ? `${reference}-${i + 1}` : reference,
+          total_amount_paid: perTicketAmount,
           tier_id: metadata.tier_id || null,
           tier_name: metadata.tier_name || 'Standard',
-        });
+          referral_code: metadata.referral_code || null,
+        }));
+
+        const { data: inserted, error: insertError } = await supabase
+          .from('tickets')
+          .insert(ticketsToCreate)
+          .select();
+
+        if (insertError) {
+          console.error('[webhook] Fallback ticket insert failed:', insertError);
+        } else if (inserted?.length) {
+          console.warn(`[webhook] Created ${inserted.length} ticket(s) via fallback for reference=${reference} — verify-payment never completed for this purchase.`);
+          const { data: eventRow } = await supabase.from('events').select('title').eq('id', metadata.event_id).single();
+          try {
+            const { error: emailError } = await sendTicketEmail({
+              email: customer.email,
+              eventTitle: eventRow?.title || 'your event',
+              ticketId: inserted[0].id,
+              amount: amount / 100,
+            });
+            if (emailError) console.error('[webhook] Fallback ticket email failed:', emailError);
+          } catch (emailErr) {
+            console.error('[webhook] Fallback ticket email threw:', emailErr);
+          }
+        }
       }
     }
 

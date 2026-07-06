@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendTicketEmail } from '@/lib/sendTicketEmail';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -157,6 +158,23 @@ export async function POST(request: Request) {
       .select();
 
     if (error) throw error;
+
+    // --- 7. Send confirmation email server-side. Must be awaited before
+    // returning — a serverless function can be frozen/torn down right after
+    // its response is sent, so a fire-and-forget send here would be just as
+    // unreliable as the client-side version this replaces.
+    const { data: eventRow } = await supabase.from('events').select('title').eq('id', eventId).single();
+    try {
+      const { error: emailError } = await sendTicketEmail({
+        email,
+        eventTitle: eventRow?.title || 'your event',
+        ticketId: data[0].id,
+        amount: price * quantity + fee,
+      });
+      if (emailError) console.error('[verify-payment] Ticket email failed:', emailError);
+    } catch (emailErr) {
+      console.error('[verify-payment] Ticket email threw:', emailErr);
+    }
 
     return NextResponse.json({ ticketId: data[0].id });
   } catch (err: any) {

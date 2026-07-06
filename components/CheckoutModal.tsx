@@ -124,12 +124,6 @@ export default function CheckoutModal({
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to claim ticket");
 
-      fetch("/api/send-ticket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, eventTitle, ticketId: result.ticketId, amount: 0 }),
-      });
-
       onOpenChange(false);
       resetForm();
       router.push(`/tickets/${result.ticketId}`);
@@ -160,12 +154,6 @@ export default function CheckoutModal({
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Payment verification failed");
 
-      fetch("/api/send-ticket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, eventTitle, ticketId: result.ticketId, amount: totalAmount }),
-      });
-
       onOpenChange(false);
       resetForm();
       router.push(`/tickets/${result.ticketId}`);
@@ -185,6 +173,19 @@ export default function CheckoutModal({
     onClose: () => {
       setPaystackActive(false);
       document.body.style.overflow = "";
+    },
+    // Carried through to the Paystack webhook as event.data.metadata — the
+    // webhook's fallback ticket creation needs these to recover a purchase
+    // if the client never reaches /api/verify-payment (closed tab, dropped
+    // connection, etc. right after payment succeeds).
+    metadata: {
+      event_id: eventId,
+      full_name: fullName,
+      gender: gender || null,
+      quantity,
+      tier_id: selectedTier?.id || null,
+      tier_name: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
+      referral_code: referralCode || null,
     },
     ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
   };
