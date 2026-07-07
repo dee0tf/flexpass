@@ -27,6 +27,7 @@ interface TicketTier {
   quantity: string;
   ends_at?: string;
   group_size: string;
+  is_hidden: boolean;
 }
 
 function SuccessModal({ eventId, onClose }: { eventId: string; onClose: () => void }) {
@@ -99,7 +100,7 @@ export default function CreateEvent() {
     locationReveal: false,
   });
 
-  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "", group_size: "1" }]);
+  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false }]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
@@ -127,10 +128,13 @@ export default function CreateEvent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "", group_size: "1" }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false }]);
   const removeTier = (i: number) => { if (tiers.length > 1) { const n = [...tiers]; n.splice(i, 1); setTiers(n); } };
-  const updateTier = (i: number, field: keyof TicketTier, value: string) => {
+  const updateTier = (i: number, field: Exclude<keyof TicketTier, "is_hidden">, value: string) => {
     const n = [...tiers]; n[i][field] = value; setTiers(n);
+  };
+  const toggleTierHidden = (i: number) => {
+    const n = [...tiers]; n[i] = { ...n[i], is_hidden: !n[i].is_hidden }; setTiers(n);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -183,6 +187,7 @@ export default function CreateEvent() {
           quantity_available: Number(t.quantity),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
           group_size: Number(t.group_size) || 1,
+          is_hidden: t.is_hidden ?? false,
         }))
       );
       if (tierError) throw tierError;
@@ -337,6 +342,15 @@ export default function CreateEvent() {
                           style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
                         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                           Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
+                        </p>
+                      </div>
+                      <div className="mt-3">
+                        <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                          <input type="checkbox" checked={tier.is_hidden} onChange={() => toggleTierHidden(i)} />
+                          Hide from public checkout (invite-only — for giveaways)
+                        </label>
+                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                          Buyers won&apos;t see or be able to select this tier. Once the event is published, issue tickets to winners directly from the event&apos;s edit page.
                         </p>
                       </div>
                       <div className="mt-3">

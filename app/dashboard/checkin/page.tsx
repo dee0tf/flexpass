@@ -11,6 +11,7 @@ interface ScanResult {
   email?: string;
   tier?: string;
   checkedInAt?: string;
+  giveaway?: boolean;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -127,6 +128,7 @@ export default function CheckInPage() {
         email: data.email,
         tier: data.tier,
         checkedInAt: data.checkedInAt,
+        giveaway: data.giveaway,
       };
       setResult(r);
 
@@ -351,6 +353,14 @@ export default function CheckInPage() {
               </div>
 
               <div className="p-5 space-y-2.5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                {result.giveaway && (
+                  <div className="flex justify-center">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+                      style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706" }}>
+                      🎁 Giveaway
+                    </span>
+                  </div>
+                )}
                 {result.holder && <InfoRow label="Name" value={result.holder} />}
                 {result.email && <InfoRow label="Email" value={result.email} />}
                 {result.tier && <InfoRow label="Ticket Type" value={result.tier} />}

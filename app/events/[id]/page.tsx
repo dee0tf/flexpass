@@ -22,19 +22,28 @@ async function getEvent(id: string) {
 
   if (!event) return null;
 
-  // Fetch tiers
+  // Fetch tiers — hidden/giveaway tiers are excluded at the query level
+  // (not just filtered out of rendering) so their data never enters the
+  // page's fetch payload at all. Next.js embeds raw fetch responses in the
+  // RSC hydration stream for cache bookkeeping, so filtering only after the
+  // fact would still leak a hidden tier's name/price/quantity into page
+  // source even though it's correctly excluded from what's rendered.
   const { data: tiers } = await supabase
     .from("ticket_tiers")
     .select("*")
     .eq("event_id", id)
+    .eq("is_hidden", false)
     .order('price', { ascending: true });
 
-  // Count sold tickets per tier so buyers can see remaining
+  // Count sold tickets per tier so buyers can see remaining. Includes
+  // 'scanned' as well as 'valid' — a checked-in ticket still occupies a
+  // slot and must keep counting, or remaining capacity appears to free up
+  // as attendees check in mid-event.
   const { data: soldRows } = await supabase
     .from("tickets")
     .select("tier_id")
     .eq("event_id", id)
-    .eq("status", "valid");
+    .in("status", ["valid", "scanned"]);
 
   const soldByTier: Record<string, number> = {};
   for (const row of soldRows || []) {
@@ -42,15 +51,19 @@ async function getEvent(id: string) {
     soldByTier[key] = (soldByTier[key] || 0) + 1;
   }
 
-  const tiersWithRemaining = (tiers || []).map((t: any) => {
-    // soldByTier counts individual ticket rows; quantity_available counts
-    // groups/units for group tiers (group_size > 1), so convert back to the
-    // same unit before comparing — otherwise a group tier reads as sold out
-    // as soon as individual-ticket count passes the group count.
-    const groupSize = t.group_size || 1;
-    const groupsSold = (soldByTier[t.id] || 0) / groupSize;
-    return { ...t, remaining: Math.max(0, t.quantity_available - groupsSold) };
-  });
+  const tiersWithRemaining = (tiers || [])
+    // Hidden/giveaway tiers are never shown or purchasable on the public
+    // page — tickets against them are issued directly by the host instead.
+    .filter((t: any) => !t.is_hidden)
+    .map((t: any) => {
+      // soldByTier counts individual ticket rows; quantity_available counts
+      // groups/units for group tiers (group_size > 1), so convert back to the
+      // same unit before comparing — otherwise a group tier reads as sold out
+      // as soon as individual-ticket count passes the group count.
+      const groupSize = t.group_size || 1;
+      const groupsSold = (soldByTier[t.id] || 0) / groupSize;
+      return { ...t, remaining: Math.max(0, t.quantity_available - groupsSold) };
+    });
 
   // For legacy (no-tier) events
   const legacySold = soldByTier["__legacy__"] || 0;

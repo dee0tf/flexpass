@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     // Fetch the ticket
     const { data: ticket } = await db
       .from('tickets')
-      .select('id, status, user_name, user_email, tier_name, checked_in_at, event_id')
+      .select('id, status, user_name, user_email, tier_name, checked_in_at, event_id, is_giveaway')
       .eq('id', ticketId)
       .single();
 
@@ -77,6 +77,7 @@ export async function POST(request: Request) {
         holder: ticket.user_name,
         email: ticket.user_email,
         tier: ticket.tier_name || 'Standard',
+        giveaway: ticket.is_giveaway,
       }, { status: 409 });
     }
 
@@ -99,6 +100,7 @@ export async function POST(request: Request) {
       email: ticket.user_email,
       tier: ticket.tier_name || 'Standard',
       checkedInAt: now,
+      giveaway: ticket.is_giveaway,
     });
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

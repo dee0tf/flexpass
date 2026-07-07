@@ -17,7 +17,108 @@ import { use } from "react";
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
 interface TierFormData {
-  id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean; group_size: string;
+  id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean; group_size: string; is_hidden: boolean;
+}
+
+// ── Issue Giveaway Ticket panel ─────────────────────────────────────
+function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: string; tierId: string; quantityAvailable: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const [issuedList, setIssuedList] = useState<Array<{ id: string; user_name: string | null; user_email: string; created_at: string }>>([]);
+  const [issuedLoaded, setIssuedLoaded] = useState(false);
+  const [winnerName, setWinnerName] = useState("");
+  const [winnerEmail, setWinnerEmail] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [issuing, setIssuing] = useState(false);
+  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const loadIssued = async () => {
+    const { data } = await supabase
+      .from("tickets")
+      .select("id, user_name, user_email, created_at")
+      .eq("tier_id", tierId)
+      .eq("is_giveaway", true)
+      .order("created_at", { ascending: false });
+    setIssuedList(data || []);
+    setIssuedLoaded(true);
+  };
+
+  const handleExpand = () => {
+    setExpanded(e => !e);
+    if (!issuedLoaded) loadIssued();
+  };
+
+  const handleIssue = async () => {
+    if (!winnerEmail.trim() || !winnerName.trim()) { setMessage({ text: "Name and email are required.", isError: true }); return; }
+    setIssuing(true);
+    setMessage(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setMessage({ text: "Please log in again.", isError: true }); return; }
+
+      const res = await fetch("/api/issue-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ eventId, tierId, email: winnerEmail.trim(), fullName: winnerName.trim(), quantity: Number(quantity) || 1 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to issue ticket");
+
+      setMessage({ text: `Ticket issued to ${winnerEmail}`, isError: false });
+      setWinnerName(""); setWinnerEmail(""); setQuantity("1");
+      loadIssued();
+    } catch (e: any) {
+      setMessage({ text: e.message, isError: true });
+    } finally {
+      setIssuing(false);
+    }
+  };
+
+  // Pressing Enter inside these inputs would otherwise bubble up and submit
+  // the outer event-edit form, since this panel renders inside that <form>.
+  const onEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); handleIssue(); }
+  };
+  const inputStyle = { backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
+
+  return (
+    <div className="mt-3 rounded-xl p-3" style={{ backgroundColor: "var(--card-bg)", border: "1px dashed var(--brand-indigo)" }}>
+      <button type="button" onClick={handleExpand}
+        className="w-full flex items-center justify-between text-xs font-semibold" style={{ color: "var(--brand-indigo)" }}>
+        <span>🎁 Issue Giveaway Ticket{issuedLoaded ? ` — ${issuedList.length}/${quantityAvailable} issued` : ""}</span>
+        <span>{expanded ? "▲" : "▼"}</span>
+      </button>
+      {expanded && (
+        <div className="mt-3 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input type="text" placeholder="Winner name" value={winnerName} onChange={e => setWinnerName(e.target.value)}
+              onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
+            <input type="email" placeholder="Winner email" value={winnerEmail} onChange={e => setWinnerEmail(e.target.value)}
+              onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
+            <input type="number" placeholder="Qty" min="1" value={quantity} onChange={e => setQuantity(e.target.value)}
+              onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
+          </div>
+          {message && (
+            <p className="text-xs font-medium" style={{ color: message.isError ? "#ef4444" : "#16a34a" }}>{message.text}</p>
+          )}
+          <button type="button" onClick={handleIssue} disabled={issuing}
+            className="w-full py-2 rounded-lg text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+            style={{ backgroundColor: "var(--brand-indigo)" }}>
+            {issuing ? "Sending…" : "Send Ticket"}
+          </button>
+          {issuedList.length > 0 && (
+            <div className="pt-2 space-y-1 max-h-40 overflow-y-auto">
+              <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Issued so far:</p>
+              {issuedList.map(t => (
+                <p key={t.id} className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {t.user_name || "—"} ({t.user_email}) — {new Date(t.created_at).toLocaleDateString()}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Branded success modal ──────────────────────────────────────────
@@ -194,10 +295,11 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           quantity: t.quantity_available.toString(),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString().slice(0, 16) : "",
           group_size: (t.group_size ?? 1).toString(),
+          is_hidden: t.is_hidden ?? false,
         }))
       );
       if (!existingTiers || existingTiers.length === 0) {
-        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1" }]);
+        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1", is_hidden: false }]);
       }
 
       // Detect if category is custom (not in CATEGORIES standard list)
@@ -230,15 +332,18 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     loadData();
   }, [id, router]);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true, group_size: "1" }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true, group_size: "1", is_hidden: false }]);
   const removeTier = (i: number) => {
     if (tiers.length <= 1) return;
     const removed = tiers[i];
     if (removed.id) setRemovedTierIds(prev => [...prev, removed.id!]);
     setTiers(tiers.filter((_, idx) => idx !== i));
   };
-  const updateTier = (i: number, field: keyof TierFormData, value: string) => {
+  const updateTier = (i: number, field: Exclude<keyof TierFormData, "is_hidden">, value: string) => {
     const u = [...tiers]; u[i] = { ...u[i], [field]: value }; setTiers(u);
+  };
+  const toggleTierHidden = (i: number) => {
+    const u = [...tiers]; u[i] = { ...u[i], is_hidden: !u[i].is_hidden }; setTiers(u);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -278,6 +383,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           quantity_available: Number(t.quantity),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
           group_size: Number(t.group_size) || 1,
+          is_hidden: t.is_hidden ?? false,
         }));
       const newTiers = tiers
         .filter(t => !t.id)
@@ -287,6 +393,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           quantity_available: Number(t.quantity),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
           group_size: Number(t.group_size) || 1,
+          is_hidden: t.is_hidden ?? false,
         }));
 
       if (existingTiers.length) {
@@ -457,6 +564,15 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     </p>
                   </div>
                   <div className="mt-3">
+                    <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                      <input type="checkbox" checked={tier.is_hidden} onChange={() => toggleTierHidden(i)} />
+                      Hide from public checkout (invite-only — for giveaways)
+                    </label>
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                      Buyers won&apos;t see or be able to select this tier. Issue tickets to winners directly below.
+                    </p>
+                  </div>
+                  <div className="mt-3">
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--brand-amber)" }}>
                       Early Bird Ends (optional)
                     </label>
@@ -466,6 +582,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                       style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
                     <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier auto-closes after this date/time.</p>
                   </div>
+                  {tier.id && tier.is_hidden && (
+                    <IssueTicketPanel eventId={id} tierId={tier.id} quantityAvailable={Number(tier.quantity) || 0} />
+                  )}
                   {tiers.length > 1 && (
                     <button type="button" onClick={() => removeTier(i)}
                       className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1.5 rounded-full hover:bg-red-200 transition opacity-0 group-hover:opacity-100">

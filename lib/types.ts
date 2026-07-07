@@ -26,5 +26,6 @@ export interface TicketTier {
   quantity_available: number;
   ends_at?: string | null;
   group_size?: number;
+  is_hidden?: boolean;
 }
 
