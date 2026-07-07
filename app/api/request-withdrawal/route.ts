@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { logPaymentEvent } from "@/lib/logPaymentEvent";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -38,24 +39,30 @@ export async function POST(request: Request) {
     if (!bank) return NextResponse.json({ error: "No bank account saved. Please add your bank details first." }, { status: 400 });
 
     // Insert payout
-    const { error: insertError } = await db.from("payouts").insert({
+    const { data: payout, error: insertError } = await db.from("payouts").insert({
       user_id: user.id,
       amount,
       status: "pending",
-    });
+    }).select().single();
 
     if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
-    // Fire notification email (non-blocking — don't fail the request if email fails)
+    // The withdrawal request itself is already saved above regardless of what
+    // happens below — this email just alerts the admin to go process it. Must
+    // still be awaited (not fire-and-forget): a serverless function can be
+    // frozen/torn down right after its response is sent, so an un-awaited
+    // send here could silently never complete, same class of bug as the
+    // ticket-email issue this pattern was built to fix.
     const now = new Date().toLocaleString("en-NG", {
       timeZone: "Africa/Lagos",
       day: "numeric", month: "long", year: "numeric",
       hour: "2-digit", minute: "2-digit",
     });
 
-    resend.emails.send({
+    try {
+      const { error: emailError } = await resend.emails.send({
       from: "FlexPass <tickets@flexpasshq.com>",
-      to: ["flexpasshome@gmail.com"],
+      to: [process.env.ADMIN_EMAIL!],
       subject: `💸 New Withdrawal Request — ₦${amount.toLocaleString()}`,
       html: `
 <!DOCTYPE html>
@@ -126,7 +133,27 @@ export async function POST(request: Request) {
   </table>
 </body>
 </html>`,
-    }).catch(() => { /* don't fail the request if email errors */ });
+      });
+
+      if (emailError) {
+        console.error('[request-withdrawal] Admin notification failed:', emailError);
+        await logPaymentEvent({
+          source: 'request-withdrawal', eventType: 'admin_notification_failed', status: 'error',
+          email: user.email, message: JSON.stringify(emailError),
+          metadata: { payoutId: payout?.id, amount },
+        });
+      }
+    } catch (emailErr) {
+      // The withdrawal request itself is already safely saved (see insert
+      // above) — an email failure here must never fail the request back to
+      // the host, only be recorded so it can't go unnoticed.
+      console.error('[request-withdrawal] Admin notification threw:', emailErr);
+      await logPaymentEvent({
+        source: 'request-withdrawal', eventType: 'admin_notification_failed', status: 'error',
+        email: user.email, message: emailErr instanceof Error ? emailErr.message : String(emailErr),
+        metadata: { payoutId: payout?.id, amount },
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
