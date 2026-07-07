@@ -15,11 +15,12 @@ interface ClientProps {
   eventPrice: number;
   eventId: string;
   eventDate: string;
+  salesEndDate?: string | null;
   tiers: TicketTier[];
   legacyRemaining: number;
 }
 
-export default function ClientEventPage({ eventTitle, eventPrice, eventId, eventDate, tiers, legacyRemaining }: ClientProps) {
+export default function ClientEventPage({ eventTitle, eventPrice, eventId, eventDate, salesEndDate, tiers, legacyRemaining }: ClientProps) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -54,7 +55,11 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
 
   const soldOut = totalRemaining === 0;
   // Slice to YYYY-MM-DD so Supabase timestamp formats don't get parsed as UTC midnight
-  const ended = new Date(eventDate.slice(0, 10) + "T23:59:59") < new Date();
+  const eventDatePassed = new Date(eventDate.slice(0, 10) + "T23:59:59") < new Date();
+  const salesEndPassed = !!salesEndDate && new Date(salesEndDate) < new Date();
+  const ended = eventDatePassed || salesEndPassed;
+  // Distinguish "sales window closed early" from "the event itself already happened"
+  const endedLabel = salesEndPassed && !eventDatePassed ? "Sales Ended" : "Event Ended";
 
   // Nearest active early bird tier
   const now = Date.now();
@@ -115,7 +120,7 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
             className="px-8 py-3 rounded-xl font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ backgroundColor: ended ? "#6b7280" : soldOut ? "var(--text-muted)" : "var(--brand-indigo)" }}
           >
-            {ended ? "Ended" : soldOut ? "Sold Out" : "Buy Ticket"}
+            {ended ? endedLabel : soldOut ? "Sold Out" : "Buy Ticket"}
           </button>
         </div>
       </div>
@@ -145,7 +150,7 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
           className="w-full py-4 rounded-xl font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ backgroundColor: ended ? "#6b7280" : soldOut ? "var(--text-muted)" : "var(--brand-indigo)" }}
         >
-          {ended ? "Event Ended" : soldOut ? "Sold Out" : "Get Tickets"}
+          {ended ? endedLabel : soldOut ? "Sold Out" : "Get Tickets"}
         </button>
         <button
           onClick={handleShare}

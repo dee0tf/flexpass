@@ -14,6 +14,7 @@ export interface TicketTier {
   price: number;
   remaining?: number;
   ends_at?: string | null;
+  group_size?: number;
 }
 
 interface CheckoutModalProps {
@@ -98,6 +99,7 @@ export default function CheckoutModal({
 
   const isLegacyEvent = tiers.length === 0;
   const finalPrice = isLegacyEvent ? basePrice : (selectedTier ? selectedTier.price : 0);
+  const groupSize = !isLegacyEvent && selectedTier?.group_size ? selectedTier.group_size : 1;
   const FEE_PERCENTAGE = 0.05;
   const subtotal = finalPrice * quantity;
   const fee = Math.round(subtotal * FEE_PERCENTAGE * 100) / 100;
@@ -260,16 +262,33 @@ export default function CheckoutModal({
                               opacity: unavailable ? 0.5 : 1,
                             }}>
                             <div>
-                              <p className="font-bold" style={{ color: "var(--text-primary)" }}>{tier.name}</p>
+                              <p className="font-bold flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
+                                {tier.name}
+                                {tier.group_size !== undefined && tier.group_size > 1 && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                                    style={{ backgroundColor: "rgba(72,0,130,0.1)", color: "var(--brand-indigo)" }}>
+                                    Group of {tier.group_size}
+                                  </span>
+                                )}
+                              </p>
                               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                                 {tier.price === 0 ? "Free" : `₦${tier.price.toLocaleString()}`}
+                                {tier.group_size !== undefined && tier.group_size > 1 && " total"}
                               </p>
                               {soldOut
                                 ? <p className="text-xs font-semibold text-red-500 mt-0.5">Sold out</p>
                                 : expired
                                 ? <p className="text-xs font-semibold mt-0.5" style={{ color: "var(--text-muted)" }}>Sale ended</p>
                                 : tier.remaining !== undefined && tier.remaining <= 20
-                                ? <p className="text-xs font-semibold text-orange-500 mt-0.5">{tier.remaining} left</p>
+                                ? (() => {
+                                    const isGroup = !!tier.group_size && tier.group_size > 1;
+                                    const noun = isGroup ? `group${tier.remaining === 1 ? "" : "s"}` : "";
+                                    return (
+                                      <p className="text-xs font-semibold text-orange-500 mt-0.5">
+                                        {tier.remaining} {noun ? `${noun} ` : ""}left
+                                      </p>
+                                    );
+                                  })()
                                 : null}
                             </div>
                             {isSelected && !unavailable && (
@@ -307,7 +326,7 @@ export default function CheckoutModal({
                             {selectedTier ? `${selectedTier.name} Ticket` : "Standard Ticket"}
                           </span>
                           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                            {finalPrice === 0 ? "Free" : `₦${finalPrice.toLocaleString()} each`}
+                            {finalPrice === 0 ? "Free" : `₦${finalPrice.toLocaleString()} ${groupSize > 1 ? "per group" : "each"}`}
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
@@ -330,10 +349,16 @@ export default function CheckoutModal({
                       {(() => {
                         const rem = isLegacyEvent ? legacyRemaining : selectedTier?.remaining;
                         if (!rem || rem > 20) return null;
+                        const unit = groupSize > 1 ? "group" : "ticket";
                         return rem <= 0
                           ? <p className="text-xs font-semibold text-red-500 mt-2">This ticket type is sold out.</p>
-                          : <p className="text-xs font-semibold text-orange-500 mt-2">Only {rem} ticket{rem !== 1 ? "s" : ""} remaining!</p>;
+                          : <p className="text-xs font-semibold text-orange-500 mt-2">Only {rem} {unit}{rem !== 1 ? "s" : ""} remaining!</p>;
                       })()}
+                      {groupSize > 1 && (
+                        <p className="text-xs font-semibold mt-2" style={{ color: "var(--brand-indigo)" }}>
+                          You'll receive {quantity * groupSize} separate QR codes — one for each person in your group{quantity > 1 ? "s" : ""}.
+                        </p>
+                      )}
                     </div>
 
                     {/* Full Name */}

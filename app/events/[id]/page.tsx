@@ -42,10 +42,15 @@ async function getEvent(id: string) {
     soldByTier[key] = (soldByTier[key] || 0) + 1;
   }
 
-  const tiersWithRemaining = (tiers || []).map((t: any) => ({
-    ...t,
-    remaining: Math.max(0, t.quantity_available - (soldByTier[t.id] || 0)),
-  }));
+  const tiersWithRemaining = (tiers || []).map((t: any) => {
+    // soldByTier counts individual ticket rows; quantity_available counts
+    // groups/units for group tiers (group_size > 1), so convert back to the
+    // same unit before comparing — otherwise a group tier reads as sold out
+    // as soon as individual-ticket count passes the group count.
+    const groupSize = t.group_size || 1;
+    const groupsSold = (soldByTier[t.id] || 0) / groupSize;
+    return { ...t, remaining: Math.max(0, t.quantity_available - groupsSold) };
+  });
 
   // For legacy (no-tier) events
   const legacySold = soldByTier["__legacy__"] || 0;
@@ -261,6 +266,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         eventPrice={event.price}
         eventId={event.id}
         eventDate={event.date}
+        salesEndDate={event.sales_end_date}
         tiers={event.tiers}
         legacyRemaining={event.legacyRemaining}
       />

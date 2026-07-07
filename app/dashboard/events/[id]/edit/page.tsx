@@ -17,7 +17,7 @@ import { use } from "react";
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
 interface TierFormData {
-  id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean;
+  id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean; group_size: string;
 }
 
 // ── Branded success modal ──────────────────────────────────────────
@@ -193,10 +193,11 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           id: t.id, name: t.name, price: t.price.toString(),
           quantity: t.quantity_available.toString(),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString().slice(0, 16) : "",
+          group_size: (t.group_size ?? 1).toString(),
         }))
       );
       if (!existingTiers || existingTiers.length === 0) {
-        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true }]);
+        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1" }]);
       }
 
       // Detect if category is custom (not in CATEGORIES standard list)
@@ -229,7 +230,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     loadData();
   }, [id, router]);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true, group_size: "1" }]);
   const removeTier = (i: number) => {
     if (tiers.length <= 1) return;
     const removed = tiers[i];
@@ -246,7 +247,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     setIsSaving(true);
     try {
       const minPrice = Math.min(...tiers.map(t => Number(t.price)));
-      const totalTickets = tiers.reduce((acc, t) => acc + Number(t.quantity), 0);
+      const totalTickets = tiers.reduce((acc, t) => acc + Number(t.quantity) * (Number(t.group_size) || 1), 0);
       const finalCategory = formData.category === "Others" && formData.custom_category
         ? formData.custom_category : formData.category;
 
@@ -276,6 +277,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           price: Number(t.price),
           quantity_available: Number(t.quantity),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
+          group_size: Number(t.group_size) || 1,
         }));
       const newTiers = tiers
         .filter(t => !t.id)
@@ -284,6 +286,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           price: Number(t.price),
           quantity_available: Number(t.quantity),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
+          group_size: Number(t.group_size) || 1,
         }));
 
       if (existingTiers.length) {
@@ -305,8 +308,15 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
       setShowSaved(true);
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "Unknown error";
-      // Show inline error instead of browser alert
+      // Supabase errors are plain objects with a `message` property, not
+      // real Error instances — `instanceof Error` misses them entirely and
+      // was silently collapsing every real error down to "Unknown error".
+      const msg = error instanceof Error
+        ? error.message
+        : (error && typeof error === "object" && "message" in error)
+          ? String((error as { message: unknown }).message)
+          : "Unknown error";
+      console.error("[edit event] Save failed:", error);
       showToast("Failed to save: " + msg, "error");
     } finally {
       setIsSaving(false);
@@ -427,11 +437,24 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>{f.label}</label>
                         <input type={f.type} placeholder={f.placeholder} value={tier[f.field]}
                           onChange={e => updateTier(i, f.field, e.target.value)}
+                          min={f.type === "number" ? "0" : undefined}
                           className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
                           style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
                           required />
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+                      Tickets per Purchase (optional)
+                    </label>
+                    <input type="number" placeholder="1" value={tier.group_size} min="1"
+                      onChange={e => updateTier(i, "group_size", e.target.value)}
+                      className="w-full sm:w-1/3 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                      style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                      Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
+                    </p>
                   </div>
                   <div className="mt-3">
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--brand-amber)" }}>

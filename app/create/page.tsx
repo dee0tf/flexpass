@@ -26,6 +26,7 @@ interface TicketTier {
   price: string;
   quantity: string;
   ends_at?: string;
+  group_size: string;
 }
 
 function SuccessModal({ eventId, onClose }: { eventId: string; onClose: () => void }) {
@@ -98,7 +99,7 @@ export default function CreateEvent() {
     locationReveal: false,
   });
 
-  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "" }]);
+  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "", group_size: "1" }]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
@@ -126,7 +127,7 @@ export default function CreateEvent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "" }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "", group_size: "1" }]);
   const removeTier = (i: number) => { if (tiers.length > 1) { const n = [...tiers]; n.splice(i, 1); setTiers(n); } };
   const updateTier = (i: number, field: keyof TicketTier, value: string) => {
     const n = [...tiers]; n[i][field] = value; setTiers(n);
@@ -145,7 +146,7 @@ export default function CreateEvent() {
       ? formData.custom_category : formData.category;
 
     try {
-      const totalTickets = tiers.reduce((acc, t) => acc + Number(t.quantity), 0);
+      const totalTickets = tiers.reduce((acc, t) => acc + Number(t.quantity) * (Number(t.group_size) || 1), 0);
       const minPrice = Math.min(...tiers.map(t => Number(t.price)));
 
       // Get creator social links from user metadata
@@ -181,6 +182,7 @@ export default function CreateEvent() {
           price: Number(t.price),
           quantity_available: Number(t.quantity),
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
+          group_size: Number(t.group_size) || 1,
         }))
       );
       if (tierError) throw tierError;
@@ -324,6 +326,18 @@ export default function CreateEvent() {
                             style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
                             required />
                         </div>
+                      </div>
+                      <div className="mt-3">
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+                          Tickets per Purchase (optional)
+                        </label>
+                        <input type="number" placeholder="1" value={tier.group_size} min="1"
+                          onChange={e => updateTier(i, "group_size", e.target.value)}
+                          className="w-full sm:w-1/3 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                          style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                          Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
+                        </p>
                       </div>
                       <div className="mt-3">
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
