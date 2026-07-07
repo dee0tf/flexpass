@@ -129,7 +129,10 @@ export async function POST(request: Request) {
         .from('tickets')
         .select('id', { count: 'exact', head: true })
         .eq('tier_id', tierId)
-        .eq('status', 'valid');
+        // Include 'scanned' as well as 'valid' — a checked-in ticket still
+        // occupies a slot and must keep counting against capacity, or
+        // capacity appears to free up as attendees check in mid-event.
+        .in('status', ['valid', 'scanned']);
 
       // soldCount counts individual ticket rows; quantity_available counts
       // groups/units, so convert back to the same unit before comparing.
@@ -150,7 +153,7 @@ export async function POST(request: Request) {
         .from('tickets')
         .select('id', { count: 'exact', head: true })
         .eq('event_id', eventId)
-        .eq('status', 'valid');
+        .in('status', ['valid', 'scanned']);
 
       const remaining = (eventRow.total_tickets || 0) - (soldCount || 0);
       if (remaining < quantity) {
