@@ -168,7 +168,7 @@ export async function POST(request: Request) {
       const { error: emailError } = await sendTicketEmail({
         email,
         eventTitle: eventRow?.title || 'your event',
-        ticketId: data[0].id,
+        ticketIds: data.map(t => t.id),
         amount: price * quantity + fee,
       });
       if (emailError) console.error('[verify-payment] Ticket email failed:', emailError);
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       console.error('[verify-payment] Ticket email threw:', emailErr);
     }
 
-    return NextResponse.json({ ticketId: data[0].id });
+    return NextResponse.json({ ticketIds: data.map(t => t.id) });
   } catch (err: any) {
     console.error('[verify-payment] Unhandled error:', err);
     return NextResponse.json({ error: 'Internal server error: ' + (err?.message || 'unknown') }, { status: 500 });

@@ -167,7 +167,7 @@ export async function POST(request: Request) {
       const { error: emailError } = await sendTicketEmail({
         email,
         eventTitle: eventRow?.title || 'your event',
-        ticketId: data[0].id,
+        ticketIds: data.map(t => t.id),
         amount: 0,
       });
       if (emailError) console.error('[claim-free-ticket] Ticket email failed:', emailError);
@@ -175,7 +175,7 @@ export async function POST(request: Request) {
       console.error('[claim-free-ticket] Ticket email threw:', emailErr);
     }
 
-    return NextResponse.json({ ticketId: data[0].id });
+    return NextResponse.json({ ticketIds: data.map(t => t.id) });
   } catch (err: any) {
     console.error('[claim-free-ticket] Unhandled error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

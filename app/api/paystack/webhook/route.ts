@@ -72,7 +72,7 @@ export async function POST(request: Request) {
             const { error: emailError } = await sendTicketEmail({
               email: customer.email,
               eventTitle: eventRow?.title || 'your event',
-              ticketId: inserted[0].id,
+              ticketIds: inserted.map(t => t.id),
               amount: amount / 100,
             });
             if (emailError) console.error('[webhook] Fallback ticket email failed:', emailError);

@@ -6,10 +6,10 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, eventTitle, ticketId, amount } = body;
+    const { email, eventTitle, ticketIds, amount } = body;
 
     // Input validation
-    if (!email || !eventTitle || !ticketId || amount == null) {
+    if (!email || !eventTitle || !Array.isArray(ticketIds) || ticketIds.length === 0 || amount == null) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
     }
 
-    if (typeof ticketId !== 'string' || ticketId.length > 100) {
+    if (ticketIds.some((id: unknown) => typeof id !== 'string' || id.length > 100)) {
       return NextResponse.json({ error: 'Invalid ticket ID' }, { status: 400 });
     }
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
     }
 
-    const { error } = await sendTicketEmail({ email, eventTitle, ticketId, amount: safeAmount });
+    const { error } = await sendTicketEmail({ email, eventTitle, ticketIds, amount: safeAmount });
 
     if (error) {
       console.error('[send-ticket] Resend error:', error);

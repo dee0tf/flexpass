@@ -126,7 +126,8 @@ export default function CheckoutModal({
 
       onOpenChange(false);
       resetForm();
-      router.push(`/tickets/${result.ticketId}`);
+      const ids: string[] = result.ticketIds;
+      router.push(ids.length > 1 ? `/tickets/order?ids=${ids.join(",")}` : `/tickets/${ids[0]}`);
     } catch (err: any) {
       showToast("Could not claim ticket: " + err.message, "error");
     } finally {
@@ -156,7 +157,8 @@ export default function CheckoutModal({
 
       onOpenChange(false);
       resetForm();
-      router.push(`/tickets/${result.ticketId}`);
+      const ids: string[] = result.ticketIds;
+      router.push(ids.length > 1 ? `/tickets/order?ids=${ids.join(",")}` : `/tickets/${ids[0]}`);
     } catch (error: any) {
       showToast("Ticket processing failed: " + error.message, "error");
     } finally {
