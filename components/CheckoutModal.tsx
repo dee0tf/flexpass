@@ -279,7 +279,7 @@ export default function CheckoutModal({
                                 ? <p className="text-xs font-semibold text-red-500 mt-0.5">Sold out</p>
                                 : expired
                                 ? <p className="text-xs font-semibold mt-0.5" style={{ color: "var(--text-muted)" }}>Sale ended</p>
-                                : tier.remaining !== undefined && tier.remaining <= 20
+                                : tier.remaining !== undefined && tier.remaining <= 10
                                 ? (() => {
                                     const isGroup = !!tier.group_size && tier.group_size > 1;
                                     const noun = isGroup ? `group${tier.remaining === 1 ? "" : "s"}` : "";
@@ -348,7 +348,7 @@ export default function CheckoutModal({
                       </div>
                       {(() => {
                         const rem = isLegacyEvent ? legacyRemaining : selectedTier?.remaining;
-                        if (!rem || rem > 20) return null;
+                        if (!rem || rem > 10) return null;
                         const unit = groupSize > 1 ? "group" : "ticket";
                         return rem <= 0
                           ? <p className="text-xs font-semibold text-red-500 mt-2">This ticket type is sold out.</p>

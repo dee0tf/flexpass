@@ -101,7 +101,7 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
               <Clock className="h-3 w-3" /> Early bird ends in {countdown}
             </p>
           )}
-          {!countdown && totalRemaining <= 20 && !soldOut && (
+          {!countdown && totalRemaining <= 10 && !soldOut && (
             <p className="text-xs font-semibold text-orange-500">{totalRemaining} left!</p>
           )}
         </div>
@@ -140,7 +140,7 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
             <Clock className="h-4 w-4" /> Early bird ends in {countdown}
           </p>
         )}
-        {!countdown && totalRemaining <= 20 && !soldOut && (
+        {!countdown && totalRemaining <= 10 && !soldOut && (
           <p className="text-sm font-semibold text-orange-500 mb-4">Only {totalRemaining} tickets left!</p>
         )}
         {!totalRemaining || soldOut ? null : <div className="mb-4" />}
