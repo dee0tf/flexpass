@@ -36,7 +36,7 @@ export async function sendTicketEmail({
                 </tr>
               </table>`).join('');
 
-  return resend.emails.send({
+  const payload = {
     from: 'FlexPass <tickets@flexpasshq.com>',
     to: [email],
     subject: multiple
@@ -102,5 +102,29 @@ export async function sendTicketEmail({
   </table>
 </body>
 </html>`,
-  });
+  };
+
+  // Resend returns { data, error } on API-level failures (rate limit, bad
+  // domain, etc.) rather than throwing, but a network blip can still throw —
+  // retry a couple of times on either failure mode before giving up, since a
+  // ticket can otherwise exist with no confirmation email ever reaching the
+  // buyer and nothing catching it.
+  const MAX_ATTEMPTS = 3;
+  let lastResult: Awaited<ReturnType<typeof resend.emails.send>>;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      lastResult = await resend.emails.send(payload);
+      if (!lastResult.error) return lastResult;
+    } catch (err) {
+      lastResult = {
+        data: null,
+        error: { name: 'network_error', message: err instanceof Error ? err.message : String(err) } as any,
+        headers: null,
+      };
+    }
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise(resolve => setTimeout(resolve, attempt * 750));
+    }
+  }
+  return lastResult!;
 }

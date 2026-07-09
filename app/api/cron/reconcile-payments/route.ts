@@ -22,9 +22,15 @@ const GRACE_MS = 3 * 60 * 1000;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 // Tolerance for rounding when comparing paid amount to the expected tier price + fee.
 const AMOUNT_TOLERANCE_KOBO = 100;
+// How far back to check for unresolved email_failed events each run — a bit
+// wider than the ~10min external cron interval so a slightly-delayed run
+// never misses one, at the cost of occasionally reporting the same failure
+// across two consecutive runs (harmless — far better than staying silent).
+const EMAIL_ALERT_LOOKBACK_MS = 20 * 60 * 1000;
 
 interface FixedRecord { reference: string; email: string; amountNaira: number; ticketIds: string[]; recovered?: boolean }
 interface FlaggedRecord { reference: string; email: string | null; amountNaira: number; reason: string }
+interface EmailFailureRecord { reference: string | null; email: string | null; source: string; message: string }
 
 // When a successful transaction has no metadata (e.g. an abandoned first
 // attempt carried it correctly, but a retry somehow didn't), look for
@@ -65,7 +71,7 @@ async function findSiblingMetadata(
   return candidates[0].metadata;
 }
 
-function buildReportHtml(fixed: FixedRecord[], flagged: FlaggedRecord[]): string {
+function buildReportHtml(fixed: FixedRecord[], flagged: FlaggedRecord[], emailFailures: EmailFailureRecord[]): string {
   const fixedRows = fixed.map(f => `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee;">${f.reference}</td>
@@ -81,6 +87,14 @@ function buildReportHtml(fixed: FixedRecord[], flagged: FlaggedRecord[]): string
       <td style="padding:8px;border-bottom:1px solid #eee;">${f.email || '(unknown)'}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;">₦${f.amountNaira.toLocaleString()}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;">${f.reason}</td>
+    </tr>`).join('');
+
+  const emailFailureRows = emailFailures.map(f => `
+    <tr>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${f.reference || '(unknown)'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${f.email || '(unknown)'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${f.source}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${f.message}</td>
     </tr>`).join('');
 
   return `
@@ -107,6 +121,16 @@ function buildReportHtml(fixed: FixedRecord[], flagged: FlaggedRecord[]): string
       ${flaggedRows}
     </table>
     <p style="font-size:13px;color:#666;">These were deliberately left alone — check the payment_events table (source=reconciliation) for details before deciding what to do.</p>` : ''}
+  ${emailFailures.length > 0 ? `
+    <h3 style="color:#dc2626;">📧 Email delivery failed (${emailFailures.length})</h3>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <tr style="background:#f8f8f8;text-align:left;">
+        <th style="padding:8px;">Reference</th><th style="padding:8px;">Email</th>
+        <th style="padding:8px;">From</th><th style="padding:8px;">Error</th>
+      </tr>
+      ${emailFailureRows}
+    </table>
+    <p style="font-size:13px;color:#666;">The ticket(s) already exist for these — only the confirmation email failed to send (after 3 retry attempts). Resend manually.</p>` : ''}
 </body>
 </html>`;
 }
@@ -240,18 +264,31 @@ export async function GET(request: Request) {
     }
   }
 
-  if (fixed.length > 0 || flagged.length > 0) {
+  // Surface unresolved email_failed events too — the ticket exists in these
+  // cases, but nothing else would ever alert us that the confirmation email
+  // itself never reached the buyer.
+  const { data: emailFailureRows } = await supabase
+    .from('payment_events')
+    .select('reference, email, source, message')
+    .eq('event_type', 'email_failed')
+    .gte('created_at', new Date(now - EMAIL_ALERT_LOOKBACK_MS).toISOString());
+  const emailFailures: EmailFailureRecord[] = emailFailureRows || [];
+
+  if (fixed.length > 0 || flagged.length > 0 || emailFailures.length > 0) {
     try {
       await resend.emails.send({
         from: 'FlexPass <tickets@flexpasshq.com>',
         to: [process.env.ADMIN_EMAIL!],
-        subject: `Payment reconciliation: ${fixed.length} fixed, ${flagged.length} flagged`,
-        html: buildReportHtml(fixed, flagged),
+        subject: `Payment reconciliation: ${fixed.length} fixed, ${flagged.length} flagged, ${emailFailures.length} email failures`,
+        html: buildReportHtml(fixed, flagged, emailFailures),
       });
     } catch (err) {
       console.error('[reconcile] Failed to send report email:', err);
     }
   }
 
-  return NextResponse.json({ checked: candidates.length, fixed: fixed.length, flagged: flagged.length });
+  return NextResponse.json({
+    checked: candidates.length, fixed: fixed.length, flagged: flagged.length,
+    emailFailures: emailFailures.length,
+  });
 }
