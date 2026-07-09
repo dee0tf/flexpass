@@ -89,6 +89,19 @@ export async function createFallbackTicket({
     .select();
 
   if (insertError) {
+    // A duplicate purchase_reference here means verify-payment (or the other
+    // fallback path) won the race and created the ticket(s) in the split
+    // second after our pre-check above — not a real failure, just two safety
+    // nets firing for the same purchase.
+    if (insertError.code === '23505') {
+      await logPaymentEvent({
+        source, eventType: 'ticket_already_exists', status: 'skipped',
+        reference, eventId: metadata.event_id, email: customerEmail || null,
+        message: 'Ticket(s) already created by a concurrent path for this reference',
+      });
+      return { outcome: 'already_exists' };
+    }
+
     console.error(`[${source}] Fallback ticket insert failed:`, insertError);
     await logPaymentEvent({
       source, eventType: 'fallback_insert_failed', status: 'error',

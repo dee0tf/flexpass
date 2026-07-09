@@ -231,6 +231,28 @@ export async function POST(request: Request) {
       .select();
 
     if (error) {
+      // A duplicate purchase_reference means the webhook's fallback path won
+      // the race and already created the ticket(s) a moment before we tried
+      // to insert our own — not a failure, just two safety nets firing for
+      // the same purchase. Return what's already there instead of erroring
+      // out to a customer who actually does have a valid ticket.
+      if (error.code === '23505') {
+        const { data: existing } = await supabase
+          .from('tickets')
+          .select('id')
+          .or(`purchase_reference.eq.${reference},purchase_reference.like.${reference}-%`)
+          .order('created_at', { ascending: true });
+
+        if (existing && existing.length > 0) {
+          await logPaymentEvent({
+            source: 'verify-payment', eventType: 'ticket_created_by_webhook_race', status: 'success',
+            reference, eventId, email,
+            message: `Webhook fallback already created ${existing.length} ticket(s) for this reference`,
+          });
+          return NextResponse.json({ ticketIds: existing.map(t => t.id) });
+        }
+      }
+
       // This is the critical failure mode this log exists to catch: Paystack
       // already confirmed the charge succeeded, but we failed to record the
       // ticket(s) — the customer is now charged with nothing to show for it.
