@@ -454,7 +454,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const inputStyle = { backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
 
   return (
-    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: "var(--background)" }}>
+    <div className="min-h-screen py-12 px-2 sm:px-6 lg:px-8" style={{ backgroundColor: "var(--background)" }}>
       <Toast toast={toast} onClose={() => setToast(null)} />
       {showSaved && <SavedModal onClose={() => { setShowSaved(false); router.push("/dashboard"); }} />}
       {showDeleteModal && (
@@ -479,7 +479,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
         <div className="rounded-3xl shadow-xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
           <div className="h-1.5 w-full grad-brand" />
-          <form onSubmit={handleSubmit} className="p-4 sm:p-8 space-y-8">
+          <form onSubmit={handleSubmit} className="p-3 sm:p-8 space-y-8">
 
             {/* Event Details */}
             <div className="space-y-6">
@@ -509,20 +509,20 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                   </div>
                 </div>
                 <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div>
+                  <div className="min-w-0">
                     <label className={labelClass} style={labelStyle}>Date</label>
-                    <div className="relative">
+                    <div className="relative min-w-0">
                       <Calendar className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none" style={{ color: "var(--text-muted)" }} />
                       <input type="date" name="date" value={formData.date} onChange={handleChange}
-                        className={`${inputClass} pl-10`} style={inputStyle} required />
+                        className={`${inputClass} pl-10 min-w-0`} style={inputStyle} required />
                     </div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <label className={labelClass} style={labelStyle}>Start Time</label>
-                    <div className="relative">
+                    <div className="relative min-w-0">
                       <Clock className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none" style={{ color: "var(--text-muted)" }} />
                       <input type="time" name="start_time" value={formData.start_time} onChange={handleChange}
-                        className={`${inputClass} pl-10`} style={inputStyle} required />
+                        className={`${inputClass} pl-10 min-w-0`} style={inputStyle} required />
                     </div>
                   </div>
                 </div>
@@ -591,7 +591,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     </label>
                     <input type="datetime-local" value={tier.ends_at || ""}
                       onChange={e => updateTier(i, "ends_at", e.target.value)}
-                      className="w-full sm:w-1/2 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                      className="w-full sm:w-1/2 min-w-0 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
                       style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
                     <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier auto-closes after this date/time.</p>
                   </div>
@@ -610,10 +610,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
               ))}
               <div className="pt-2">
                 <label className={labelClass} style={labelStyle}>Stop Selling Tickets On</label>
-                <div className="relative w-full sm:w-1/2">
+                <div className="relative w-full sm:w-1/2 min-w-0">
                   <AlertCircle className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none z-10" style={{ color: "var(--text-muted)" }} />
                   <input type="datetime-local" name="sales_end_date" value={formData.sales_end_date} onChange={handleChange}
-                    className={`${inputClass} pl-10`} style={{ ...inputStyle, colorScheme: "dark" }} />
+                    className={`${inputClass} pl-10 min-w-0`} style={{ ...inputStyle, colorScheme: "dark" }} />
                 </div>
                 <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank to keep ticket sales open with no cutoff date.</p>
               </div>
