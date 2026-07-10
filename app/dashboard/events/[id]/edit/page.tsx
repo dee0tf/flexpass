@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
   Image as ImageIcon, Type, Clock, User, Plus, Trash2,
-  CheckCircle2, AlertTriangle, Tag, Mail,
+  CheckCircle2, AlertTriangle, AlertCircle, Tag, Mail,
 } from "lucide-react";
 import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
@@ -316,7 +316,12 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       setFormData({
         title: event.title,
         description: event.description || "",
-        date: event.date,
+        // event.date comes back as a full timestamp ("2026-12-01T00:00:00+00:00")
+        // since the DB column is timestamptz, but <input type="date"> requires
+        // exactly YYYY-MM-DD — anything else and the browser silently renders
+        // the field as empty (state still holds a value, the DOM input doesn't),
+        // which then fails the field's `required` validation on every save.
+        date: event.date ? new Date(event.date).toISOString().slice(0, 10) : "",
         start_time: event.start_time || "",
         price: event.price?.toString() || "",
         total_tickets: event.total_tickets?.toString() || "",
@@ -364,7 +369,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         longitude: locationData.lng,
         location_reveal: locationData.locationReveal,
         price: minPrice,
-        total_tickets: totalTickets, sales_end_date: formData.sales_end_date,
+        total_tickets: totalTickets,
+        // Empty string isn't a valid timestamptz — Postgres rejects it outright.
+        // A blank field means "no cutoff", which must be written as null.
+        sales_end_date: formData.sales_end_date ? new Date(formData.sales_end_date).toISOString() : null,
         organizer_name: formData.organizer_name, image_url: formData.image_url,
         category: finalCategory,
       }).eq("id", id);
@@ -458,20 +466,20 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       )}
 
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-10">
-          <h1 className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>Edit Event</h1>
+        <div className="flex items-center justify-between mb-10 gap-3">
+          <h1 className="text-xl sm:text-3xl font-bold" style={{ color: "var(--text-primary)" }}>Edit Event</h1>
           <Link
             href={`/dashboard/events/${id}/email`}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition hover:opacity-90"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-semibold text-sm transition hover:opacity-90 shrink-0"
             style={{ backgroundColor: "var(--surface-raised)", color: "var(--brand-indigo)", border: "1px solid var(--card-border)" }}
           >
-            <Mail size={15} /> Email Attendees
+            <Mail size={15} /> <span className="hidden sm:inline">Email </span>Attendees
           </Link>
         </div>
 
         <div className="rounded-3xl shadow-xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
           <div className="h-1.5 w-full grad-brand" />
-          <form onSubmit={handleSubmit} className="p-8 space-y-8">
+          <form onSubmit={handleSubmit} className="p-4 sm:p-8 space-y-8">
 
             {/* Event Details */}
             <div className="space-y-6">
@@ -500,17 +508,19 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                       className={`${inputClass} pl-10`} style={inputStyle} required />
                   </div>
                 </div>
-                <div>
-                  <label className={labelClass} style={labelStyle}>Date</label>
-                  <input type="date" name="date" value={formData.date} onChange={handleChange}
-                    className={inputClass} style={inputStyle} required />
-                </div>
-                <div>
-                  <label className={labelClass} style={labelStyle}>Start Time</label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-3.5 h-5 w-5" style={{ color: "var(--text-muted)" }} />
-                    <input type="time" name="start_time" value={formData.start_time} onChange={handleChange}
-                      className={`${inputClass} pl-10`} style={inputStyle} required />
+                <div className="col-span-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass} style={labelStyle}>Date</label>
+                    <input type="date" name="date" value={formData.date} onChange={handleChange}
+                      className={inputClass} style={inputStyle} required />
+                  </div>
+                  <div>
+                    <label className={labelClass} style={labelStyle}>Start Time</label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-3.5 h-5 w-5" style={{ color: "var(--text-muted)" }} />
+                      <input type="time" name="start_time" value={formData.start_time} onChange={handleChange}
+                        className={`${inputClass} pl-10`} style={inputStyle} required />
+                    </div>
                   </div>
                 </div>
                 <div className="col-span-2">
@@ -533,14 +543,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                 </button>
               </div>
               {tiers.map((tier, i) => (
-                <div key={i} className="p-4 rounded-xl relative group" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div key={i} className="p-4 rounded-xl" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {([
-                      { label: "Class Name", field: "name" as const, type: "text", placeholder: "e.g. VIP" },
-                      { label: "Price (₦)", field: "price" as const, type: "number", placeholder: "0" },
-                      { label: "Quantity", field: "quantity" as const, type: "number", placeholder: "100" },
+                      { label: "Class Name", field: "name" as const, type: "text", placeholder: "e.g. VIP", colSpan: "col-span-2 sm:col-span-1" },
+                      { label: "Price (₦)", field: "price" as const, type: "number", placeholder: "0", colSpan: "" },
+                      { label: "Quantity", field: "quantity" as const, type: "number", placeholder: "100", colSpan: "" },
                     ] as const).map(f => (
-                      <div key={f.field}>
+                      <div key={f.field} className={f.colSpan}>
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>{f.label}</label>
                         <input type={f.type} placeholder={f.placeholder} value={tier[f.field]}
                           onChange={e => updateTier(i, f.field, e.target.value)}
@@ -578,7 +588,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     </label>
                     <input type="datetime-local" value={tier.ends_at || ""}
                       onChange={e => updateTier(i, "ends_at", e.target.value)}
-                      className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                      className="w-full sm:w-1/2 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
                       style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
                     <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier auto-closes after this date/time.</p>
                   </div>
@@ -586,17 +596,23 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     <IssueTicketPanel eventId={id} tierId={tier.id} quantityAvailable={Number(tier.quantity) || 0} />
                   )}
                   {tiers.length > 1 && (
-                    <button type="button" onClick={() => removeTier(i)}
-                      className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1.5 rounded-full hover:bg-red-200 transition opacity-0 group-hover:opacity-100">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid var(--card-border)" }}>
+                      <button type="button" onClick={() => removeTier(i)}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 transition px-3 py-1.5 rounded-lg hover:bg-red-50">
+                        <Trash2 className="h-3.5 w-3.5" /> Remove Ticket Class
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
               <div className="pt-2">
                 <label className={labelClass} style={labelStyle}>Stop Selling Tickets On</label>
-                <input type="datetime-local" name="sales_end_date" value={formData.sales_end_date} onChange={handleChange}
-                  className={inputClass} style={{ ...inputStyle, colorScheme: "dark" }} required />
+                <div className="relative w-full sm:w-1/2">
+                  <AlertCircle className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none z-10" style={{ color: "var(--text-muted)" }} />
+                  <input type="datetime-local" name="sales_end_date" value={formData.sales_end_date} onChange={handleChange}
+                    className={`${inputClass} pl-10`} style={{ ...inputStyle, colorScheme: "dark" }} />
+                </div>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank to keep ticket sales open with no cutoff date.</p>
               </div>
             </div>
 
