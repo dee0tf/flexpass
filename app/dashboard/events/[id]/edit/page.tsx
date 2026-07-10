@@ -508,16 +508,19 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                       className={`${inputClass} pl-10`} style={inputStyle} required />
                   </div>
                 </div>
-                <div className="col-span-2 grid grid-cols-2 gap-4">
+                <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label className={labelClass} style={labelStyle}>Date</label>
-                    <input type="date" name="date" value={formData.date} onChange={handleChange}
-                      className={inputClass} style={inputStyle} required />
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none" style={{ color: "var(--text-muted)" }} />
+                      <input type="date" name="date" value={formData.date} onChange={handleChange}
+                        className={`${inputClass} pl-10`} style={inputStyle} required />
+                    </div>
                   </div>
                   <div>
                     <label className={labelClass} style={labelStyle}>Start Time</label>
                     <div className="relative">
-                      <Clock className="absolute left-3 top-3.5 h-5 w-5" style={{ color: "var(--text-muted)" }} />
+                      <Clock className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none" style={{ color: "var(--text-muted)" }} />
                       <input type="time" name="start_time" value={formData.start_time} onChange={handleChange}
                         className={`${inputClass} pl-10`} style={inputStyle} required />
                     </div>
