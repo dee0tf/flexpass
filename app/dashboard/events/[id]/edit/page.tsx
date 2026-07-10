@@ -513,8 +513,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     <label className={labelClass} style={labelStyle}>Date</label>
                     <div className="relative min-w-0">
                       <Calendar className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none" style={{ color: "var(--text-muted)" }} />
+                      {/* appearance-none strips iOS Safari's native chrome for
+                          this input type — without it, a FILLED-IN date value
+                          renders at the OS's own native width and ignores our
+                          CSS width entirely, blowing out past the card (empty
+                          fields don't trigger this, which is why it only
+                          showed up once a real date was set). */}
                       <input type="date" name="date" value={formData.date} onChange={handleChange}
-                        className={`${inputClass} pl-10 min-w-0`} style={inputStyle} required />
+                        className={`${inputClass} pl-10 min-w-0 appearance-none`} style={inputStyle} required />
                     </div>
                   </div>
                   <div className="min-w-0">
@@ -522,7 +528,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     <div className="relative min-w-0">
                       <Clock className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none" style={{ color: "var(--text-muted)" }} />
                       <input type="time" name="start_time" value={formData.start_time} onChange={handleChange}
-                        className={`${inputClass} pl-10 min-w-0`} style={inputStyle} required />
+                        className={`${inputClass} pl-10 min-w-0 appearance-none`} style={inputStyle} required />
                     </div>
                   </div>
                 </div>
@@ -591,7 +597,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     </label>
                     <input type="datetime-local" value={tier.ends_at || ""}
                       onChange={e => updateTier(i, "ends_at", e.target.value)}
-                      className="w-full sm:w-1/2 min-w-0 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                      className="w-full sm:w-1/2 min-w-0 appearance-none p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
                       style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
                     <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier auto-closes after this date/time.</p>
                   </div>
@@ -613,7 +619,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                 <div className="relative w-full sm:w-1/2 min-w-0">
                   <AlertCircle className="absolute left-3 top-3.5 h-5 w-5 pointer-events-none z-10" style={{ color: "var(--text-muted)" }} />
                   <input type="datetime-local" name="sales_end_date" value={formData.sales_end_date} onChange={handleChange}
-                    className={`${inputClass} pl-10 min-w-0`} style={{ ...inputStyle, colorScheme: "dark" }} />
+                    className={`${inputClass} pl-10 min-w-0 appearance-none`} style={{ ...inputStyle, colorScheme: "dark" }} />
                 </div>
                 <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank to keep ticket sales open with no cutoff date.</p>
               </div>

@@ -50,11 +50,14 @@ export default function ThemeToggle() {
       title={`Switch to ${isDark ? "light" : "dark"} mode`}
       className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 group"
     >
-      {/* Outer ring — subtle glow */}
+      {/* Outer ring — subtle glow. The hover-triggered variant is scoped to
+          devices that actually support :hover — on touch devices, iOS Safari
+          can leave :hover "stuck" active after a tap, making this glow ring
+          look like a second button offset behind the real one. */}
       <span className={`absolute inset-0 rounded-2xl transition-opacity duration-300 ${
         isDark
           ? "bg-[#9F67FE]/20 opacity-100 blur-md scale-110"
-          : "bg-[#480082]/10 opacity-0 group-hover:opacity-100 blur-sm"
+          : "bg-[#480082]/10 opacity-0 blur-sm [@media(hover:hover)]:group-hover:opacity-100"
       }`} />
 
       {/* Button body */}
