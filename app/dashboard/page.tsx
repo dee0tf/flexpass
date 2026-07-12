@@ -7,6 +7,7 @@ import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mai
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import SalesChart from "@/components/SalesChart";
 import Link from "next/link";
+import { csvCell, downloadCSV } from "@/lib/exportCsv";
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -68,7 +69,7 @@ export default function DashboardPage() {
         .in("event_id", myEventIds).eq("status", "valid")
         .order("created_at", { ascending: false });
 
-      const revenue = myTickets?.reduce((acc, t) => acc + (t.events?.price || 0), 0) || 0;
+      const revenue = myTickets?.reduce((acc, t) => acc + (t.total_amount_paid ?? t.events?.price ?? 0), 0) || 0;
 
       // Sales velocity: tickets sold per event in last 7 days
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -88,7 +89,7 @@ export default function DashboardPage() {
       const chartDataMap = new Map<string, number>();
       myTickets?.forEach(t => {
         const title = t.events?.title || "Unknown";
-        chartDataMap.set(title, (chartDataMap.get(title) || 0) + (t.events?.price || 0));
+        chartDataMap.set(title, (chartDataMap.get(title) || 0) + (t.total_amount_paid ?? t.events?.price ?? 0));
       });
 
       // Attach velocity + sold count to each event
@@ -116,36 +117,49 @@ export default function DashboardPage() {
     }
   }
 
-  function downloadCSV(rows: string[][], filename: string) {
-    const blob = new Blob([rows.map(r => r.join(",")).join("\n")], { type: "text/csv;charset=utf-8;" });
-    const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(blob), download: filename,
-    });
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  }
-
-  function csvCell(val: string | number) {
-    const s = String(val ?? "").replace(/"/g, '""');
-    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
-  }
-
   const handleExport = () => {
     if (!stats.recentSales.length) { showToast("No data to export yet", "warning"); return; }
-    const sorted = [...stats.recentSales].sort((a, b) =>
-      (a.events?.title || "").localeCompare(b.events?.title || "")
-    );
+
+    // Group tickets by event so the CSV reads as one section per event
+    // (with its own subtotal) instead of one flat alphabetized list.
+    const grouped = new Map<string, typeof stats.recentSales>();
+    for (const t of stats.recentSales) {
+      const title = t.events?.title || "Unknown";
+      if (!grouped.has(title)) grouped.set(title, []);
+      grouped.get(title)!.push(t);
+    }
+    const sortedTitles = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+
     const header = ["Event", "Ticket ID", "Tier", "Customer Name", "Email", "Amount (NGN)", "Status", "Date"];
-    const rows = sorted.map(t => [
-      csvCell(t.events?.title || "Unknown"),
-      csvCell(t.id),
-      csvCell(t.tier_name || "Standard"),
-      csvCell(t.user_name || "N/A"),
-      csvCell(t.user_email),
-      csvCell(t.events?.price ?? 0),
-      csvCell(t.status),
-      csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
-    ]);
-    downloadCSV([header, ...rows], `flexpass_all_events_${new Date().toISOString().split("T")[0]}.csv`);
+    const rows: string[][] = [header];
+    let grandTotal = 0;
+    let grandCount = 0;
+
+    for (const title of sortedTitles) {
+      const eventTickets = [...grouped.get(title)!].sort((a, b) => a.created_at.localeCompare(b.created_at));
+      let subtotal = 0;
+      for (const t of eventTickets) {
+        const amount = t.total_amount_paid ?? t.events?.price ?? 0;
+        subtotal += amount;
+        rows.push([
+          csvCell(title),
+          csvCell(t.id),
+          csvCell(t.tier_name || "Standard"),
+          csvCell(t.user_name || "N/A"),
+          csvCell(t.user_email),
+          csvCell(amount),
+          csvCell(t.status),
+          csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
+        ]);
+      }
+      rows.push(["", "", "", "", `Subtotal (${eventTickets.length} ticket${eventTickets.length === 1 ? "" : "s"})`, csvCell(subtotal), "", ""]);
+      rows.push(["", "", "", "", "", "", "", ""]);
+      grandTotal += subtotal;
+      grandCount += eventTickets.length;
+    }
+    rows.push(["", "", "", "", `GRAND TOTAL (${grandCount} ticket${grandCount === 1 ? "" : "s"})`, csvCell(grandTotal), "", ""]);
+
+    downloadCSV(rows, `flexpass_all_events_${new Date().toISOString().split("T")[0]}.csv`);
   };
 
   const handleExportByEvent = async (eventId: string, eventTitle: string) => {
@@ -166,7 +180,7 @@ export default function DashboardPage() {
       csvCell(t.tier_name || "Standard"),
       csvCell(t.user_name || "N/A"),
       csvCell(t.user_email),
-      csvCell(t.events?.price ?? 0),
+      csvCell(t.total_amount_paid ?? t.events?.price ?? 0),
       csvCell(t.status),
       csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
     ]);
@@ -386,7 +400,7 @@ export default function DashboardPage() {
                     <td className="px-4 sm:px-6 py-3 font-medium text-theme max-w-[120px] sm:max-w-none truncate">{ticket.events?.title || "Unknown"}</td>
                     <td className="hidden sm:table-cell px-6 py-3 max-w-[160px] truncate">{ticket.user_email}</td>
                     <td className="hidden md:table-cell px-6 py-3">{new Date(ticket.created_at).toLocaleDateString()}</td>
-                    <td className="px-4 sm:px-6 py-3 font-bold whitespace-nowrap">₦{(ticket.events?.price ?? 0).toLocaleString()}</td>
+                    <td className="px-4 sm:px-6 py-3 font-bold whitespace-nowrap">₦{(ticket.total_amount_paid ?? ticket.events?.price ?? 0).toLocaleString()}</td>
                     <td className="px-4 sm:px-6 py-3"><span className="px-2 sm:px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">Paid</span></td>
                   </tr>
                 ))}

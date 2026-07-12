@@ -5,13 +5,14 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
-  Image as ImageIcon, Type, Clock, User, Plus, Trash2,
+  Image as ImageIcon, Type, Clock, User, Plus, Trash2, Download,
   CheckCircle2, AlertTriangle, AlertCircle, Tag, Mail,
 } from "lucide-react";
 import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
 import LocationPicker, { LocationData } from "@/components/LocationPicker";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
+import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { use } from "react";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -351,6 +352,32 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     const u = [...tiers]; u[i] = { ...u[i], is_hidden: !u[i].is_hidden }; setTiers(u);
   };
 
+  const handleExportTierCsv = async (tierId: string, tierName: string) => {
+    const { data: tickets, error } = await supabase
+      .from("tickets")
+      .select("id, user_name, user_email, total_amount_paid, status, created_at")
+      .eq("event_id", id)
+      .eq("tier_id", tierId)
+      .order("created_at", { ascending: false });
+
+    if (error || !tickets?.length) {
+      showToast(`No ticket data for "${tierName}" yet`, "warning");
+      return;
+    }
+
+    const header = ["Ticket ID", "Customer Name", "Email", "Amount (NGN)", "Status", "Date"];
+    const rows = tickets.map(t => [
+      csvCell(t.id),
+      csvCell(t.user_name || "N/A"),
+      csvCell(t.user_email),
+      csvCell(t.total_amount_paid ?? 0),
+      csvCell(t.status),
+      csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
+    ]);
+    const safeTier = tierName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    downloadCSV([header, ...rows], `flexpass_${safeTier}_${new Date().toISOString().split("T")[0]}.csv`);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (tiers.some(t => !t.name || !t.price || !t.quantity)) return;
@@ -604,12 +631,22 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                   {tier.id && tier.is_hidden && (
                     <IssueTicketPanel eventId={id} tierId={tier.id} quantityAvailable={Number(tier.quantity) || 0} />
                   )}
-                  {tiers.length > 1 && (
-                    <div className="mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid var(--card-border)" }}>
-                      <button type="button" onClick={() => removeTier(i)}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 transition px-3 py-1.5 rounded-lg hover:bg-red-50">
-                        <Trash2 className="h-3.5 w-3.5" /> Remove Ticket Class
-                      </button>
+                  {(tier.id || tiers.length > 1) && (
+                    <div className="mt-3 pt-3 flex items-center justify-between gap-2" style={{ borderTop: "1px solid var(--card-border)" }}>
+                      {tier.id ? (
+                        <button type="button" onClick={() => handleExportTierCsv(tier.id!, tier.name || "tier")}
+                          className="flex items-center gap-1.5 text-xs font-semibold transition px-3 py-1.5 rounded-lg hover:bg-[var(--surface-raised)]"
+                          style={{ color: "var(--text-secondary)" }}
+                          title="Download this ticket class's sales as CSV">
+                          <Download className="h-3.5 w-3.5" /> Download CSV
+                        </button>
+                      ) : <span />}
+                      {tiers.length > 1 && (
+                        <button type="button" onClick={() => removeTier(i)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 transition px-3 py-1.5 rounded-lg hover:bg-red-50">
+                          <Trash2 className="h-3.5 w-3.5" /> Remove Ticket Class
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

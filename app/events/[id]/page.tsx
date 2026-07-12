@@ -39,16 +39,31 @@ async function getEvent(id: string) {
   // 'scanned' as well as 'valid' — a checked-in ticket still occupies a
   // slot and must keep counting, or remaining capacity appears to free up
   // as attendees check in mid-event.
-  const { data: soldRows } = await supabase
-    .from("tickets")
-    .select("tier_id")
-    .eq("event_id", id)
-    .in("status", ["valid", "scanned"]);
-
+  //
+  // Uses a head-count query per tier (not a row fetch) because Supabase/
+  // PostgREST caps a plain select's rows at 1000 by default — a row fetch
+  // would silently truncate the sold count on any tier that's sold past
+  // that, understating how many are sold and overstating "remaining".
   const soldByTier: Record<string, number> = {};
-  for (const row of soldRows || []) {
-    const key = row.tier_id ?? "__legacy__";
-    soldByTier[key] = (soldByTier[key] || 0) + 1;
+  await Promise.all(
+    (tiers || []).map(async (t: any) => {
+      const { count } = await supabase
+        .from("tickets")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", id)
+        .eq("tier_id", t.id)
+        .in("status", ["valid", "scanned"]);
+      soldByTier[t.id] = count || 0;
+    })
+  );
+  {
+    const { count: legacyCount } = await supabase
+      .from("tickets")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", id)
+      .is("tier_id", null)
+      .in("status", ["valid", "scanned"]);
+    soldByTier["__legacy__"] = legacyCount || 0;
   }
 
   const tiersWithRemaining = (tiers || [])

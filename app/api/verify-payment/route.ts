@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendTicketEmail } from '@/lib/sendTicketEmail';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
+import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -108,16 +109,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Paid amount does not match order total' }, { status: 400 });
     }
 
-    // --- 5. Look up the tier (if any) to get quantity_available AND
-    // group_size — never trust the client for either. group_size is how
-    // many individual attendee tickets one purchased "unit" issues (1 for a
-    // normal tier, e.g. 5 for a "Table of 5" bundle).
-    let tierQuantityAvailable = 0;
+    // --- 5. Look up the tier (if any) to get group_size — never trust the
+    // client for it. group_size is how many individual attendee tickets one
+    // purchased "unit" issues (1 for a normal tier, e.g. 5 for a "Table of 5"
+    // bundle). Capacity itself is checked atomically inside
+    // create_tickets_atomic below, under a row lock, so it can't race with a
+    // concurrent purchase of the same tier.
     let groupSize = 1;
     if (tierId) {
       const { data: tier } = await supabase
         .from('ticket_tiers')
-        .select('quantity_available, group_size, event_id')
+        .select('group_size, event_id')
         .eq('id', tierId)
         .single();
 
@@ -130,7 +132,6 @@ export async function POST(request: Request) {
         });
         return NextResponse.json({ error: 'Invalid ticket tier for this event' }, { status: 400 });
       }
-      tierQuantityAvailable = tier.quantity_available || 0;
       groupSize = tier.group_size || 1;
     }
 
@@ -159,65 +160,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // --- 6. Check availability to prevent overselling ---
-    if (tierId) {
-      const { count: soldCount } = await supabase
-        .from('tickets')
-        .select('id', { count: 'exact', head: true })
-        .eq('tier_id', tierId)
-        // Include 'scanned' as well as 'valid' — a checked-in ticket still
-        // occupies a slot and must keep counting against capacity, or
-        // capacity appears to free up as attendees check in mid-event.
-        .in('status', ['valid', 'scanned']);
-
-      // soldCount counts individual ticket rows; quantity_available counts
-      // groups/units, so convert back to the same unit before comparing.
-      const groupsSold = (soldCount || 0) / groupSize;
-      const remaining = tierQuantityAvailable - groupsSold;
-      if (remaining < quantity) {
-        await logPaymentEvent({
-          source: 'verify-payment', eventType: 'oversold', status: 'error',
-          reference, eventId, email, message: `tierId=${tierId} remaining=${remaining} requested=${quantity}`,
-        });
-        return NextResponse.json(
-          { error: remaining <= 0 ? 'This ticket tier is sold out' : `Only ${remaining} left` },
-          { status: 409 }
-        );
-      }
-    } else {
-      // Legacy event — check total_tickets (no tiers, so no group concept)
-      const { count: soldCount } = await supabase
-        .from('tickets')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', eventId)
-        .in('status', ['valid', 'scanned']);
-
-      const remaining = (eventRow?.total_tickets || 0) - (soldCount || 0);
-      if (remaining < quantity) {
-        await logPaymentEvent({
-          source: 'verify-payment', eventType: 'oversold', status: 'error',
-          reference, eventId, email, message: `legacy event remaining=${remaining} requested=${quantity}`,
-        });
-        return NextResponse.json(
-          { error: remaining <= 0 ? 'This event is sold out' : `Only ${remaining} ticket(s) left` },
-          { status: 409 }
-        );
-      }
-    }
-
-    // --- 7. Insert verified ticket(s) — one row per individual attendee ---
+    // --- 6. Insert verified ticket(s) atomically — one row per individual
+    // attendee. Capacity is checked and enforced inside create_tickets_atomic
+    // under a row lock on the tier (or event, for legacy events), so two
+    // simultaneous purchases for the last slot can't both succeed.
     const perTicketFee = fee / attendeeCount;
     const perTicketPrice = price / groupSize;
     // Each row gets a unique purchase_reference so the UNIQUE constraint holds.
     // For a single ticket: use the reference as-is.
     // For multi-ticket/group purchases: suffix with position (e.g. ref-1, ref-2).
     const ticketsToCreate = Array.from({ length: attendeeCount }, (_, i) => ({
-      event_id: eventId,
-      user_email: email,
+      event_id: eventId!,
+      user_email: email!,
       user_name: fullName,
       user_gender: gender || null,
       status: 'valid',
-      purchase_reference: attendeeCount > 1 ? `${reference}-${i + 1}` : reference,
+      purchase_reference: attendeeCount > 1 ? `${reference}-${i + 1}` : reference!,
       fee_amount: perTicketFee,
       total_amount_paid: perTicketPrice + perTicketFee,
       tier_id: tierId || null,
@@ -225,43 +183,68 @@ export async function POST(request: Request) {
       referral_code: referralCode || null,
     }));
 
-    const { data, error } = await supabase
-      .from('tickets')
-      .insert(ticketsToCreate)
-      .select();
+    const result = await createTicketsAtomic(supabase, {
+      tierId: tierId || null,
+      eventId,
+      quantity,
+      tickets: ticketsToCreate,
+    });
 
-    if (error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data: any[];
+
+    if (result.outcome === 'duplicate_reference') {
       // A duplicate purchase_reference means the webhook's fallback path won
       // the race and already created the ticket(s) a moment before we tried
       // to insert our own — not a failure, just two safety nets firing for
       // the same purchase. Return what's already there instead of erroring
       // out to a customer who actually does have a valid ticket.
-      if (error.code === '23505') {
-        const { data: existing } = await supabase
-          .from('tickets')
-          .select('id')
-          .or(`purchase_reference.eq.${reference},purchase_reference.like.${reference}-%`)
-          .order('created_at', { ascending: true });
+      const { data: existing } = await supabase
+        .from('tickets')
+        .select('id')
+        .or(`purchase_reference.eq.${reference},purchase_reference.like.${reference}-%`)
+        .order('created_at', { ascending: true });
 
-        if (existing && existing.length > 0) {
-          await logPaymentEvent({
-            source: 'verify-payment', eventType: 'ticket_created_by_webhook_race', status: 'success',
-            reference, eventId, email,
-            message: `Webhook fallback already created ${existing.length} ticket(s) for this reference`,
-          });
-          return NextResponse.json({ ticketIds: existing.map(t => t.id) });
-        }
+      if (existing && existing.length > 0) {
+        await logPaymentEvent({
+          source: 'verify-payment', eventType: 'ticket_created_by_webhook_race', status: 'success',
+          reference, eventId, email,
+          message: `Webhook fallback already created ${existing.length} ticket(s) for this reference`,
+        });
+        return NextResponse.json({ ticketIds: existing.map(t => t.id) });
       }
 
+      await logPaymentEvent({
+        source: 'verify-payment', eventType: 'ticket_insert_failed', status: 'error',
+        reference, eventId, email, message: 'Duplicate purchase reference with no matching ticket found',
+        metadata: { attendeeCount, tierId: tierId || null },
+      });
+      throw new Error('Duplicate purchase reference with no matching ticket found');
+    } else if (result.outcome === 'sold_out' || result.outcome === 'tier_not_found') {
+      const remaining = result.outcome === 'sold_out' ? result.remaining : 0;
+      await logPaymentEvent({
+        source: 'verify-payment', eventType: 'oversold', status: 'error',
+        reference, eventId, email,
+        message: result.outcome === 'sold_out'
+          ? `tierId=${tierId || 'legacy'} remaining=${remaining} requested=${quantity}`
+          : `tierId=${tierId} not found`,
+      });
+      return NextResponse.json(
+        { error: remaining <= 0 ? 'This ticket tier is sold out' : `Only ${remaining} left` },
+        { status: 409 }
+      );
+    } else if (result.outcome === 'error') {
       // This is the critical failure mode this log exists to catch: Paystack
       // already confirmed the charge succeeded, but we failed to record the
       // ticket(s) — the customer is now charged with nothing to show for it.
       await logPaymentEvent({
         source: 'verify-payment', eventType: 'ticket_insert_failed', status: 'error',
-        reference, eventId, email, message: error.message,
+        reference, eventId, email, message: result.message,
         metadata: { attendeeCount, tierId: tierId || null },
       });
-      throw error;
+      throw new Error(result.message);
+    } else {
+      data = result.tickets;
     }
 
     await logPaymentEvent({

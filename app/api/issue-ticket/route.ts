@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendTicketEmail } from '@/lib/sendTicketEmail';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
+import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -72,31 +73,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This action is only available for hidden/giveaway tiers' }, { status: 400 });
     }
 
-    // --- 4. Capacity check — mirrors claim-free-ticket's group_size-aware math ---
+    // --- 4. Create the giveaway ticket(s) atomically — one row per
+    // individual attendee. Capacity is checked and enforced inside
+    // create_tickets_atomic under a row lock on the tier, so two
+    // simultaneous issues for the last slot can't both succeed.
     const groupSize = tier.group_size || 1;
-    const { count: soldCount } = await supabase
-      .from('tickets')
-      .select('id', { count: 'exact', head: true })
-      .eq('tier_id', tierId)
-      // Include 'scanned' as well as 'valid' — a checked-in ticket still
-      // occupies a slot in this tier and must keep counting against
-      // capacity, or capacity appears to free up as attendees check in.
-      .in('status', ['valid', 'scanned']);
-
-    const groupsSold = (soldCount || 0) / groupSize;
-    const remaining = tier.quantity_available - groupsSold;
-    if (remaining < quantity) {
-      await logPaymentEvent({
-        source: 'issue-ticket', eventType: 'oversold', status: 'error',
-        eventId, email, message: `tierId=${tierId} remaining=${remaining} requested=${quantity}`,
-      });
-      return NextResponse.json(
-        { error: remaining <= 0 ? 'This giveaway tier is exhausted' : `Only ${remaining} left in this tier` },
-        { status: 409 }
-      );
-    }
-
-    // --- 5. Create the giveaway ticket(s) — one row per individual attendee ---
     const attendeeCount = quantity * groupSize;
     const baseRef = `GIVEAWAY-${crypto.randomUUID()}`;
     const ticketsToCreate = Array.from({ length: attendeeCount }, (_, i) => ({
@@ -114,18 +95,45 @@ export async function POST(request: Request) {
       referral_code: null,
     }));
 
-    const { data, error } = await supabase
-      .from('tickets')
-      .insert(ticketsToCreate)
-      .select();
+    const result = await createTicketsAtomic(supabase, {
+      tierId,
+      eventId,
+      quantity,
+      tickets: ticketsToCreate,
+    });
 
-    if (error) {
-      console.error('[issue-ticket] Insert error:', error);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data: any[];
+
+    if (result.outcome === 'duplicate_reference') {
       await logPaymentEvent({
         source: 'issue-ticket', eventType: 'ticket_insert_failed', status: 'error',
-        eventId, email, message: error.message, metadata: { attendeeCount, tierId },
+        eventId, email, message: 'Duplicate purchase reference generated for giveaway issue',
+        metadata: { attendeeCount, tierId },
       });
-      throw error;
+      return NextResponse.json({ error: 'Something went wrong, please try again' }, { status: 409 });
+    } else if (result.outcome === 'sold_out' || result.outcome === 'tier_not_found') {
+      const remaining = result.outcome === 'sold_out' ? result.remaining : 0;
+      await logPaymentEvent({
+        source: 'issue-ticket', eventType: 'oversold', status: 'error',
+        eventId, email,
+        message: result.outcome === 'sold_out'
+          ? `tierId=${tierId} remaining=${remaining} requested=${quantity}`
+          : `tierId=${tierId} not found`,
+      });
+      return NextResponse.json(
+        { error: remaining <= 0 ? 'This giveaway tier is exhausted' : `Only ${remaining} left in this tier` },
+        { status: 409 }
+      );
+    } else if (result.outcome === 'error') {
+      console.error('[issue-ticket] Insert error:', result.message);
+      await logPaymentEvent({
+        source: 'issue-ticket', eventType: 'ticket_insert_failed', status: 'error',
+        eventId, email, message: result.message, metadata: { attendeeCount, tierId },
+      });
+      throw new Error(result.message);
+    } else {
+      data = result.tickets;
     }
 
     await logPaymentEvent({

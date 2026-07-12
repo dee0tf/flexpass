@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendTicketEmail } from '@/lib/sendTicketEmail';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
+import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -54,13 +55,12 @@ export async function POST(request: Request) {
     // free, and group_size (individual tickets per unit) must come from the
     // DB too, never the client. ---
     let verifiedPrice: number;
-    let tierQuantityAvailable = 0;
     let groupSize = 1;
 
     if (tierId) {
       const { data: tier, error: tierErr } = await supabase
         .from('ticket_tiers')
-        .select('price, event_id, quantity_available, group_size')
+        .select('price, event_id, group_size')
         .eq('id', tierId)
         .single();
 
@@ -79,7 +79,6 @@ export async function POST(request: Request) {
       }
 
       verifiedPrice = tier.price;
-      tierQuantityAvailable = tier.quantity_available || 0;
       groupSize = tier.group_size || 1;
     } else {
       verifiedPrice = eventRow.price;
@@ -123,58 +122,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // --- 4. Check inventory to prevent overselling ---
-    if (tierId) {
-      const { count: soldCount } = await supabase
-        .from('tickets')
-        .select('id', { count: 'exact', head: true })
-        .eq('tier_id', tierId)
-        // Include 'scanned' as well as 'valid' — a checked-in ticket still
-        // occupies a slot and must keep counting against capacity, or
-        // capacity appears to free up as attendees check in mid-event.
-        .in('status', ['valid', 'scanned']);
-
-      // soldCount counts individual ticket rows; quantity_available counts
-      // groups/units, so convert back to the same unit before comparing.
-      const groupsSold = (soldCount || 0) / groupSize;
-      const remaining = tierQuantityAvailable - groupsSold;
-      if (remaining < quantity) {
-        await logPaymentEvent({
-          source: 'claim-free-ticket', eventType: 'oversold', status: 'error',
-          eventId, email, message: `tierId=${tierId} remaining=${remaining} requested=${quantity}`,
-        });
-        return NextResponse.json(
-          { error: remaining <= 0 ? 'This ticket tier is sold out' : `Only ${remaining} left` },
-          { status: 409 }
-        );
-      }
-    } else {
-      const { count: soldCount } = await supabase
-        .from('tickets')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', eventId)
-        .in('status', ['valid', 'scanned']);
-
-      const remaining = (eventRow.total_tickets || 0) - (soldCount || 0);
-      if (remaining < quantity) {
-        await logPaymentEvent({
-          source: 'claim-free-ticket', eventType: 'oversold', status: 'error',
-          eventId, email, message: `legacy event remaining=${remaining} requested=${quantity}`,
-        });
-        return NextResponse.json(
-          { error: remaining <= 0 ? 'This event is sold out' : `Only ${remaining} ticket(s) left` },
-          { status: 409 }
-        );
-      }
-    }
-
-    // --- 5. Create unique base reference for this free claim ---
+    // --- 4. Create unique base reference for this free claim ---
     const baseRef = `FREE-${crypto.randomUUID()}`;
 
-    // --- 6. Insert verified free tickets — one row per individual attendee ---
+    // --- 5. Insert verified free tickets atomically — one row per
+    // individual attendee. Capacity is checked and enforced inside
+    // create_tickets_atomic under a row lock on the tier (or event, for
+    // legacy events), so two simultaneous claims for the last slot can't
+    // both succeed.
     const ticketsToCreate = Array.from({ length: attendeeCount }, (_, i) => ({
-      event_id: eventId,
-      user_email: email,
+      event_id: eventId!,
+      user_email: email!,
       user_name: fullName,
       user_gender: gender || null,
       status: 'valid',
@@ -186,19 +144,46 @@ export async function POST(request: Request) {
       referral_code: referralCode || null,
     }));
 
-    const { data, error } = await supabase
-      .from('tickets')
-      .insert(ticketsToCreate)
-      .select();
+    const result = await createTicketsAtomic(supabase, {
+      tierId: tierId || null,
+      eventId,
+      quantity,
+      tickets: ticketsToCreate,
+    });
 
-    if (error) {
-      console.error('[claim-free-ticket] Insert error:', error);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data: any[];
+
+    if (result.outcome === 'duplicate_reference') {
       await logPaymentEvent({
         source: 'claim-free-ticket', eventType: 'ticket_insert_failed', status: 'error',
-        eventId, email, message: error.message,
+        eventId, email, message: 'Duplicate purchase reference generated for free claim',
         metadata: { attendeeCount, tierId: tierId || null },
       });
-      throw error;
+      return NextResponse.json({ error: 'Something went wrong, please try again' }, { status: 409 });
+    } else if (result.outcome === 'sold_out' || result.outcome === 'tier_not_found') {
+      const remaining = result.outcome === 'sold_out' ? result.remaining : 0;
+      await logPaymentEvent({
+        source: 'claim-free-ticket', eventType: 'oversold', status: 'error',
+        eventId, email,
+        message: result.outcome === 'sold_out'
+          ? `tierId=${tierId || 'legacy'} remaining=${remaining} requested=${quantity}`
+          : `tierId=${tierId} not found`,
+      });
+      return NextResponse.json(
+        { error: remaining <= 0 ? 'This ticket tier is sold out' : `Only ${remaining} left` },
+        { status: 409 }
+      );
+    } else if (result.outcome === 'error') {
+      console.error('[claim-free-ticket] Insert error:', result.message);
+      await logPaymentEvent({
+        source: 'claim-free-ticket', eventType: 'ticket_insert_failed', status: 'error',
+        eventId, email, message: result.message,
+        metadata: { attendeeCount, tierId: tierId || null },
+      });
+      throw new Error(result.message);
+    } else {
+      data = result.tickets;
     }
 
     await logPaymentEvent({

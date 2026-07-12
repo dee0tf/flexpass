@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendTicketEmail } from './sendTicketEmail';
 import { logPaymentEvent } from './logPaymentEvent';
+import { createTicketsAtomic } from './createTicketsAtomic';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,6 +70,7 @@ export async function createFallbackTicket({
     groupSize = tier?.group_size || 1;
   }
   const attendeeCount = quantity * groupSize;
+
   const perTicketAmount = (amountKobo / 100) / attendeeCount;
   const ticketsToCreate = Array.from({ length: attendeeCount }, (_, i) => ({
     event_id: metadata.event_id,
@@ -77,39 +79,60 @@ export async function createFallbackTicket({
     user_gender: metadata.gender || null,
     status: 'valid',
     purchase_reference: attendeeCount > 1 ? `${reference}-${i + 1}` : reference,
+    fee_amount: 0,
     total_amount_paid: perTicketAmount,
     tier_id: metadata.tier_id || null,
     tier_name: metadata.tier_name || 'Standard',
     referral_code: metadata.referral_code || null,
   }));
 
-  const { data: inserted, error: insertError } = await supabase
-    .from('tickets')
-    .insert(ticketsToCreate)
-    .select();
+  // Capacity check and insert happen atomically under a row lock (see
+  // create_tickets_atomic). The fallback path only runs when verify-payment
+  // never completed (e.g. buyer's connection dropped right after paying), so
+  // it must not skip this and oversell a tier that's already sold out just
+  // because the money already moved.
+  const result = await createTicketsAtomic(supabase, {
+    tierId: metadata.tier_id || null,
+    eventId: metadata.event_id,
+    quantity,
+    tickets: ticketsToCreate,
+  });
 
-  if (insertError) {
+  if (result.outcome === 'duplicate_reference') {
     // A duplicate purchase_reference here means verify-payment (or the other
-    // fallback path) won the race and created the ticket(s) in the split
-    // second after our pre-check above — not a real failure, just two safety
-    // nets firing for the same purchase.
-    if (insertError.code === '23505') {
-      await logPaymentEvent({
-        source, eventType: 'ticket_already_exists', status: 'skipped',
-        reference, eventId: metadata.event_id, email: customerEmail || null,
-        message: 'Ticket(s) already created by a concurrent path for this reference',
-      });
-      return { outcome: 'already_exists' };
-    }
-
-    console.error(`[${source}] Fallback ticket insert failed:`, insertError);
+    // fallback path) won the race and already created the ticket(s) in the
+    // split second after our pre-check above — not a real failure, just two
+    // safety nets firing for the same purchase.
     await logPaymentEvent({
-      source, eventType: 'fallback_insert_failed', status: 'error',
-      reference, eventId: metadata.event_id, email: customerEmail,
-      message: insertError.message, metadata: { attendeeCount, tierId: metadata.tier_id || null },
+      source, eventType: 'ticket_already_exists', status: 'skipped',
+      reference, eventId: metadata.event_id, email: customerEmail || null,
+      message: 'Ticket(s) already created by a concurrent path for this reference',
+    });
+    return { outcome: 'already_exists' };
+  }
+
+  if (result.outcome === 'sold_out' || result.outcome === 'tier_not_found') {
+    await logPaymentEvent({
+      source, eventType: 'oversold', status: 'error',
+      reference, eventId: metadata.event_id, email: customerEmail || null,
+      message: result.outcome === 'sold_out'
+        ? `Fallback ticket blocked: tierId=${metadata.tier_id || 'legacy'} remaining=${result.remaining} requested=${quantity}. Charge succeeded but tier is sold out - needs manual refund/resolution.`
+        : `Fallback ticket blocked: tierId=${metadata.tier_id} not found. Charge succeeded but tier is missing - needs manual refund/resolution.`,
     });
     return { outcome: 'insert_failed' };
   }
+
+  if (result.outcome === 'error') {
+    console.error(`[${source}] Fallback ticket insert failed:`, result.message);
+    await logPaymentEvent({
+      source, eventType: 'fallback_insert_failed', status: 'error',
+      reference, eventId: metadata.event_id, email: customerEmail,
+      message: result.message, metadata: { attendeeCount, tierId: metadata.tier_id || null },
+    });
+    return { outcome: 'insert_failed' };
+  }
+
+  const inserted = result.tickets;
 
   console.warn(`[${source}] Created ${inserted.length} ticket(s) via fallback for reference=${reference}.`);
   await logPaymentEvent({
