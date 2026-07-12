@@ -13,6 +13,7 @@ import ImageUpload from "@/components/ImageUpload";
 import LocationPicker, { LocationData } from "@/components/LocationPicker";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
+import { hostAmount } from "@/lib/hostAmount";
 import { use } from "react";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -374,7 +375,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const handleExportTierCsv = async (tierId: string, tierName: string) => {
     const { data: tickets, error } = await supabase
       .from("tickets")
-      .select("id, user_name, user_email, total_amount_paid, status, created_at")
+      .select("id, user_name, user_email, total_amount_paid, fee_amount, status, created_at")
       .eq("event_id", id)
       .eq("tier_id", tierId)
       .order("created_at", { ascending: false });
@@ -389,7 +390,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       csvCell(t.id),
       csvCell(t.user_name || "N/A"),
       csvCell(t.user_email),
-      csvCell(t.total_amount_paid ?? 0),
+      csvCell(hostAmount(t)),
       csvCell(t.status),
       csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
     ]);

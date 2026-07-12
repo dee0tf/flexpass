@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import BankSettings from "@/components/BankSettings";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
+import { hostAmount } from "@/lib/hostAmount";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:    { label: "Pending Review", color: "bg-yellow-100 text-yellow-700" },
@@ -50,7 +51,10 @@ export default function WalletPage() {
       .in("event_id", myEventIds.length > 0 ? myEventIds : ["__none__"])
       .in("status", ["valid", "scanned"]);
 
-    const totalRevenue = tickets?.reduce((acc, ticket: any) => acc + (ticket.events?.price || 0), 0) || 0;
+    // Each ticket's total_amount_paid includes FlexPass's service fee on top
+    // of the ticket price — hostAmount strips that out so the withdrawable
+    // balance only ever reflects the host's own share, never the fee.
+    const totalRevenue = tickets?.reduce((acc, ticket: any) => acc + hostAmount(ticket), 0) || 0;
 
     const { data: myPayouts } = await supabase
       .from("payouts")

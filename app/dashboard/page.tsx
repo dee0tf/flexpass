@@ -8,6 +8,7 @@ import { Toast, ToastState, ToastType } from "@/components/Toast";
 import SalesChart from "@/components/SalesChart";
 import Link from "next/link";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
+import { hostAmount } from "@/lib/hostAmount";
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -69,7 +70,7 @@ export default function DashboardPage() {
         .in("event_id", myEventIds).eq("status", "valid")
         .order("created_at", { ascending: false });
 
-      const revenue = myTickets?.reduce((acc, t) => acc + (t.total_amount_paid ?? t.events?.price ?? 0), 0) || 0;
+      const revenue = myTickets?.reduce((acc, t) => acc + hostAmount(t), 0) || 0;
 
       // Sales velocity: tickets sold per event in last 7 days
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -89,7 +90,7 @@ export default function DashboardPage() {
       const chartDataMap = new Map<string, number>();
       myTickets?.forEach(t => {
         const title = t.events?.title || "Unknown";
-        chartDataMap.set(title, (chartDataMap.get(title) || 0) + (t.total_amount_paid ?? t.events?.price ?? 0));
+        chartDataMap.set(title, (chartDataMap.get(title) || 0) + hostAmount(t));
       });
 
       // Attach velocity + sold count to each event
@@ -139,7 +140,7 @@ export default function DashboardPage() {
       const eventTickets = [...grouped.get(title)!].sort((a, b) => a.created_at.localeCompare(b.created_at));
       let subtotal = 0;
       for (const t of eventTickets) {
-        const amount = t.total_amount_paid ?? t.events?.price ?? 0;
+        const amount = hostAmount(t);
         subtotal += amount;
         rows.push([
           csvCell(title),
@@ -180,7 +181,7 @@ export default function DashboardPage() {
       csvCell(t.tier_name || "Standard"),
       csvCell(t.user_name || "N/A"),
       csvCell(t.user_email),
-      csvCell(t.total_amount_paid ?? t.events?.price ?? 0),
+      csvCell(hostAmount(t)),
       csvCell(t.status),
       csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
     ]);
@@ -400,7 +401,7 @@ export default function DashboardPage() {
                     <td className="px-4 sm:px-6 py-3 font-medium text-theme max-w-[120px] sm:max-w-none truncate">{ticket.events?.title || "Unknown"}</td>
                     <td className="hidden sm:table-cell px-6 py-3 max-w-[160px] truncate">{ticket.user_email}</td>
                     <td className="hidden md:table-cell px-6 py-3">{new Date(ticket.created_at).toLocaleDateString()}</td>
-                    <td className="px-4 sm:px-6 py-3 font-bold whitespace-nowrap">₦{(ticket.total_amount_paid ?? ticket.events?.price ?? 0).toLocaleString()}</td>
+                    <td className="px-4 sm:px-6 py-3 font-bold whitespace-nowrap">₦{hostAmount(ticket).toLocaleString()}</td>
                     <td className="px-4 sm:px-6 py-3"><span className="px-2 sm:px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">Paid</span></td>
                   </tr>
                 ))}

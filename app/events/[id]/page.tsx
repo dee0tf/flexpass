@@ -138,8 +138,14 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     notFound();
   }
 
-  // Format Date
-  const dateObj = new Date(event.date);
+  // event.date is stored as a date-only timestamp (midnight) — the actual
+  // clock time picked at event creation lives separately in event.start_time
+  // ("HH:MM"), so it has to be combined in here or every display (and the
+  // countdown timer below) reads as 00:00 regardless of what was selected.
+  const eventDateTimeStr = event.start_time
+    ? `${event.date.slice(0, 10)}T${event.start_time}`
+    : event.date;
+  const dateObj = new Date(eventDateTimeStr);
   const dateString = dateObj.toLocaleDateString("en-NG", {
     month: "short",
     day: "numeric",
@@ -276,7 +282,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           )}
 
           {/* Countdown timer — visible within 7 days of the event */}
-          <CountdownTimer eventDate={event.date} />
+          <CountdownTimer eventDate={eventDateTimeStr} />
         </div>
 
         {/* Description */}
