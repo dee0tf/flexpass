@@ -56,7 +56,9 @@ export default function CheckoutModal({
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
   const [gender, setGender] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [paystackActive, setPaystackActive] = useState(false);
@@ -107,7 +109,7 @@ export default function CheckoutModal({
   const isFree = totalAmount === 0 && (isLegacyEvent || !!selectedTier);
 
   const resetForm = () => {
-    setQuantity(1); setEmail(""); setFullName(""); setGender(""); setSelectedTier(null);
+    setQuantity(1); setEmail(""); setFirstName(""); setLastName(""); setGender(""); setSelectedTier(null);
   };
 
   const handleClaimFree = async () => {
@@ -194,7 +196,7 @@ export default function CheckoutModal({
     ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
   };
 
-  const canProceed = !!email && validateEmail(email) && !!fullName && !emailError;
+  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !emailError;
 
   if (!open) return null;
 
@@ -361,13 +363,22 @@ export default function CheckoutModal({
                       )}
                     </div>
 
-                    {/* Full Name */}
-                    <div>
-                      <label className="text-sm font-medium block mb-1.5" style={labelStyle}>Full Name</label>
-                      <input type="text" placeholder="Enter your full name" value={fullName}
-                        onChange={e => setFullName(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
-                        style={inputStyle} />
+                    {/* First / Last Name */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-sm font-medium block mb-1.5" style={labelStyle}>First Name</label>
+                        <input type="text" placeholder="First name" value={firstName}
+                          onChange={e => setFirstName(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
+                          style={inputStyle} required />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium block mb-1.5" style={labelStyle}>Last Name</label>
+                        <input type="text" placeholder="Last name" value={lastName}
+                          onChange={e => setLastName(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
+                          style={inputStyle} required />
+                      </div>
                     </div>
 
                     {/* Gender */}

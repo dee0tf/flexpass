@@ -9,6 +9,7 @@ import SalesChart from "@/components/SalesChart";
 import Link from "next/link";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { hostAmount } from "@/lib/hostAmount";
+import { splitName } from "@/lib/splitName";
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -131,7 +132,7 @@ export default function DashboardPage() {
     }
     const sortedTitles = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
 
-    const header = ["Event", "Ticket ID", "Tier", "Customer Name", "Email", "Amount (NGN)", "Status", "Date"];
+    const header = ["Event", "Ticket ID", "Tier", "First Name", "Last Name", "Email", "Amount (NGN)", "Status", "Date"];
     const rows: string[][] = [header];
     let grandTotal = 0;
     let grandCount = 0;
@@ -142,23 +143,25 @@ export default function DashboardPage() {
       for (const t of eventTickets) {
         const amount = hostAmount(t);
         subtotal += amount;
+        const { firstName, lastName } = splitName(t.user_name);
         rows.push([
           csvCell(title),
           csvCell(t.id),
           csvCell(t.tier_name || "Standard"),
-          csvCell(t.user_name || "N/A"),
+          csvCell(firstName || "N/A"),
+          csvCell(lastName),
           csvCell(t.user_email),
           csvCell(amount),
           csvCell(t.status),
           csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
         ]);
       }
-      rows.push(["", "", "", "", `Subtotal (${eventTickets.length} ticket${eventTickets.length === 1 ? "" : "s"})`, csvCell(subtotal), "", ""]);
-      rows.push(["", "", "", "", "", "", "", ""]);
+      rows.push(["", "", "", "", "", `Subtotal (${eventTickets.length} ticket${eventTickets.length === 1 ? "" : "s"})`, csvCell(subtotal), "", ""]);
+      rows.push(["", "", "", "", "", "", "", "", ""]);
       grandTotal += subtotal;
       grandCount += eventTickets.length;
     }
-    rows.push(["", "", "", "", `GRAND TOTAL (${grandCount} ticket${grandCount === 1 ? "" : "s"})`, csvCell(grandTotal), "", ""]);
+    rows.push(["", "", "", "", "", `GRAND TOTAL (${grandCount} ticket${grandCount === 1 ? "" : "s"})`, csvCell(grandTotal), "", ""]);
 
     downloadCSV(rows, `flexpass_all_events_${new Date().toISOString().split("T")[0]}.csv`);
   };
@@ -175,16 +178,20 @@ export default function DashboardPage() {
       return;
     }
 
-    const header = ["Ticket ID", "Tier", "Customer Name", "Email", "Amount (NGN)", "Status", "Date"];
-    const rows = tickets.map((t: any) => [
-      csvCell(t.id),
-      csvCell(t.tier_name || "Standard"),
-      csvCell(t.user_name || "N/A"),
-      csvCell(t.user_email),
-      csvCell(hostAmount(t)),
-      csvCell(t.status),
-      csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
-    ]);
+    const header = ["Ticket ID", "Tier", "First Name", "Last Name", "Email", "Amount (NGN)", "Status", "Date"];
+    const rows = tickets.map((t: any) => {
+      const { firstName, lastName } = splitName(t.user_name);
+      return [
+        csvCell(t.id),
+        csvCell(t.tier_name || "Standard"),
+        csvCell(firstName || "N/A"),
+        csvCell(lastName),
+        csvCell(t.user_email),
+        csvCell(hostAmount(t)),
+        csvCell(t.status),
+        csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
+      ];
+    });
     const safe = eventTitle.replace(/[^a-z0-9]/gi, "_").toLowerCase();
     downloadCSV([header, ...rows], `flexpass_${safe}_${new Date().toISOString().split("T")[0]}.csv`);
   };

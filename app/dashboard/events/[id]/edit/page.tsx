@@ -14,6 +14,7 @@ import LocationPicker, { LocationData } from "@/components/LocationPicker";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { hostAmount } from "@/lib/hostAmount";
+import { splitName } from "@/lib/splitName";
 import { use } from "react";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -385,15 +386,19 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       return;
     }
 
-    const header = ["Ticket ID", "Customer Name", "Email", "Amount (NGN)", "Status", "Date"];
-    const rows = tickets.map(t => [
-      csvCell(t.id),
-      csvCell(t.user_name || "N/A"),
-      csvCell(t.user_email),
-      csvCell(hostAmount(t)),
-      csvCell(t.status),
-      csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
-    ]);
+    const header = ["Ticket ID", "First Name", "Last Name", "Email", "Amount (NGN)", "Status", "Date"];
+    const rows = tickets.map(t => {
+      const { firstName, lastName } = splitName(t.user_name);
+      return [
+        csvCell(t.id),
+        csvCell(firstName || "N/A"),
+        csvCell(lastName),
+        csvCell(t.user_email),
+        csvCell(hostAmount(t)),
+        csvCell(t.status),
+        csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
+      ];
+    });
     const safeTier = tierName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
     downloadCSV([header, ...rows], `flexpass_${safeTier}_${new Date().toISOString().split("T")[0]}.csv`);
   };
