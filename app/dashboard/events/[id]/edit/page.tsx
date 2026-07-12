@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
-  Image as ImageIcon, Type, Clock, User, Plus, Trash2, Download,
+  Image as ImageIcon, Type, Clock, User, Plus, Trash2, Download, Ticket,
   CheckCircle2, AlertTriangle, AlertCircle, Tag, Mail,
 } from "lucide-react";
 import Link from "next/link";
@@ -276,6 +276,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   });
   const [tiers, setTiers] = useState<TierFormData[]>([]);
   const [removedTierIds, setRemovedTierIds] = useState<string[]>([]);
+  // Individual attendee tickets sold per tier (keyed by tier id) — not
+  // group-adjusted yet, see the render site for the group_size conversion.
+  const [soldByTier, setSoldByTier] = useState<Record<string, number>>({});
 
 
   useEffect(() => {
@@ -302,6 +305,22 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       if (!existingTiers || existingTiers.length === 0) {
         setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1", is_hidden: false }]);
       }
+
+      // Sold count per tier, so the host can see how many are left without
+      // leaving this page. count-only queries, not row fetches, so this
+      // stays accurate even for a tier sold past Supabase's default row cap.
+      const soldMap: Record<string, number> = {};
+      await Promise.all(
+        (existingTiers || []).map(async (t: any) => {
+          const { count } = await supabase
+            .from("tickets")
+            .select("id", { count: "exact", head: true })
+            .eq("tier_id", t.id)
+            .in("status", ["valid", "scanned"]);
+          soldMap[t.id] = count || 0;
+        })
+      );
+      setSoldByTier(soldMap);
 
       // Detect if category is custom (not in CATEGORIES standard list)
       const stdCats = CATEGORIES.filter(c => c !== "Others");
@@ -597,6 +616,24 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                       </div>
                     ))}
                   </div>
+                  {tier.id && (() => {
+                    const groupSize = Number(tier.group_size) || 1;
+                    const soldIndividual = soldByTier[tier.id!] ?? 0;
+                    const groupsSold = soldIndividual / groupSize;
+                    const quantityAvailable = Number(tier.quantity) || 0;
+                    const remaining = Math.max(0, quantityAvailable - groupsSold);
+                    const soldOut = remaining <= 0;
+                    return (
+                      <div className="mt-2 flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                        <Ticket className="h-3.5 w-3.5" />
+                        <span>{groupsSold} sold</span>
+                        <span>&middot;</span>
+                        <span style={{ color: soldOut ? "#ef4444" : "var(--text-secondary)", fontWeight: 700 }}>
+                          {soldOut ? "Sold out" : `${remaining} left`}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <div className="mt-3">
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
                       Tickets per Purchase (optional)
