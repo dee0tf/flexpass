@@ -42,7 +42,13 @@ export default function ClientEventPage({ eventTitle, eventPrice, eventId, event
   };
 
   const hasMultipleTiers = tiers && tiers.length > 1;
-  const lowestPrice = tiers && tiers.length > 0 ? Math.min(...tiers.map(t => t.price)) : eventPrice;
+  // Prefer the cheapest tier that still has stock — once it sells out, the
+  // displayed price should move to the next tier up, not stay pinned to a
+  // tier buyers can no longer actually get.
+  const availableTiers = tiers?.filter(t => (t.remaining ?? 0) > 0) ?? [];
+  const lowestPrice = availableTiers.length > 0
+    ? Math.min(...availableTiers.map(t => t.price))
+    : tiers && tiers.length > 0 ? Math.min(...tiers.map(t => t.price)) : eventPrice;
 
   const priceDisplay = hasMultipleTiers
     ? `From ₦${lowestPrice.toLocaleString()}`

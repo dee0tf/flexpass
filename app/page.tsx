@@ -3,6 +3,7 @@ import EventCard from "@/components/EventCard";
 import { createServerSupabase } from "@/lib/supabase";
 import HomeSearchBar from "@/components/HomeSearchBar";
 import { Event } from "@/lib/types";
+import { attachEffectivePrices } from "@/lib/effectivePrices";
 import Link from "next/link";
 import { ArrowRight, Zap, ShieldCheck, Smartphone } from "lucide-react";
 
@@ -45,8 +46,8 @@ export default async function Home() {
     .order("created_at", { ascending: false })
     .limit(3);
 
-  const upcomingList: Event[] = events || [];
-  const featured: Event[] = featuredEvents || [];
+  const upcomingList: Event[] = await attachEffectivePrices(supabase, events || []);
+  const featured: Event[] = await attachEffectivePrices(supabase, featuredEvents || []);
 
   return (
     <main className="min-h-screen">

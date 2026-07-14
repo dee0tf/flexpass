@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import EventCard from "@/components/EventCard";
 import { createServerSupabase } from "@/lib/supabase";
 import { Event } from "@/lib/types";
+import { attachEffectivePrices } from "@/lib/effectivePrices";
 import Link from "next/link";
 import SearchFilters from "@/components/SearchFilters";
 
@@ -37,7 +38,7 @@ export default async function EventsPage({
     if (city) query = query.ilike("location", `%${city}%`);
 
     const { data: events } = await query;
-    const eventsList: Event[] = events || [];
+    const eventsList: Event[] = await attachEffectivePrices(supabase, events || []);
     const isFiltered = !!(q || (category && category !== "All") || city);
 
     return (
