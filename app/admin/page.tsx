@@ -8,6 +8,7 @@ import {
   ScanLine, ArrowDownToLine, CalendarDays, ChevronDown, ChevronUp, CreditCard, Share2,
 } from "lucide-react";
 import Logo from "@/components/Logo";
+import Link from "next/link";
 
 type Payout = {
   id: string; amount: number; status: string; created_at: string;
@@ -319,11 +320,18 @@ export default function AdminPage() {
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>FlexPass operations dashboard</p>
           </div>
         </div>
-        <button onClick={loadData}
-          className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
-          style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
-          <RefreshCw size={14} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/checkin"
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
+            style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+            <ScanLine size={14} /> Check-In
+          </Link>
+          <button onClick={loadData}
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
+            style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </header>
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">

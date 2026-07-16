@@ -49,7 +49,10 @@ export async function POST(request: Request) {
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
-    if (event.user_id !== user.id) {
+    // Either the event's own host, or a FlexPass admin scanning on a host's
+    // behalf (e.g. running the door for an event FlexPass staff is covering).
+    const isAdmin = !!process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL;
+    if (event.user_id !== user.id && !isAdmin) {
       return NextResponse.json({ error: 'You do not own this event' }, { status: 403 });
     }
 
