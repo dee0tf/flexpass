@@ -253,6 +253,18 @@ export async function POST(request: Request) {
       metadata: { ticketIds: data.map(t => t.id) },
     });
 
+    // Record what Paystack actually deducted for this charge — separate
+    // from the 5% we add at checkout, since that markup doesn't fully cover
+    // Paystack's real per-transaction cost. Needed to compute FlexPass's
+    // true net revenue rather than just the gross fee charged to buyers.
+    if (typeof paystackData.data.fees === 'number') {
+      await logPaymentEvent({
+        source: 'verify-payment', eventType: 'paystack_fee_recorded', status: 'success',
+        reference, eventId, email, message: 'Recorded Paystack processing fee for this charge',
+        metadata: { feesNaira: paystackData.data.fees / 100, amountNaira: paidKobo / 100 },
+      });
+    }
+
     // --- 8. Send confirmation email server-side. Must be awaited before
     // returning — a serverless function can be frozen/torn down right after
     // its response is sent, so a fire-and-forget send here would be just as

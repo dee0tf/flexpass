@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
     // --- 2. Handle charge.success (belt-and-suspenders: ticket should already exist from verify-payment) ---
     if (event.event === 'charge.success') {
-      const { reference, metadata, amount, customer } = event.data;
+      const { reference, metadata, amount, customer, fees } = event.data;
 
       // Breadcrumb proving Paystack actually called us for this reference —
       // answers "did the webhook even fire?" without needing platform logs.
@@ -65,6 +65,7 @@ export async function POST(request: Request) {
         metadata,
         amountKobo: amount,
         customerEmail: customer.email,
+        feesKobo: typeof fees === 'number' ? fees : undefined,
       });
     }
 

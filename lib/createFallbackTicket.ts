@@ -19,6 +19,7 @@ export async function createFallbackTicket({
   metadata,
   amountKobo,
   customerEmail,
+  feesKobo,
 }: {
   source: 'webhook' | 'reconciliation';
   reference: string;
@@ -26,6 +27,11 @@ export async function createFallbackTicket({
   metadata: any;
   amountKobo: number;
   customerEmail: string;
+  // Paystack's own processing fee for this charge, when the caller has it
+  // (webhook/reconciliation both get this from Paystack's transaction
+  // payload). Recorded separately from our 5% markup so admin stats can
+  // compute FlexPass's true net revenue, not just the gross fee charged.
+  feesKobo?: number;
 }): Promise<{ outcome: 'already_exists' | 'created' | 'insert_failed' | 'no_event_id'; ticketIds?: string[] }> {
   const quantity = metadata?.quantity && Number(metadata.quantity) > 0 ? Number(metadata.quantity) : 1;
 
@@ -141,6 +147,15 @@ export async function createFallbackTicket({
     message: `Created ${inserted.length} ticket(s) via fallback`,
     metadata: { ticketIds: inserted.map(t => t.id) },
   });
+
+  if (typeof feesKobo === 'number') {
+    await logPaymentEvent({
+      source, eventType: 'paystack_fee_recorded', status: 'success',
+      reference, eventId: metadata.event_id, email: customerEmail,
+      message: 'Recorded Paystack processing fee for this charge',
+      metadata: { feesNaira: feesKobo / 100, amountNaira: amountKobo / 100 },
+    });
+  }
 
   const { data: eventRow } = await supabase.from('events').select('title').eq('id', metadata.event_id).single();
   try {

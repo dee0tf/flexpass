@@ -26,7 +26,8 @@ type DeleteRequest = {
 type Stats = {
   totalUsers: number; totalHosts: number; verifiedHosts: number;
   totalEvents: number; totalTickets: number; scannedTickets: number;
-  totalRevenue: number; totalPaidOut: number;
+  totalRevenue: number; platformFeeRevenue: number;
+  paystackFeesCost: number; netPlatformRevenue: number; totalPaidOut: number;
   pendingPayouts: number; pendingPayoutAmount: number;
   pendingDeletes: number;
 };
@@ -311,23 +312,23 @@ export default function AdminPage() {
         </div>
       )}
 
-      <header className="border-b px-6 py-4 flex items-center justify-between"
+      <header className="border-b px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3"
         style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}>
         <div className="flex items-center gap-3">
           <Logo size={32} variant="gradient" />
           <div>
             <h1 className="font-display font-bold text-lg" style={{ color: "var(--text-primary)" }}>Admin Panel</h1>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>FlexPass operations dashboard</p>
+            <p className="text-xs hidden sm:block" style={{ color: "var(--text-muted)" }}>FlexPass operations dashboard</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Link href="/admin/checkin"
-            className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
+            className="flex flex-1 sm:flex-none items-center justify-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
             style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
             <ScanLine size={14} /> Check-In
           </Link>
           <button onClick={loadData}
-            className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
+            className="flex flex-1 sm:flex-none items-center justify-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
             style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
             <RefreshCw size={14} /> Refresh
           </button>
@@ -364,7 +365,7 @@ export default function AdminPage() {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                   {[
                     {
                       label: "Tickets Admitted", sublabel: `${stats.scannedTickets.toLocaleString()} scanned`,
@@ -375,6 +376,11 @@ export default function AdminPage() {
                       label: "Gross Revenue", sublabel: "all ticket sales",
                       value: `₦${stats.totalRevenue.toLocaleString()}`, icon: <TrendingUp size={16} />,
                       color: "#f59e0b", bg: "rgba(245,158,11,0.06)", highlight: false,
+                    },
+                    {
+                      label: "FlexPass Net Revenue", sublabel: `₦${stats.platformFeeRevenue.toLocaleString()} fee − ₦${stats.paystackFeesCost.toLocaleString()} Paystack cost`,
+                      value: `₦${stats.netPlatformRevenue.toLocaleString()}`, icon: <CreditCard size={16} />,
+                      color: "#9F67FE", bg: "rgba(159,103,254,0.08)", highlight: false,
                     },
                     {
                       label: "Total Paid Out", sublabel: "approved withdrawals",

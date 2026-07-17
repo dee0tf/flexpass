@@ -255,6 +255,7 @@ export async function GET(request: Request) {
       metadata,
       amountKobo: txn.amount,
       customerEmail,
+      feesKobo: typeof txn.fees === 'number' ? txn.fees : undefined,
     });
 
     if (result.outcome === 'created' && result.ticketIds) {
