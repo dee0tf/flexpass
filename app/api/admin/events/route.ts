@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   if (eventId) {
     const { data: tickets, error } = await db
       .from("tickets")
-      .select("id, user_name, user_email, tier_name, total_amount_paid, status, created_at, referral_code")
+      .select("id, user_name, user_email, tier_name, total_amount_paid, status, created_at, referral_code, checked_in_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false });
 

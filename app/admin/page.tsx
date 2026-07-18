@@ -52,6 +52,7 @@ type AdminTicket = {
   id: string; user_name: string; user_email: string;
   tier_name: string | null; total_amount_paid: number;
   status: string; created_at: string; referral_code: string | null;
+  checked_in_at: string | null;
 };
 
 export default function AdminPage() {
@@ -212,7 +213,7 @@ export default function AdminPage() {
     if (!buyers.length) return;
     const groups = groupByTier(buyers);
 
-    const header = ["Tier", "First Name", "Last Name", "Email", "Amount (NGN)", "Via Promoter", "Status", "Date"];
+    const header = ["Tier", "First Name", "Last Name", "Email", "Amount (NGN)", "Via Promoter", "Status", "Date", "Checked In At"];
     const rows: string[][] = [header];
     let grandTotal = 0;
 
@@ -230,13 +231,14 @@ export default function AdminPage() {
           csvCell(t.referral_code || ""),
           csvCell(t.status),
           csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
+          csvCell(t.checked_in_at ? new Date(t.checked_in_at).toLocaleString("en-NG") : "Not checked in"),
         ]);
       }
-      rows.push(["", "", "", `Subtotal (${tierTickets.length} ticket${tierTickets.length === 1 ? "" : "s"})`, csvCell(subtotal), "", "", ""]);
-      rows.push(["", "", "", "", "", "", "", ""]);
+      rows.push(["", "", "", `Subtotal (${tierTickets.length} ticket${tierTickets.length === 1 ? "" : "s"})`, csvCell(subtotal), "", "", "", ""]);
+      rows.push(["", "", "", "", "", "", "", "", ""]);
       grandTotal += subtotal;
     }
-    rows.push(["", "", "", `GRAND TOTAL (${buyers.length} ticket${buyers.length === 1 ? "" : "s"})`, csvCell(grandTotal), "", "", ""]);
+    rows.push(["", "", "", `GRAND TOTAL (${buyers.length} ticket${buyers.length === 1 ? "" : "s"})`, csvCell(grandTotal), "", "", "", ""]);
 
     const safe = eventTitle.replace(/[^a-z0-9]/gi, "_").toLowerCase();
     downloadCSV(rows, `flexpass_admin_${safe}_${new Date().toISOString().split("T")[0]}.csv`);
