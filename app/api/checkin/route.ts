@@ -14,6 +14,10 @@ const db = createClient(
 );
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// The reference code printed under a ticket's QR (TicketQR.tsx) is the
+// ticket ID truncated to its first 3 groups — not a full ID. Accept it too
+// so staff can type it in by hand when a QR won't scan.
+const ID_PREFIX_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}$/i;
 
 export async function POST(request: Request) {
   try {
@@ -23,8 +27,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — no ticket code detected' }, { status: 400 });
     }
 
-    if (!UUID_RE.test(ticketId) || !UUID_RE.test(eventId)) {
-      return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — this is not a FlexPass ticket QR code' }, { status: 400 });
+    const isFullId = UUID_RE.test(ticketId);
+    const isPrefixId = !isFullId && ID_PREFIX_RE.test(ticketId);
+    if ((!isFullId && !isPrefixId) || !UUID_RE.test(eventId)) {
+      return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — this is not a valid FlexPass ticket code' }, { status: 400 });
     }
 
     // Verify the scanner is an authenticated user
@@ -56,12 +62,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ code: 'not_your_event', error: "You don't have access to scan tickets for this event" }, { status: 403 });
     }
 
-    // Fetch the ticket
-    const { data: ticket } = await db
-      .from('tickets')
-      .select('id, status, user_name, user_email, tier_name, checked_in_at, event_id, is_giveaway')
-      .eq('id', ticketId)
-      .single();
+    // Fetch the ticket — exact match on a full ID, prefix match on the
+    // shortened reference code shown under the QR (see ID_PREFIX_RE above).
+    // Postgres' uuid columns don't support pattern matching, so the prefix
+    // lookup is scoped to this event and matched in memory instead.
+    const ticketFields = 'id, status, user_name, user_email, tier_name, checked_in_at, event_id, is_giveaway';
+    let ticket: { id: string; status: string; user_name: string; user_email: string; tier_name: string | null; checked_in_at: string | null; event_id: string; is_giveaway: boolean } | undefined;
+    if (isFullId) {
+      const { data } = await db.from('tickets').select(ticketFields).eq('id', ticketId.toLowerCase());
+      ticket = data?.[0];
+    } else {
+      const prefix = ticketId.toLowerCase();
+      const { data } = await db.from('tickets').select(ticketFields).eq('event_id', eventId);
+      ticket = data?.find(t => t.id.toLowerCase().startsWith(prefix));
+    }
 
     if (!ticket) {
       return NextResponse.json({ valid: false, code: 'not_found', reason: "Ticket doesn't exist — unrecognized barcode" }, { status: 404 });
@@ -94,7 +108,7 @@ export async function POST(request: Request) {
     const { error: updateError } = await db
       .from('tickets')
       .update({ checked_in_at: now, status: 'scanned' })
-      .eq('id', ticketId);
+      .eq('id', ticket.id);
 
     if (updateError) throw updateError;
 

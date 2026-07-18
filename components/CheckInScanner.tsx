@@ -234,8 +234,19 @@ export default function CheckInScanner({
 
       html5QrCode
         .start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 260, height: 260 } },
+          // Ideal width/height nudges iOS/Android away from picking a low-res
+          // or ultra-wide-lens stream — both make small QR detail too blurry
+          // or too tiny in-frame for the decoder to lock on.
+          { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+          {
+            fps: 10,
+            // Scan box sized relative to the actual video feed rather than a
+            // fixed 260px square, so it stays well-framed on any screen size.
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+              const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.7);
+              return { width: size, height: size };
+            },
+          },
           (decodedText: string) => {
             if (scanPaused.current || isCheckingIn.current) return;
             doCheckIn(decodedText);
@@ -381,7 +392,7 @@ export default function CheckInScanner({
                 <input
                   value={manualId}
                   onChange={e => setManualId(e.target.value)}
-                  placeholder="Paste ticket ID or full ticket URL…"
+                  placeholder="Paste ticket ID, reference code, or ticket URL…"
                   className="flex-1 p-3 rounded-xl text-sm font-mono"
                   style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--text-primary)" }}
                 />
@@ -392,7 +403,7 @@ export default function CheckInScanner({
                 </button>
               </form>
               <p className="text-xs px-1" style={{ color: "var(--text-muted)" }}>
-                Paste the full ticket UUID (e.g. <span className="font-mono">xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</span>) or the ticket page URL.
+                Type the short reference code printed under the QR (e.g. <span className="font-mono">#xxxxxxxx-xxxx-xxxx</span>), the full ticket UUID, or the ticket page URL.
               </p>
             </div>
           )}
