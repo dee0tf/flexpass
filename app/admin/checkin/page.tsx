@@ -2,14 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, LogOut } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import CheckInScanner, { CheckInEvent } from "@/components/CheckInScanner";
 
 export default function AdminCheckInPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [events, setEvents] = useState<CheckInEvent[]>([]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -60,11 +67,17 @@ export default function AdminCheckInPage() {
           <h1 className="font-display font-bold text-lg" style={{ color: "var(--text-primary)" }}>Admin Check-In</h1>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>Scan tickets for any event on the platform</p>
         </div>
-        <Link href="/admin"
-          className="text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
-          style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
-          ← Admin Panel
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin"
+            className="text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
+            style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+            ← Admin Panel
+          </Link>
+          <button onClick={handleLogout}
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80 text-red-500 hover:bg-red-500/10">
+            <LogOut size={14} /> Sign Out
+          </button>
+        </div>
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-8">

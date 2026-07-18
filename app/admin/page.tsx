@@ -6,10 +6,11 @@ import {
   Loader2, CheckCircle2, XCircle, RefreshCw, Building2,
   Users, Ticket, TrendingUp, Clock, AlertCircle, Trash2, BadgeCheck, ShieldOff,
   ScanLine, ArrowDownToLine, CalendarDays, ChevronDown, ChevronUp, CreditCard, Share2,
-  Download,
+  Download, LogOut,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { splitName } from "@/lib/splitName";
 
@@ -56,6 +57,7 @@ type AdminTicket = {
 };
 
 export default function AdminPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [payouts, setPayouts] = useState<Payout[]>([]);
@@ -89,6 +91,11 @@ export default function AdminPage() {
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
   };
 
   async function loadData() {
@@ -382,6 +389,10 @@ export default function AdminPage() {
             className="flex flex-1 sm:flex-none items-center justify-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80"
             style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
             <RefreshCw size={14} /> Refresh
+          </button>
+          <button onClick={handleLogout}
+            className="flex flex-1 sm:flex-none items-center justify-center gap-2 text-sm px-4 py-2 rounded-xl transition hover:opacity-80 text-red-500 hover:bg-red-500/10">
+            <LogOut size={14} /> Sign Out
           </button>
         </div>
       </header>
