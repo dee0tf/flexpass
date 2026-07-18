@@ -6,9 +6,12 @@ import {
   Loader2, CheckCircle2, XCircle, RefreshCw, Building2,
   Users, Ticket, TrendingUp, Clock, AlertCircle, Trash2, BadgeCheck, ShieldOff,
   ScanLine, ArrowDownToLine, CalendarDays, ChevronDown, ChevronUp, CreditCard, Share2,
+  Download,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import Link from "next/link";
+import { csvCell, downloadCSV } from "@/lib/exportCsv";
+import { splitName } from "@/lib/splitName";
 
 type Payout = {
   id: string; amount: number; status: string; created_at: string;
@@ -191,6 +194,52 @@ export default function AdminPage() {
       setExpandedEventId(eventId);
       loadEventTickets(eventId);
     }
+  }
+
+  // Group a buyer list by ticket tier so admins see holders clustered by
+  // what they bought, not just a flat chronological list.
+  function groupByTier(tickets: AdminTicket[]) {
+    const groups = new Map<string, AdminTicket[]>();
+    for (const t of tickets) {
+      const tier = t.tier_name || "Standard";
+      if (!groups.has(tier)) groups.set(tier, []);
+      groups.get(tier)!.push(t);
+    }
+    return new Map([...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+  }
+
+  function handleExportEventCsv(eventTitle: string, buyers: AdminTicket[]) {
+    if (!buyers.length) return;
+    const groups = groupByTier(buyers);
+
+    const header = ["Tier", "First Name", "Last Name", "Email", "Amount (NGN)", "Via Promoter", "Status", "Date"];
+    const rows: string[][] = [header];
+    let grandTotal = 0;
+
+    for (const [tierName, tierTickets] of groups) {
+      let subtotal = 0;
+      for (const t of tierTickets) {
+        subtotal += t.total_amount_paid;
+        const { firstName, lastName } = splitName(t.user_name);
+        rows.push([
+          csvCell(tierName),
+          csvCell(firstName || "N/A"),
+          csvCell(lastName),
+          csvCell(t.user_email),
+          csvCell(t.total_amount_paid),
+          csvCell(t.referral_code || ""),
+          csvCell(t.status),
+          csvCell(new Date(t.created_at).toLocaleDateString("en-NG")),
+        ]);
+      }
+      rows.push(["", "", "", `Subtotal (${tierTickets.length} ticket${tierTickets.length === 1 ? "" : "s"})`, csvCell(subtotal), "", "", ""]);
+      rows.push(["", "", "", "", "", "", "", ""]);
+      grandTotal += subtotal;
+    }
+    rows.push(["", "", "", `GRAND TOTAL (${buyers.length} ticket${buyers.length === 1 ? "" : "s"})`, csvCell(grandTotal), "", "", ""]);
+
+    const safe = eventTitle.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    downloadCSV(rows, `flexpass_admin_${safe}_${new Date().toISOString().split("T")[0]}.csv`);
   }
 
   async function handleToggleVerify(userId: string, currentVerified: boolean) {
@@ -815,6 +864,7 @@ export default function AdminPage() {
                     {adminEvents.map(ev => {
                       const isExpanded = expandedEventId === ev.id;
                       const buyers = eventTickets[ev.id] || [];
+                      const tierGroups = groupByTier(buyers);
                       return (
                         <div key={ev.id}>
                           {/* Event row */}
@@ -867,57 +917,83 @@ export default function AdminPage() {
                                   No tickets sold yet.
                                 </p>
                               ) : (
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-sm">
-                                    <thead>
-                                      <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
-                                        {["Buyer", "Email", "Tier", "Amount", "Via Promoter", "Status", "Date"].map(col => (
-                                          <th key={col} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider"
-                                            style={{ color: "var(--text-muted)" }}>{col}</th>
-                                        ))}
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {buyers.map((b, bi) => (
-                                        <tr key={b.id}
-                                          style={{ borderBottom: bi < buyers.length - 1 ? "1px solid var(--card-border)" : "none" }}>
-                                          <td className="px-5 py-3 font-medium" style={{ color: "var(--text-primary)" }}>
-                                            {b.user_name || "—"}
-                                          </td>
-                                          <td className="px-5 py-3 text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
-                                            {b.user_email}
-                                          </td>
-                                          <td className="px-5 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>
-                                            {b.tier_name || "Standard"}
-                                          </td>
-                                          <td className="px-5 py-3 font-semibold" style={{ color: "var(--text-primary)" }}>
-                                            {b.total_amount_paid === 0 ? "Free" : `₦${b.total_amount_paid.toLocaleString()}`}
-                                          </td>
-                                          <td className="px-5 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                                            {b.referral_code ? (
-                                              <span className="font-mono px-2 py-0.5 rounded"
-                                                style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
-                                                {b.referral_code}
-                                              </span>
-                                            ) : "—"}
-                                          </td>
-                                          <td className="px-5 py-3">
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                              b.status === "scanned" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                                            }`}>
-                                              {b.status}
-                                            </span>
-                                          </td>
-                                          <td className="px-5 py-3 text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                                            {new Date(b.created_at).toLocaleDateString("en-GB", {
-                                              day: "numeric", month: "short", year: "numeric",
-                                            })}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
+                                <>
+                                  <div className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap border-b"
+                                    style={{ borderColor: "var(--card-border)" }}>
+                                    <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                                      {buyers.length} ticket{buyers.length === 1 ? "" : "s"} across {tierGroups.size} tier{tierGroups.size === 1 ? "" : "s"}
+                                    </p>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleExportEventCsv(ev.title, buyers); }}
+                                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition hover:opacity-80"
+                                      style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+                                      <Download size={12} /> Download CSV
+                                    </button>
+                                  </div>
+
+                                  {Array.from(tierGroups.entries()).map(([tierName, tierTickets]) => {
+                                    const tierRevenue = tierTickets.reduce((sum, t) => sum + t.total_amount_paid, 0);
+                                    return (
+                                      <div key={tierName}>
+                                        <div className="px-5 py-2 flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-wide"
+                                          style={{ backgroundColor: "var(--surface-raised)", color: "var(--brand-indigo)" }}>
+                                          <span>{tierName}</span>
+                                          <span className="normal-case font-semibold" style={{ color: "var(--text-muted)" }}>
+                                            {tierTickets.length} ticket{tierTickets.length === 1 ? "" : "s"} · ₦{tierRevenue.toLocaleString()}
+                                          </span>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                          <table className="w-full text-sm">
+                                            <thead>
+                                              <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
+                                                {["Buyer", "Email", "Amount", "Via Promoter", "Status", "Date"].map(col => (
+                                                  <th key={col} className="px-5 py-2 text-left text-xs font-semibold uppercase tracking-wider"
+                                                    style={{ color: "var(--text-muted)" }}>{col}</th>
+                                                ))}
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {tierTickets.map((b, bi) => (
+                                                <tr key={b.id}
+                                                  style={{ borderBottom: bi < tierTickets.length - 1 ? "1px solid var(--card-border)" : "none" }}>
+                                                  <td className="px-5 py-3 font-medium" style={{ color: "var(--text-primary)" }}>
+                                                    {b.user_name || "—"}
+                                                  </td>
+                                                  <td className="px-5 py-3 text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
+                                                    {b.user_email}
+                                                  </td>
+                                                  <td className="px-5 py-3 font-semibold" style={{ color: "var(--text-primary)" }}>
+                                                    {b.total_amount_paid === 0 ? "Free" : `₦${b.total_amount_paid.toLocaleString()}`}
+                                                  </td>
+                                                  <td className="px-5 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                                                    {b.referral_code ? (
+                                                      <span className="font-mono px-2 py-0.5 rounded"
+                                                        style={{ backgroundColor: "rgba(72,0,130,0.08)", color: "var(--brand-indigo)" }}>
+                                                        {b.referral_code}
+                                                      </span>
+                                                    ) : "—"}
+                                                  </td>
+                                                  <td className="px-5 py-3">
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                                      b.status === "scanned" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                                                    }`}>
+                                                      {b.status}
+                                                    </span>
+                                                  </td>
+                                                  <td className="px-5 py-3 text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
+                                                    {new Date(b.created_at).toLocaleDateString("en-GB", {
+                                                      day: "numeric", month: "short", year: "numeric",
+                                                    })}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </>
                               )}
                             </div>
                           )}
