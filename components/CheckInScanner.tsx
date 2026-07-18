@@ -11,8 +11,14 @@ export interface CheckInEvent {
   organizer_name?: string | null;
 }
 
+type ScanResultCode =
+  | "unrecognized" | "session_expired" | "event_not_found" | "not_your_event"
+  | "not_found" | "wrong_event" | "already_checked_in" | "not_valid"
+  | "server_error" | "offline";
+
 interface ScanResult {
   valid: boolean | null;
+  code?: ScanResultCode;
   reason?: string;
   holder?: string;
   email?: string;
@@ -20,6 +26,34 @@ interface ScanResult {
   checkedInAt?: string;
   giveaway?: boolean;
 }
+
+// Shape of the JSON body returned by /api/checkin.
+interface CheckInApiResponse {
+  valid?: boolean;
+  code?: ScanResultCode;
+  reason?: string;
+  error?: string;
+  holder?: string;
+  email?: string;
+  tier?: string;
+  checkedInAt?: string;
+  giveaway?: boolean;
+}
+
+// Per-failure-reason presentation — keeps the result card specific
+// ("unrecognized barcode", "already scanned") instead of a blanket denial.
+const RESULT_PRESETS: Record<ScanResultCode, { title: string; color: string; icon: "warning" | "invalid" }> = {
+  unrecognized:       { title: "Unrecognized Barcode",   color: "#dc2626", icon: "invalid" },
+  not_found:          { title: "Ticket Doesn't Exist",   color: "#dc2626", icon: "invalid" },
+  wrong_event:        { title: "Wrong Event",            color: "#dc2626", icon: "invalid" },
+  not_valid:          { title: "Ticket Invalid",         color: "#dc2626", icon: "invalid" },
+  already_checked_in: { title: "Already Admitted",       color: "#d97706", icon: "warning" },
+  session_expired:    { title: "Scanner Signed Out",     color: "#dc2626", icon: "invalid" },
+  not_your_event:     { title: "No Access To This Event",color: "#dc2626", icon: "invalid" },
+  event_not_found:    { title: "Event Not Found",        color: "#dc2626", icon: "invalid" },
+  server_error:       { title: "Connection Problem",     color: "#dc2626", icon: "invalid" },
+  offline:            { title: "You're Offline",         color: "#dc2626", icon: "invalid" },
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -90,6 +124,25 @@ export default function CheckInScanner({
     };
   }, []);
 
+  // POST /api/checkin and normalize the response into a ScanResult.
+  // Returns null on a network-level failure (caller decides the message).
+  const postCheckIn = useCallback(async (ticketId: string, token: string): Promise<{ res: Response; data: CheckInApiResponse } | null> => {
+    try {
+      const res = await fetch("/api/checkin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ticketId, eventId: selectedEvent }),
+      });
+      const data = await res.json();
+      return { res, data };
+    } catch {
+      return null;
+    }
+  }, [selectedEvent]);
+
   const doCheckIn = useCallback(async (rawId: string) => {
     if (!selectedEvent || isCheckingIn.current) return;
 
@@ -102,7 +155,11 @@ export default function CheckInScanner({
     setResult(null);
 
     if (!isOnline) {
-      setResult({ valid: false, reason: "You are offline. Re-scan detection requires an internet connection — do not admit this ticket until you reconnect." });
+      setResult({
+        valid: false,
+        code: "offline",
+        reason: "You're offline — re-scan detection requires an internet connection. Do not admit this ticket until you reconnect.",
+      });
       setLoading(false);
       isCheckingIn.current = false;
       return;
@@ -116,43 +173,51 @@ export default function CheckInScanner({
       // getSession failure — treat as logged out
     }
     if (!session) {
+      setResult({ valid: false, code: "session_expired", reason: "You're signed out — sign in again to keep scanning." });
       setLoading(false);
       isCheckingIn.current = false;
       return;
     }
 
-    try {
-      const res = await fetch("/api/checkin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ ticketId, eventId: selectedEvent }),
-      });
-      const data = await res.json();
-      // Map either `reason` or `error` field so the UI always has a message
-      const r: ScanResult = {
-        valid: res.ok && data.valid,
-        reason: data.reason || data.error,
-        holder: data.holder,
-        email: data.email,
-        tier: data.tier,
-        checkedInAt: data.checkedInAt,
-        giveaway: data.giveaway,
-      };
-      setResult(r);
+    let outcome = await postCheckIn(ticketId, session.access_token);
 
-      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        navigator.vibrate(r.valid ? [150] : [80, 60, 80]);
+    // A stale access token (e.g. the tab sat backgrounded past its expiry)
+    // surfaces as a 401 here — refresh once and retry before telling the
+    // door staff the ticket itself is the problem.
+    if (outcome && outcome.data.code === "session_expired") {
+      const { data: refreshed } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
+      if (refreshed?.session) {
+        outcome = await postCheckIn(ticketId, refreshed.session.access_token);
       }
-    } catch {
-      setResult({ valid: false, reason: "Network error — check connection and try again." });
-    } finally {
+    }
+
+    if (!outcome) {
+      setResult({ valid: false, code: "server_error", reason: "Couldn't reach the server — check connection and try again." });
       setLoading(false);
       isCheckingIn.current = false;
+      return;
     }
-  }, [selectedEvent, isOnline]);
+
+    const { res, data } = outcome;
+    const r: ScanResult = {
+      valid: res.ok && !!data.valid,
+      code: data.code,
+      // Map either `reason` or `error` field so the UI always has a message
+      reason: data.reason || data.error,
+      holder: data.holder,
+      email: data.email,
+      tier: data.tier,
+      checkedInAt: data.checkedInAt,
+      giveaway: data.giveaway,
+    };
+    setResult(r);
+
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(r.valid ? [150] : [80, 60, 80]);
+    }
+    setLoading(false);
+    isCheckingIn.current = false;
+  }, [selectedEvent, isOnline, postCheckIn]);
 
   useEffect(() => {
     if (mode !== "camera" || !selectedEvent || scannerStarted.current) return;
@@ -225,10 +290,9 @@ export default function CheckInScanner({
     });
   };
 
-  const resultColor =
-    result?.valid === true ? "#16a34a"
-    : result?.reason?.includes("Already") ? "#d97706"
-    : "#dc2626";
+  const resultPreset = result?.code ? RESULT_PRESETS[result.code] : undefined;
+  const resultColor = result?.valid === true ? "#16a34a" : (resultPreset?.color ?? "#dc2626");
+  const isDuplicate = result?.code === "already_checked_in";
 
   return (
     <div className="max-w-lg mx-auto space-y-5 pb-8">
@@ -346,18 +410,18 @@ export default function CheckInScanner({
               <div className="p-6 text-white text-center" style={{ backgroundColor: resultColor }}>
                 {result.valid
                   ? <CheckCircle2 className="h-14 w-14 mx-auto mb-3" />
-                  : result.reason?.includes("Already")
+                  : resultPreset?.icon === "warning"
                   ? <AlertCircle className="h-14 w-14 mx-auto mb-3" />
                   : <XCircle className="h-14 w-14 mx-auto mb-3" />}
                 <h2 className="text-2xl font-bold">
                   {result.valid ? "Access Granted ✓"
-                    : result.reason?.includes("Already") ? "Already Admitted ⚠️"
+                    : resultPreset ? `${resultPreset.title}${resultPreset.icon === "warning" ? " ⚠️" : " ✗"}`
                     : "Access Denied ✗"}
                 </h2>
                 {result.reason && (
                   <p className="text-sm mt-1 opacity-90">{result.reason}</p>
                 )}
-                {result.reason?.includes("Already") && result.checkedInAt && (
+                {isDuplicate && result.checkedInAt && (
                   <p className="text-xs mt-1 opacity-70">
                     First admitted at {new Date(result.checkedInAt).toLocaleTimeString()}
                   </p>
@@ -380,7 +444,7 @@ export default function CheckInScanner({
                   <InfoRow label="Admitted At" value={new Date(result.checkedInAt).toLocaleTimeString()} />
                 )}
 
-                {result.reason?.includes("Already") && (
+                {isDuplicate && (
                   <div className="flex items-start gap-2 p-3 rounded-xl mt-1"
                     style={{ backgroundColor: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
                     <ShieldAlert size={14} className="text-amber-600 mt-0.5 shrink-0" />

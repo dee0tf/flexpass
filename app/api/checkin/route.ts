@@ -20,23 +20,23 @@ export async function POST(request: Request) {
     const { ticketId, eventId } = await request.json();
 
     if (!ticketId || !eventId) {
-      return NextResponse.json({ error: 'Missing ticketId or eventId' }, { status: 400 });
+      return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — no ticket code detected' }, { status: 400 });
     }
 
     if (!UUID_RE.test(ticketId) || !UUID_RE.test(eventId)) {
-      return NextResponse.json({ error: 'Invalid ID format' }, { status: 400 });
+      return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — this is not a FlexPass ticket QR code' }, { status: 400 });
     }
 
     // Verify the scanner is an authenticated user
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
     if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ code: 'session_expired', error: 'Your scanner session has expired — sign in again to keep scanning' }, { status: 401 });
     }
 
     const { data: { user }, error: authError } = await authClient.auth.getUser(token);
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ code: 'session_expired', error: 'Your scanner session has expired — sign in again to keep scanning' }, { status: 401 });
     }
 
     // Confirm this user owns the event (via service-role client)
@@ -47,13 +47,13 @@ export async function POST(request: Request) {
       .single();
 
     if (!event) {
-      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+      return NextResponse.json({ code: 'event_not_found', error: 'Event not found' }, { status: 404 });
     }
     // Either the event's own host, or a FlexPass admin scanning on a host's
     // behalf (e.g. running the door for an event FlexPass staff is covering).
     const isAdmin = !!process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL;
     if (event.user_id !== user.id && !isAdmin) {
-      return NextResponse.json({ error: 'You do not own this event' }, { status: 403 });
+      return NextResponse.json({ code: 'not_your_event', error: "You don't have access to scan tickets for this event" }, { status: 403 });
     }
 
     // Fetch the ticket
@@ -64,18 +64,19 @@ export async function POST(request: Request) {
       .single();
 
     if (!ticket) {
-      return NextResponse.json({ valid: false, reason: 'Ticket not found' }, { status: 404 });
+      return NextResponse.json({ valid: false, code: 'not_found', reason: "Ticket doesn't exist — unrecognized barcode" }, { status: 404 });
     }
 
     if (ticket.event_id !== eventId) {
-      return NextResponse.json({ valid: false, reason: 'Ticket is for a different event' }, { status: 400 });
+      return NextResponse.json({ valid: false, code: 'wrong_event', reason: 'This ticket is for a different event' }, { status: 400 });
     }
 
     // Check re-entry first — catches both status='scanned' and any lingering checked_in_at
     if (ticket.status === 'scanned' || ticket.checked_in_at) {
       return NextResponse.json({
         valid: false,
-        reason: 'Already checked in',
+        code: 'already_checked_in',
+        reason: 'Already scanned — this ticket was used before',
         checkedInAt: ticket.checked_in_at,
         holder: ticket.user_name,
         email: ticket.user_email,
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
     }
 
     if (ticket.status !== 'valid') {
-      return NextResponse.json({ valid: false, reason: `Ticket is ${ticket.status} — cannot admit` }, { status: 400 });
+      return NextResponse.json({ valid: false, code: 'not_valid', reason: `Ticket is ${ticket.status} — cannot admit` }, { status: 400 });
     }
 
     // Mark as checked in (service-role bypasses RLS — always succeeds)
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
       giveaway: ticket.is_giveaway,
     });
   } catch {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ code: 'server_error', error: "Couldn't reach the server — check connection and try again" }, { status: 500 });
   }
 }
 
