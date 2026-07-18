@@ -98,6 +98,8 @@ export default function CheckInScanner({
   const [manualId, setManualId] = useState("");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [cameraError, setCameraError] = useState(false);
+  const [cameraRetryTick, setCameraRetryTick] = useState(0);
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
@@ -226,6 +228,7 @@ export default function CheckInScanner({
     scannerStarted.current = true;
     scanPaused.current = false;
     setScanning(false);
+    setCameraError(false);
     setResult(null);
 
     import("html5-qrcode").then(({ Html5Qrcode }) => {
@@ -234,19 +237,8 @@ export default function CheckInScanner({
 
       html5QrCode
         .start(
-          // Ideal width/height nudges iOS/Android away from picking a low-res
-          // or ultra-wide-lens stream — both make small QR detail too blurry
-          // or too tiny in-frame for the decoder to lock on.
-          { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
-          {
-            fps: 10,
-            // Scan box sized relative to the actual video feed rather than a
-            // fixed 260px square, so it stays well-framed on any screen size.
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-              const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.7);
-              return { width: size, height: size };
-            },
-          },
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 260, height: 260 } },
           (decodedText: string) => {
             if (scanPaused.current || isCheckingIn.current) return;
             doCheckIn(decodedText);
@@ -256,6 +248,7 @@ export default function CheckInScanner({
         .then(() => setScanning(true))
         .catch(() => {
           setScanning(false);
+          setCameraError(true);
           scannerStarted.current = false;
         });
     });
@@ -277,7 +270,13 @@ export default function CheckInScanner({
         }
       }
     };
-  }, [mode, selectedEvent, doCheckIn]);
+  }, [mode, selectedEvent, doCheckIn, cameraRetryTick]);
+
+  const retryCamera = () => {
+    setCameraError(false);
+    scannerStarted.current = false;
+    setCameraRetryTick(t => t + 1);
+  };
 
   const handleScanNext = () => {
     setResult(null);
@@ -369,7 +368,19 @@ export default function CheckInScanner({
           {mode === "camera" && (
             <div className="relative rounded-2xl overflow-hidden" style={{ border: "2px solid var(--border-color)" }}>
               <div id="qr-reader" className="w-full" />
-              {!scanning && !result && (
+              {cameraError && !result && (
+                <div className="p-8 text-center flex flex-col items-center gap-3" style={{ color: "var(--text-muted)" }}>
+                  <Camera className="h-10 w-10 text-red-500 opacity-70" />
+                  <p className="text-sm font-medium text-red-500">Couldn&apos;t start the camera</p>
+                  <p className="text-xs">Check that camera access is allowed for this site in your browser settings, then try again — or switch to &ldquo;Enter ID&rdquo; below.</p>
+                  <button onClick={retryCamera}
+                    className="mt-1 px-4 py-2 rounded-xl text-xs font-bold text-white hover:opacity-90 transition"
+                    style={{ backgroundColor: "var(--brand-indigo)" }}>
+                    Try Again
+                  </button>
+                </div>
+              )}
+              {!scanning && !cameraError && !result && (
                 <div className="p-8 text-center flex flex-col items-center gap-3" style={{ color: "var(--text-muted)" }}>
                   <Camera className="h-10 w-10 opacity-40" />
                   <p className="text-sm">Starting camera… allow access when prompted.</p>
