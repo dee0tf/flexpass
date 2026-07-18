@@ -29,15 +29,19 @@ export default function DashboardPage() {
     let cancelled = false;
 
     // Primary: explicitly fetch session (works reliably after page reload)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return;
-      if (!session) {
-        window.location.replace("/login");
-        return;
-      }
-      setUser(session.user);
-      loadDashboardData(session.user.id);
-    });
+    const checkSession = () => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (cancelled) return;
+        if (!session) {
+          window.location.replace("/login");
+          return;
+        }
+        setUser(session.user);
+        loadDashboardData(session.user.id);
+      });
+    };
+
+    checkSession();
 
     // Also listen for sign-out so the page reacts if user logs out in another tab
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -46,9 +50,19 @@ export default function DashboardPage() {
       }
     });
 
+    // Safari (and other browsers) can restore this page from the
+    // back/forward cache after sign-out without re-running this effect —
+    // re-verify the session so a bfcache restore can't show stale
+    // authenticated content for a signed-out user.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) checkSession();
+    };
+    window.addEventListener("pageshow", onPageShow);
+
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      window.removeEventListener("pageshow", onPageShow);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

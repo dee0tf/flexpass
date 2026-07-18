@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen
+  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen, ShieldCheck
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useState, useEffect, useRef } from "react";
@@ -15,12 +15,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const notifChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return;
       const userId = session.user.id;
+
+      // Only the FlexPass admin account gets a link back to /admin — everyone
+      // else on this dashboard is a regular host with no admin access.
+      fetch("/api/admin/check-auth", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).then(res => setIsAdminUser(res.ok)).catch(() => setIsAdminUser(false));
 
       // Check verified status
       const { data } = await supabase
@@ -138,7 +145,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         })}
       </nav>
 
-      <div className="p-4" style={{borderTop:"1px solid var(--sidebar-border)"}}>
+      <div className="p-4 space-y-1" style={{borderTop:"1px solid var(--sidebar-border)"}}>
+        {isAdminUser && (
+          <Link
+            href="/admin"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl w-full transition-colors text-sm font-medium"
+            style={{ color: "var(--brand-indigo)" }}
+          >
+            <ShieldCheck size={18} /> Admin Panel
+          </Link>
+        )}
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-500/10 rounded-xl w-full transition-colors text-sm font-medium"

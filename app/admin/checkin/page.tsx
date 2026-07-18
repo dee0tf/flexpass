@@ -19,21 +19,35 @@ export default function AdminCheckInPage() {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { setLoading(false); return; }
-      const res = await fetch("/api/admin/check-auth", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) { setLoading(false); return; }
-      setAuthorized(true);
+    const checkAuth = () => {
+      setLoading(true);
+      setAuthorized(false);
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (!session) { setLoading(false); return; }
+        const res = await fetch("/api/admin/check-auth", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) { setLoading(false); return; }
+        setAuthorized(true);
 
-      const { data } = await supabase
-        .from("events")
-        .select("id, title, date, organizer_name")
-        .order("date", { ascending: false });
-      setEvents(data || []);
-      setLoading(false);
-    });
+        const { data } = await supabase
+          .from("events")
+          .select("id, title, date, organizer_name")
+          .order("date", { ascending: false });
+        setEvents(data || []);
+        setLoading(false);
+      });
+    };
+
+    checkAuth();
+
+    // Re-verify on bfcache restore (e.g. swiping back on iOS Safari after
+    // signing out) so a cached authorized render can't linger post-logout.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) checkAuth();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   if (loading) {

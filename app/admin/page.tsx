@@ -77,15 +77,31 @@ export default function AdminPage() {
   const [eventTicketsLoading, setEventTicketsLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { setLoading(false); return; }
-      const res = await fetch("/api/admin/check-auth", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+    const checkAuth = () => {
+      setLoading(true);
+      setAuthorized(false);
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (!session) { setLoading(false); return; }
+        const res = await fetch("/api/admin/check-auth", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) { setLoading(false); return; }
+        setAuthorized(true);
+        loadData();
       });
-      if (!res.ok) { setLoading(false); return; }
-      setAuthorized(true);
-      loadData();
-    });
+    };
+
+    checkAuth();
+
+    // Safari (and other browsers) can restore this page from the
+    // back/forward cache after sign-out without re-running this effect —
+    // re-verify the session so a bfcache restore can't show stale
+    // authorized content for a signed-out user.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) checkAuth();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   const showToast = (message: string, type: "success" | "error") => {
