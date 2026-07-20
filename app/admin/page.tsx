@@ -772,7 +772,7 @@ export default function AdminPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr style={{ borderBottom: "1px solid var(--card-border)", backgroundColor: "var(--background)" }}>
-                          {["Host", "Email", "Events", "Tickets", "Revenue", "FlexPass Fee", "Promoters", "Bank Details", "Status", "Action"].map(h => (
+                          {["Host", "Email", "Events", "Tickets", "Revenue", "FlexPass Fee", "Creator Payout", "Promoters", "Bank Details", "Status", "Action"].map(h => (
                             <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
                               style={{ color: "var(--text-muted)" }}>{h}</th>
                           ))}
@@ -796,6 +796,9 @@ export default function AdminPage() {
                             </td>
                             <td className="px-4 py-4 font-semibold" style={{ color: "#16a34a" }}>
                               ₦{h.fee.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-4 font-bold" style={{ color: "var(--brand-indigo)" }}>
+                              ₦{(h.revenue - h.fee).toLocaleString()}
                             </td>
                             <td className="px-4 py-4">
                               {h.promoters > 0 ? (
@@ -934,6 +937,10 @@ export default function AdminPage() {
                               <div className="text-center hidden sm:block">
                                 <p className="font-bold" style={{ color: "#16a34a" }}>₦{ev.fee.toLocaleString()}</p>
                                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>FlexPass Fee</p>
+                              </div>
+                              <div className="text-center hidden sm:block">
+                                <p className="font-bold" style={{ color: "var(--brand-indigo)" }}>₦{(ev.revenue - ev.fee).toLocaleString()}</p>
+                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Creator Payout</p>
                               </div>
                               {isExpanded
                                 ? <ChevronUp size={16} style={{ color: "var(--text-muted)" }} />
