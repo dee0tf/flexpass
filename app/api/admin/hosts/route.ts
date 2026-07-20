@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { platformFeeFromGross } from "@/lib/platformFee";
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,12 +62,12 @@ export async function GET(request: Request) {
 
   // Build event/ticket stats per user
   const statsMap = new Map<string, {
-    organizer_name: string; events: number; tickets: number; revenue: number; verified: boolean;
+    organizer_name: string; events: number; tickets: number; revenue: number; fee: number; verified: boolean;
   }>();
 
   for (const e of events || []) {
     const s = statsMap.get(e.user_id) ?? {
-      organizer_name: e.organizer_name || "—", events: 0, tickets: 0, revenue: 0, verified: false,
+      organizer_name: e.organizer_name || "—", events: 0, tickets: 0, revenue: 0, fee: 0, verified: false,
     };
     s.events += 1;
     if (e.organizer_verified) s.verified = true;
@@ -78,7 +79,11 @@ export async function GET(request: Request) {
     const userId = eventOwner.get(t.event_id);
     if (!userId) continue;
     const s = statsMap.get(userId);
-    if (s) { s.tickets += 1; s.revenue += t.total_amount_paid || 0; }
+    if (s) {
+      s.tickets += 1;
+      s.revenue += t.total_amount_paid || 0;
+      s.fee += platformFeeFromGross(t.total_amount_paid);
+    }
   }
 
   const hosts = allAuthUsers.map((u: any) => {
@@ -90,6 +95,7 @@ export async function GET(request: Request) {
       events:         s?.events   || 0,
       tickets:        s?.tickets  || 0,
       revenue:        s?.revenue  || 0,
+      fee:            Math.round(s?.fee || 0),
       verified:       s?.verified || false,
       promoters:      promoterCountMap.get(u.id) || 0,
       bank:           bankMap.get(u.id) || null,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { platformFeeFromGross } from "@/lib/platformFee";
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -72,20 +73,9 @@ export async function GET(request: Request) {
   const pendingPayoutAmount = (pendingPayoutRows || []).reduce((acc, p) => acc + (p.amount || 0), 0);
   const totalPaidOut = (paidPayoutRows || []).reduce((acc, p) => acc + (p.amount || 0), 0);
 
-  // The 5% service fee (CheckoutModal.tsx) is baked into total_amount_paid
-  // rather than always split out in fee_amount — tickets created via the
-  // webhook/reconciliation fallback path always record fee_amount as 0 even
-  // though the buyer paid the fee, so that column alone undercounts. Every
-  // paid ticket's total is subtotal * 1.05, so the fee is reconstructed from
-  // the total itself instead, which holds regardless of which path created
-  // the ticket.
-  const FEE_PERCENTAGE = 0.05;
-  const platformFeeRevenue = (soldTickets || []).reduce((acc, t) => {
-    const total = t.total_amount_paid || 0;
-    if (total <= 0) return acc;
-    const subtotal = total / (1 + FEE_PERCENTAGE);
-    return acc + (total - subtotal);
-  }, 0);
+  const platformFeeRevenue = (soldTickets || []).reduce(
+    (acc, t) => acc + platformFeeFromGross(t.total_amount_paid), 0
+  );
 
   // What FlexPass actually keeps: the 5% charged to buyers minus what
   // Paystack itself deducts per transaction, which varies by payment

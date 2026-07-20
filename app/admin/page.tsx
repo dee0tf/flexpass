@@ -38,7 +38,7 @@ type Stats = {
 
 type Host = {
   user_id: string; email: string; organizer_name: string;
-  events: number; tickets: number; revenue: number; verified: boolean;
+  events: number; tickets: number; revenue: number; fee: number; verified: boolean;
   promoters: number;
   bank: { bank_name: string; account_number: string; account_name: string } | null;
 };
@@ -46,7 +46,7 @@ type Host = {
 type AdminEvent = {
   id: string; title: string; date: string; image_url: string | null;
   organizer_name: string; verified: boolean;
-  host_email: string; tickets: number; revenue: number;
+  host_email: string; tickets: number; revenue: number; fee: number;
 };
 
 type AdminTicket = {
@@ -772,7 +772,7 @@ export default function AdminPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr style={{ borderBottom: "1px solid var(--card-border)", backgroundColor: "var(--background)" }}>
-                          {["Host", "Email", "Events", "Tickets", "Revenue", "Promoters", "Bank Details", "Status", "Action"].map(h => (
+                          {["Host", "Email", "Events", "Tickets", "Revenue", "FlexPass Fee", "Promoters", "Bank Details", "Status", "Action"].map(h => (
                             <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
                               style={{ color: "var(--text-muted)" }}>{h}</th>
                           ))}
@@ -793,6 +793,9 @@ export default function AdminPage() {
                             <td className="px-4 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>{h.tickets}</td>
                             <td className="px-4 py-4 font-semibold" style={{ color: "var(--text-primary)" }}>
                               ₦{h.revenue.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-4 font-semibold" style={{ color: "#16a34a" }}>
+                              ₦{h.fee.toLocaleString()}
                             </td>
                             <td className="px-4 py-4">
                               {h.promoters > 0 ? (
@@ -927,6 +930,10 @@ export default function AdminPage() {
                               <div className="text-center hidden sm:block">
                                 <p className="font-bold" style={{ color: "var(--text-primary)" }}>₦{ev.revenue.toLocaleString()}</p>
                                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>Revenue</p>
+                              </div>
+                              <div className="text-center hidden sm:block">
+                                <p className="font-bold" style={{ color: "#16a34a" }}>₦{ev.fee.toLocaleString()}</p>
+                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>FlexPass Fee</p>
                               </div>
                               {isExpanded
                                 ? <ChevronUp size={16} style={{ color: "var(--text-muted)" }} />

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { platformFeeFromGross } from "@/lib/platformFee";
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -53,11 +54,12 @@ export async function GET(request: Request) {
     .select("event_id, total_amount_paid")
     .in("status", ["valid", "scanned"]);
 
-  const ticketStats = new Map<string, { count: number; revenue: number }>();
+  const ticketStats = new Map<string, { count: number; revenue: number; fee: number }>();
   for (const t of ticketRows || []) {
-    const s = ticketStats.get(t.event_id) ?? { count: 0, revenue: 0 };
+    const s = ticketStats.get(t.event_id) ?? { count: 0, revenue: 0, fee: 0 };
     s.count  += 1;
     s.revenue += t.total_amount_paid || 0;
+    s.fee += platformFeeFromGross(t.total_amount_paid);
     ticketStats.set(t.event_id, s);
   }
 
@@ -85,6 +87,7 @@ export async function GET(request: Request) {
     host_email:     emailMap.get(e.user_id) ?? (e.user_id ? `${String(e.user_id).slice(0, 8)}…` : "unknown"),
     tickets:        ticketStats.get(e.id)?.count   || 0,
     revenue:        ticketStats.get(e.id)?.revenue || 0,
+    fee:            Math.round(ticketStats.get(e.id)?.fee || 0),
   }));
 
   return NextResponse.json({ events: enriched });
