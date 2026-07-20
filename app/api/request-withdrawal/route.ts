@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { logPaymentEvent } from "@/lib/logPaymentEvent";
+import { hostAmount } from "@/lib/hostAmount";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -27,6 +28,35 @@ export async function POST(request: Request) {
     const { amount } = await request.json();
     if (!amount || typeof amount !== "number" || amount < 1000) {
       return NextResponse.json({ error: "Minimum withdrawal is ₦1,000" }, { status: 400 });
+    }
+
+    // Recompute the host's available balance server-side — this must not
+    // trust the client, since the wallet UI's own balance check is only a
+    // convenience and can be bypassed with a direct request. Mirrors
+    // dashboard/wallet/page.tsx's loadWalletData exactly: net-of-fee ticket
+    // revenue minus every non-rejected payout already made or requested.
+    const { data: myEvents } = await db.from("events").select("id").eq("user_id", user.id);
+    const myEventIds = (myEvents || []).map(e => e.id);
+
+    const { data: tickets } = await db
+      .from("tickets")
+      .select("total_amount_paid")
+      .in("event_id", myEventIds.length > 0 ? myEventIds : ["__none__"])
+      .in("status", ["valid", "scanned"]);
+
+    const totalRevenue = (tickets || []).reduce((acc, t) => acc + hostAmount(t), 0);
+
+    const { data: myPayouts } = await db.from("payouts").select("amount, status").eq("user_id", user.id);
+    const totalWithdrawn = (myPayouts || [])
+      .filter(p => p.status !== "rejected")
+      .reduce((acc, p) => acc + (p.amount || 0), 0);
+
+    const availableBalance = Math.max(0, totalRevenue - totalWithdrawn);
+
+    if (amount > availableBalance) {
+      return NextResponse.json({
+        error: `Insufficient balance — ₦${Math.round(availableBalance).toLocaleString()} available`,
+      }, { status: 400 });
     }
 
     // Look up bank details
