@@ -1,11 +1,21 @@
 "use client";
 
-import React from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-interface MomentumPoint { date: string; tickets: number }
+interface MomentumPoint { date: string; value: number }
 
-export default function MomentumChart({ data }: { data: MomentumPoint[] }) {
+interface MomentumChartProps {
+  data: MomentumPoint[];
+  /** Tooltip value formatter — defaults to "N tickets". */
+  formatValue?: (value: number) => string;
+  /** Y-axis tick formatter — defaults to the raw number. */
+  formatAxis?: (value: number) => string;
+}
+
+export default function MomentumChart({ data, formatValue, formatAxis }: MomentumChartProps) {
+  const fmtValue = formatValue ?? ((v: number) => `${v} ticket${v === 1 ? "" : "s"}`);
+  const fmtAxis = formatAxis ?? ((v: number) => String(v));
+
   const formatted = data.map(d => ({
     ...d,
     label: new Date(d.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -37,8 +47,9 @@ export default function MomentumChart({ data }: { data: MomentumPoint[] }) {
             axisLine={false}
             tickLine={false}
             allowDecimals={false}
-            width={28}
+            width={40}
             tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+            tickFormatter={fmtAxis}
           />
           <Tooltip
             cursor={{ stroke: "var(--brand-lavender)", strokeWidth: 1, strokeDasharray: "3 3" }}
@@ -49,11 +60,11 @@ export default function MomentumChart({ data }: { data: MomentumPoint[] }) {
             }}
             labelStyle={{ color: "var(--text-secondary)", fontWeight: 600, marginBottom: 2 }}
             itemStyle={{ color: "var(--text-primary)" }}
-            formatter={(value: number | undefined) => [`${value ?? 0} ticket${value === 1 ? "" : "s"}`, ""]}
+            formatter={(value: number | undefined) => [fmtValue(value ?? 0), ""]}
           />
           <Area
             type="monotone"
-            dataKey="tickets"
+            dataKey="value"
             stroke="var(--brand-lavender)"
             strokeWidth={2}
             fill="url(#momentumFill)"

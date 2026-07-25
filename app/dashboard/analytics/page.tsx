@@ -9,6 +9,7 @@ import {
 import EventPaceChip from "@/components/EventPaceChip";
 import MomentumChart from "@/components/analytics/MomentumChart";
 import GenderDonut from "@/components/analytics/GenderDonut";
+import FunnelBars from "@/components/analytics/FunnelBars";
 import Link from "next/link";
 import { PaceStatus } from "@/lib/eventPacing";
 
@@ -215,7 +216,7 @@ export default function AnalyticsPage() {
             <div className="rounded-2xl p-5 sm:p-6" style={card}>
               <h3 className="font-bold text-theme">Sales momentum</h3>
               <p className="text-theme-2 text-xs mt-0.5 mb-2">Daily tickets sold {range !== "all" ? `· last ${range} days` : ""}</p>
-              <MomentumChart data={data.momentum} />
+              <MomentumChart data={data.momentum.map(m => ({ date: m.date, value: m.tickets }))} />
             </div>
 
             <div className="rounded-2xl p-5 sm:p-6" style={card}>
@@ -405,44 +406,6 @@ function KpiTile({ icon, iconColor, iconBg, label, value, sub, newBadge }: {
       </div>
       <p className="font-bold text-xl sm:text-2xl truncate text-theme" style={{ fontFamily: "var(--font-display)" }}>{value}</p>
       {sub && <p className="text-[11px] mt-1 truncate" style={{ color: "var(--text-muted)" }}>{sub}</p>}
-    </div>
-  );
-}
-
-function FunnelBars({ funnel }: { funnel: { opened: number; initiated: number; completed: number } }) {
-  const { opened, initiated, completed } = funnel;
-  if (opened === 0) return <EmptyNote text="No checkouts started in this window yet." />;
-  const stages = [
-    { label: "Opened checkout", value: opened, pct: 100 },
-    { label: "Started payment", value: initiated, pct: opened > 0 ? Math.round((initiated / opened) * 100) : 0 },
-    { label: "Completed purchase", value: completed, pct: opened > 0 ? Math.round((completed / opened) * 100) : 0 },
-  ];
-  return (
-    <div className="space-y-3">
-      {stages.map((s, i) => (
-        <div key={s.label}>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-8 rounded-lg overflow-hidden" style={{ backgroundColor: "var(--surface-raised)" }}>
-              <div
-                className="h-full rounded-lg flex items-center px-3 transition-all"
-                style={{ width: `${Math.max(s.pct, 8)}%`, backgroundColor: i === 2 ? "var(--brand-indigo)" : "var(--brand-lavender)" }}
-              >
-                <span className="text-white text-xs font-bold whitespace-nowrap">{s.value.toLocaleString()}</span>
-              </div>
-            </div>
-            <div className="w-28 text-right shrink-0">
-              <div className="text-xs font-semibold text-theme">{s.label}</div>
-              <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>{s.pct}%</div>
-            </div>
-          </div>
-          {i < stages.length - 1 && (
-            <div className="text-[10.5px] font-semibold pl-1 pt-1" style={{ color: "#b9740a" }}>
-              {stages[i].value - stages[i + 1].value} left before {i === 0 ? "starting payment" : "completing"}
-            </div>
-          )}
-        </div>
-      ))}
-      <p className="text-[11px] pt-1" style={{ color: "var(--text-muted)" }}>Tracked automatically from your checkout — no setup needed.</p>
     </div>
   );
 }

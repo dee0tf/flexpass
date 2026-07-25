@@ -13,6 +13,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { splitName } from "@/lib/splitName";
+import EventPaceChip from "@/components/EventPaceChip";
+import MomentumChart from "@/components/analytics/MomentumChart";
+import FunnelBars from "@/components/analytics/FunnelBars";
+import GenderDonut from "@/components/analytics/GenderDonut";
+import { PaceStatus } from "@/lib/eventPacing";
 
 type Payout = {
   id: string; amount: number; status: string; created_at: string;
@@ -58,6 +63,33 @@ type AdminTicket = {
   checked_in_at: string | null;
 };
 
+type AdminAnalytics = {
+  range: string;
+  kpis: {
+    gmv: number; avgOrderValue: number; conversionPct: number | null;
+    checkoutOpened: number; checkoutInitiated: number; checkoutCompleted: number;
+    activeHosts: number; totalHosts: number;
+  };
+  momentum: { date: string; value: number }[];
+  funnel: { opened: number; initiated: number; completed: number };
+  sources: { name: string; tickets: number; revenue: number }[];
+  topEvents: {
+    id: string; title: string; hostName: string; pace: PaceStatus;
+    sold: number; capacity: number; conversionPct: number | null; revenue: number;
+  }[];
+  topHosts: {
+    userId: string; name: string; verified: boolean; events: number;
+    revenue: number; feeEarned: number; avgConversionPct: number | null;
+  }[];
+  audience: {
+    gender: { female: number; male: number; other: number; totalCounted: number };
+    newVsReturning: { newPct: number; returningPct: number; totalBuyers: number };
+    showUpRate: { pct: number; sampleSize: number } | null;
+  };
+};
+
+type AnalyticsRange = "7" | "30" | "90" | "all";
+
 export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -69,7 +101,7 @@ export default function AdminPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [payoutTab, setPayoutTab] = useState<"pending" | "all">("pending");
   const [deleteTab, setDeleteTab] = useState<"pending" | "approved" | "all">("pending");
-  const [mainTab, setMainTab] = useState<"withdrawals" | "deletes" | "hosts" | "events">("withdrawals");
+  const [mainTab, setMainTab] = useState<"withdrawals" | "deletes" | "hosts" | "events" | "analytics">("withdrawals");
   const [hosts, setHosts] = useState<Host[]>([]);
   const [hostsLoading, setHostsLoading] = useState(false);
   const [adminEvents, setAdminEvents] = useState<AdminEvent[]>([]);
@@ -77,6 +109,9 @@ export default function AdminPage() {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [eventTickets, setEventTickets] = useState<Record<string, AdminTicket[]>>({});
   const [eventTicketsLoading, setEventTicketsLoading] = useState<string | null>(null);
+  const [adminAnalytics, setAdminAnalytics] = useState<AdminAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>("30");
 
   useEffect(() => {
     const checkAuth = () => {
@@ -211,6 +246,18 @@ export default function AdminPage() {
       const data = await res.json();
       if (res.ok) setEventTickets(prev => ({ ...prev, [eventId]: data.tickets || [] }));
     } finally { setEventTicketsLoading(null); }
+  }
+
+  async function loadAdminAnalytics(range: AnalyticsRange) {
+    setAnalyticsLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/admin/analytics?range=${range}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) setAdminAnalytics(await res.json());
+    } finally { setAnalyticsLoading(false); }
   }
 
   function toggleEvent(eventId: string) {
@@ -502,19 +549,24 @@ export default function AdminPage() {
                 { key: "deletes",     label: `Delete Requests${pendingDeleteCount ? ` (${pendingDeleteCount})` : ""}` },
                 { key: "hosts",       label: "Hosts" },
                 { key: "events",      label: "Events" },
+                { key: "analytics",   label: "Analytics" },
               ] as const).map(t => (
                 <button key={t.key}
                   onClick={() => {
                     setMainTab(t.key);
-                    if (t.key === "hosts"  && hosts.length === 0)       loadHosts();
-                    if (t.key === "events" && adminEvents.length === 0)  loadEvents();
+                    if (t.key === "hosts"     && hosts.length === 0)       loadHosts();
+                    if (t.key === "events"    && adminEvents.length === 0)  loadEvents();
+                    if (t.key === "analytics" && !adminAnalytics)          loadAdminAnalytics(analyticsRange);
                   }}
-                  className="px-5 py-2 rounded-xl text-sm font-semibold transition"
+                  className="px-5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5"
                   style={{
                     backgroundColor: mainTab === t.key ? "var(--brand-indigo)" : "transparent",
                     color: mainTab === t.key ? "#fff" : "var(--text-muted)",
                   }}>
                   {t.label}
+                  {t.key === "analytics" && mainTab !== "analytics" && (
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "var(--brand-amber)" }} />
+                  )}
                 </button>
               ))}
             </div>
@@ -1051,6 +1103,243 @@ export default function AdminPage() {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Analytics ── */}
+            {mainTab === "analytics" && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h2 className="font-display font-bold text-lg" style={{ color: "var(--text-primary)" }}>
+                      Platform Analytics
+                    </h2>
+                    <p className="text-xs mt-0.5 max-w-md" style={{ color: "var(--text-muted)" }}>
+                      The same view every host gets for their own events — aggregated across every host and event on FlexPass.
+                    </p>
+                  </div>
+                  <div className="inline-flex p-1 rounded-xl gap-0.5" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
+                    {(["7", "30", "90", "all"] as const).map(r => (
+                      <button key={r}
+                        onClick={() => { setAnalyticsRange(r); loadAdminAnalytics(r); }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition"
+                        style={analyticsRange === r
+                          ? { backgroundColor: "var(--card-bg)", color: "var(--brand-indigo)" }
+                          : { color: "var(--text-secondary)" }}>
+                        {r === "all" ? "All" : `${r}D`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {analyticsLoading && !adminAnalytics ? (
+                  <div className="flex justify-center py-16">
+                    <Loader2 className="h-7 w-7 animate-spin" style={{ color: "var(--brand-indigo)" }} />
+                  </div>
+                ) : adminAnalytics && (
+                  <div className="space-y-4" style={{ opacity: analyticsLoading ? 0.6 : 1, transition: "opacity .15s" }}>
+                    {/* KPI row */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "rgba(245,158,11,0.06)", border: "1px solid var(--card-border)" }}>
+                        <div className="flex items-center gap-1.5 mb-1" style={{ color: "#f59e0b" }}>
+                          <TrendingUp size={16} /><span className="text-xs font-semibold uppercase tracking-wide">Platform GMV</span>
+                        </div>
+                        <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                          {analyticsRange === "all" ? "all time" : `last ${analyticsRange} days`}
+                        </p>
+                        <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>₦{adminAnalytics.kpis.gmv.toLocaleString()}</p>
+                      </div>
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "rgba(236,72,153,0.06)", border: "1px solid var(--card-border)" }}>
+                        <div className="flex items-center gap-1.5 mb-1" style={{ color: "#ec4899" }}>
+                          <Percent size={16} /><span className="text-xs font-semibold uppercase tracking-wide">Checkout Conversion</span>
+                        </div>
+                        <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                          {adminAnalytics.kpis.checkoutCompleted.toLocaleString()} of {adminAnalytics.kpis.checkoutInitiated.toLocaleString()} started
+                        </p>
+                        <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>
+                          {adminAnalytics.kpis.conversionPct !== null ? `${adminAnalytics.kpis.conversionPct}%` : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "rgba(72,0,130,0.06)", border: "1px solid var(--card-border)" }}>
+                        <div className="flex items-center gap-1.5 mb-1" style={{ color: "var(--brand-indigo)" }}>
+                          <Users size={16} /><span className="text-xs font-semibold uppercase tracking-wide">Active Hosts</span>
+                        </div>
+                        <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>made a sale this period</p>
+                        <p className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>
+                          {adminAnalytics.kpis.activeHosts} <span className="text-lg" style={{ color: "var(--text-muted)" }}>/ {adminAnalytics.kpis.totalHosts}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Momentum + Funnel */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                        <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Platform sales momentum</h3>
+                        <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>Daily GMV across every event</p>
+                        <MomentumChart
+                          data={adminAnalytics.momentum}
+                          formatValue={(v) => `₦${Math.round(v).toLocaleString()}`}
+                          formatAxis={(v) => v >= 1e6 ? `₦${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `₦${Math.round(v / 1e3)}K` : `₦${v}`}
+                        />
+                      </div>
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                        <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Checkout funnel</h3>
+                        <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--text-muted)" }}>Every host&apos;s checkout, combined</p>
+                        <FunnelBars funnel={adminAnalytics.funnel} />
+                      </div>
+                    </div>
+
+                    {/* Sources + Top events */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                        <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Traffic sources, platform-wide</h3>
+                        <p className="text-xs mt-0.5 mb-4" style={{ color: "var(--text-muted)" }}>Direct vs. promoter-driven tickets</p>
+                        {adminAnalytics.sources.every(s => s.tickets === 0) ? (
+                          <p className="text-xs py-4" style={{ color: "var(--text-muted)" }}>No ticket sales in this window yet.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {adminAnalytics.sources.map((s, i) => {
+                              const max = Math.max(...adminAnalytics.sources.map(x => x.tickets), 1);
+                              const pct = Math.round((s.tickets / max) * 100);
+                              const color = i === 0 ? "#480082" : "#9F67FE";
+                              return (
+                                <div key={s.name}>
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{s.name}</span>
+                                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                                      <b style={{ color: "var(--text-primary)" }}>{s.tickets.toLocaleString()}</b> tickets · ₦{s.revenue.toLocaleString()}
+                                    </span>
+                                  </div>
+                                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--surface-raised)" }}>
+                                    <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                        <div className="p-5 pb-3">
+                          <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Top events this period</h3>
+                          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Ranked by revenue, all hosts</p>
+                        </div>
+                        {adminAnalytics.topEvents.length === 0 ? (
+                          <p className="text-xs px-5 pb-5" style={{ color: "var(--text-muted)" }}>No events yet.</p>
+                        ) : (
+                          <div className="divide-y" style={{ borderColor: "var(--card-border)" }}>
+                            {adminAnalytics.topEvents.map((e, i) => (
+                              <div key={e.id} className="px-5 py-3 flex items-center gap-3">
+                                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10.5px] font-bold shrink-0"
+                                  style={{ backgroundColor: "var(--surface-raised)", color: "var(--text-muted)" }}>{i + 1}</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{e.title}</p>
+                                  <p className="text-[10.5px] truncate" style={{ color: "var(--text-muted)" }}>{e.hostName}</p>
+                                </div>
+                                <EventPaceChip status={e.pace} size="xs" />
+                                <span className="text-xs font-bold shrink-0 whitespace-nowrap" style={{ color: "var(--text-primary)" }}>
+                                  ₦{e.revenue.toLocaleString()}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Top hosts */}
+                    <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                      <div className="p-5 pb-3">
+                        <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Top hosts this period</h3>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                          Ranked by revenue — plus what FlexPass earned in fees from each
+                        </p>
+                      </div>
+                      {adminAnalytics.topHosts.length === 0 ? (
+                        <p className="text-xs px-5 pb-5" style={{ color: "var(--text-muted)" }}>No hosts yet.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm" style={{ minWidth: 560 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid var(--card-border)", backgroundColor: "var(--background)" }}>
+                                {["Host", "Events", "Avg. conversion", "Revenue", "FlexPass fee earned"].map(h => (
+                                  <th key={h} className="px-5 py-2.5 text-left text-[10.5px] font-semibold uppercase tracking-wider"
+                                    style={{ color: "var(--text-muted)" }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {adminAnalytics.topHosts.map((h, i) => (
+                                <tr key={h.userId} style={{ borderBottom: i < adminAnalytics.topHosts.length - 1 ? "1px solid var(--card-border)" : "none" }}>
+                                  <td className="px-5 py-3 font-semibold flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
+                                    {h.name}
+                                    {h.verified && <BadgeCheck size={13} style={{ color: "#16a34a" }} />}
+                                  </td>
+                                  <td className="px-5 py-3" style={{ color: "var(--text-secondary)" }}>{h.events}</td>
+                                  <td className="px-5 py-3" style={{ color: "var(--text-secondary)" }}>
+                                    {h.avgConversionPct !== null ? `${h.avgConversionPct}%` : "—"}
+                                  </td>
+                                  <td className="px-5 py-3 font-bold" style={{ color: "var(--text-primary)" }}>₦{h.revenue.toLocaleString()}</td>
+                                  <td className="px-5 py-3 font-semibold" style={{ color: "#16a34a" }}>₦{h.feeEarned.toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Audience */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                        <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Gender split</h3>
+                        <p className="text-xs mt-0.5 mb-1" style={{ color: "var(--text-muted)" }}>Buyers platform-wide</p>
+                        <GenderDonut
+                          female={adminAnalytics.audience.gender.female}
+                          male={adminAnalytics.audience.gender.male}
+                          other={adminAnalytics.audience.gender.other}
+                          total={adminAnalytics.audience.gender.totalCounted}
+                        />
+                      </div>
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                        <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>New vs. returning buyers</h3>
+                        <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--text-muted)" }}>Across the whole platform</p>
+                        {adminAnalytics.audience.newVsReturning.totalBuyers === 0 ? (
+                          <p className="text-xs py-4" style={{ color: "var(--text-muted)" }}>No buyers yet.</p>
+                        ) : (
+                          <>
+                            <div className="h-3 rounded-full overflow-hidden flex" style={{ backgroundColor: "var(--surface-raised)" }}>
+                              <div style={{ width: `${adminAnalytics.audience.newVsReturning.newPct}%`, backgroundColor: "var(--brand-lavender)" }} />
+                              <div style={{ width: `${adminAnalytics.audience.newVsReturning.returningPct}%`, backgroundColor: "rgba(159,103,254,0.18)" }} />
+                            </div>
+                            <div className="flex justify-between mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                              <span><b style={{ color: "var(--text-primary)" }}>{adminAnalytics.audience.newVsReturning.newPct}%</b> new</span>
+                              <span><b style={{ color: "var(--text-primary)" }}>{adminAnalytics.audience.newVsReturning.returningPct}%</b> returning</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                        <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Average show-up rate</h3>
+                        <p className="text-xs mt-0.5 mb-1" style={{ color: "var(--text-muted)" }}>Checked in vs. sold, past events</p>
+                        {!adminAnalytics.audience.showUpRate ? (
+                          <p className="text-xs py-4" style={{ color: "var(--text-muted)" }}>No past events yet.</p>
+                        ) : (
+                          <>
+                            <p className="text-3xl font-bold mt-2" style={{ color: "var(--text-primary)" }}>{adminAnalytics.audience.showUpRate.pct}%</p>
+                            <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
+                              of {adminAnalytics.audience.showUpRate.sampleSize.toLocaleString()} sold tickets scanned in at the door
+                            </p>
+                            <div className="h-2 rounded-full overflow-hidden mt-3" style={{ backgroundColor: "var(--surface-raised)" }}>
+                              <div className="h-full rounded-full" style={{ width: `${adminAnalytics.audience.showUpRate.pct}%`, backgroundColor: "var(--brand-lavender)" }} />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
