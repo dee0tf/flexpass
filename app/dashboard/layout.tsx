@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen, ShieldCheck
+  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen, ShieldCheck, BarChart3
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useState, useEffect, useRef } from "react";
@@ -99,6 +99,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navItems = [
     { name: "Overview",   href: "/dashboard",           icon: LayoutDashboard },
     { name: "My Events",  href: "/dashboard/events",     icon: CalendarDays },
+    { name: "Analytics",  href: "/dashboard/analytics", icon: BarChart3, isNew: true },
     { name: "My Tickets", href: "/dashboard/tickets",   icon: TicketIcon },
     { name: "Check-In",   href: "/dashboard/checkin",   icon: ScanLine },
     { name: "Promoters",  href: "/dashboard/promoters", icon: Share2 },
@@ -140,6 +141,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
               <item.icon size={18} />
               {item.name}
+              {item.isNew && !isActive && (
+                <span className="w-1.5 h-1.5 rounded-full ml-auto shrink-0" style={{ backgroundColor: "var(--brand-amber)" }} />
+              )}
             </Link>
           );
         })}

@@ -1,15 +1,38 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mail, TrendingUp, BadgeCheck, BookOpen, X, ChevronRight } from "lucide-react";
+import {
+  Loader2, DollarSign, Ticket, Users, Calendar, Edit, Download, Plus, Mail, TrendingUp, BadgeCheck, BookOpen, X, ChevronRight,
+  Percent, ArrowUpRight, AlertTriangle, Wallet, PartyPopper,
+} from "lucide-react";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
-import SalesChart from "@/components/SalesChart";
 import Link from "next/link";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { hostAmount } from "@/lib/hostAmount";
 import { splitName } from "@/lib/splitName";
+import EventPaceChip from "@/components/EventPaceChip";
+import { PaceStatus } from "@/lib/eventPacing";
+
+interface AttentionItem {
+  id: string;
+  tone: "warn" | "good" | "info";
+  icon: ReactNode;
+  title: string;
+  text: string;
+  ctaLabel: string;
+  onClick: () => void;
+  /** Set for items whose CTA triggers an async action (e.g. duplicate) so the
+   *  button can show a loading state without the item itself going stale. */
+  relatedEventId?: string;
+}
+
+const ATTENTION_STYLES: Record<AttentionItem["tone"], { bg: string; color: string }> = {
+  warn: { bg: "rgba(250,178,25,0.16)", color: "#b9740a" },
+  good: { bg: "rgba(22,163,74,0.12)", color: "#16a34a" },
+  info: { bg: "rgba(159,103,254,0.12)", color: "var(--brand-indigo)" },
+};
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -21,8 +44,12 @@ export default function DashboardPage() {
   }, []);
   const [stats, setStats] = useState<{
     revenue: number; ticketsSold: number; activeEvents: number;
-    recentSales: any[]; myEvents: any[]; chartData: any[];
-  }>({ revenue: 0, ticketsSold: 0, activeEvents: 0, recentSales: [], myEvents: [], chartData: [] });
+    recentSales: any[]; myEvents: any[];
+  }>({ revenue: 0, ticketsSold: 0, activeEvents: 0, recentSales: [], myEvents: [] });
+  const [paceByEvent, setPaceByEvent] = useState<Record<string, PaceStatus>>({});
+  const [checkoutStats, setCheckoutStats] = useState<{ conversionPct: number | null; completed: number; initiated: number }>({ conversionPct: null, completed: 0, initiated: 0 });
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -74,15 +101,18 @@ export default function DashboardPage() {
         .order("created_at", { ascending: false });
 
       if (!myEvents || myEvents.length === 0) {
-        setStats({ revenue: 0, ticketsSold: 0, activeEvents: 0, recentSales: [], myEvents: [], chartData: [] });
+        setStats({ revenue: 0, ticketsSold: 0, activeEvents: 0, recentSales: [], myEvents: [] });
         setLoading(false);
         return;
       }
 
       const myEventIds = myEvents.map(e => e.id);
+      // valid + scanned — a checked-in ticket is still a completed sale;
+      // excluding it would silently undercount revenue for any event
+      // that's already had check-in (matches Wallet's and Admin's balance math).
       const { data: myTickets } = await supabase
         .from("tickets").select("*, events(title, price)")
-        .in("event_id", myEventIds).eq("status", "valid")
+        .in("event_id", myEventIds).in("status", ["valid", "scanned"])
         .order("created_at", { ascending: false });
 
       const revenue = myTickets?.reduce((acc, t) => acc + hostAmount(t), 0) || 0;
@@ -102,12 +132,6 @@ export default function DashboardPage() {
         soldByEvent.set(t.event_id, (soldByEvent.get(t.event_id) || 0) + 1);
       });
 
-      const chartDataMap = new Map<string, number>();
-      myTickets?.forEach(t => {
-        const title = t.events?.title || "Unknown";
-        chartDataMap.set(title, (chartDataMap.get(title) || 0) + hostAmount(t));
-      });
-
       // Attach velocity + sold count to each event
       const eventsWithVelocity = myEvents.map(e => ({
         ...e,
@@ -121,15 +145,129 @@ export default function DashboardPage() {
         activeEvents: myEvents.length,
         recentSales: myTickets || [],
         myEvents: eventsWithVelocity,
-        chartData: Array.from(chartDataMap.entries()).map(([name, rev]) => ({
-          name: name.length > 20 ? name.slice(0, 17) + "..." : name,
-          revenue: rev,
-        })),
       });
+
+      // Everything below is best-effort context for the KPI strip and Needs
+      // Attention — none of it should block the core numbers above from showing.
+      loadAttentionData(myEvents);
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadAttentionData(myEvents: any[]) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const [analyticsRes, payoutsRes] = await Promise.all([
+        fetch("/api/dashboard/analytics?eventId=all&range=30", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }),
+        supabase.from("payouts").select("amount, status").eq("user_id", session.user.id),
+      ]);
+
+      const items: AttentionItem[] = [];
+      let events: any[] = [];
+
+      if (analyticsRes.ok) {
+        const analytics = await analyticsRes.json();
+        events = analytics.events || [];
+
+        const pace: Record<string, PaceStatus> = {};
+        events.forEach((e: any) => { pace[e.id] = e.pace; });
+        setPaceByEvent(pace);
+        setCheckoutStats({
+          conversionPct: analytics.kpis?.conversionPct ?? null,
+          completed: analytics.kpis?.checkoutCompleted || 0,
+          initiated: analytics.kpis?.checkoutInitiated || 0,
+        });
+
+        // Slowing event: needs a push, ranked by lowest sell-through.
+        const needsPush = events.filter((e: any) => e.pace === "needs_push").sort((a: any, b: any) => a.sellThroughPct - b.sellThroughPct)[0];
+        if (needsPush) {
+          items.push({
+            id: `slow-${needsPush.id}`, tone: "warn", icon: <AlertTriangle size={16} />,
+            title: `${needsPush.title} is slowing down`,
+            text: `Only ${needsPush.sellThroughPct}% sold${needsPush.daysUntilEvent !== null ? ` with ${needsPush.daysUntilEvent} day${needsPush.daysUntilEvent === 1 ? "" : "s"} to go` : ""} — sales have dropped this week.`,
+            ctaLabel: "Boost this event", onClick: () => router.push(`/dashboard/events/${needsPush.id}/edit`),
+          });
+        }
+
+        // High checkout drop-off vs. the host's own average, min sample size.
+        const withSample = events.filter((e: any) => e.checkoutInitiated >= 8 && e.conversionPct !== null);
+        if (withSample.length >= 2) {
+          const avgConv = withSample.reduce((s: number, e: any) => s + e.conversionPct, 0) / withSample.length;
+          const worst = [...withSample].sort((a: any, b: any) => a.conversionPct - b.conversionPct)[0];
+          if (avgConv - worst.conversionPct >= 15) {
+            items.push({
+              id: `dropoff-${worst.id}`, tone: "warn", icon: <AlertTriangle size={16} />,
+              title: `High checkout drop-off on ${worst.title}`,
+              text: `${100 - worst.conversionPct}% of buyers abandon before paying — ${Math.round(avgConv - worst.conversionPct)} points below your other events.`,
+              ctaLabel: "View funnel", onClick: () => router.push(`/dashboard/analytics?eventId=${worst.id}`),
+            });
+          }
+        }
+
+        // Sold-out opportunity.
+        const soldOut = events.find((e: any) => e.pace === "sold_out");
+        if (soldOut) {
+          items.push({
+            id: `soldout-${soldOut.id}`, tone: "good", icon: <PartyPopper size={16} />,
+            title: `${soldOut.title} sold out`,
+            text: "Demand is proven — duplicate it to plan your next drop while it's hot.",
+            ctaLabel: "Duplicate event", relatedEventId: soldOut.id,
+            onClick: () => handleDuplicate(soldOut.id),
+          });
+        }
+      }
+
+      if (!payoutsRes.error) {
+        const payouts = payoutsRes.data || [];
+        const totalWithdrawn = payouts.filter((p: any) => p.status !== "rejected").reduce((s: number, p: any) => s + p.amount, 0);
+        const { data: allHostTickets } = await supabase
+          .from("tickets").select("total_amount_paid, events(price)")
+          .in("event_id", myEvents.map(e => e.id)).in("status", ["valid", "scanned"]);
+        const totalRevenue = (allHostTickets || []).reduce((s: number, t: any) => s + hostAmount(t), 0);
+        const balance = Math.max(0, totalRevenue - totalWithdrawn);
+        if (balance >= 5000) {
+          items.push({
+            id: "payout-ready", tone: "info", icon: <Wallet size={16} />,
+            title: `₦${balance.toLocaleString()} ready to withdraw`,
+            text: "Your available balance is sitting in your wallet, ready to send to your bank.",
+            ctaLabel: "Go to Wallet", onClick: () => router.push("/dashboard/wallet"),
+          });
+        }
+      }
+
+      setAttention(items);
+    } catch (err) {
+      console.error("Needs Attention load error:", err);
+    }
+  }
+
+  async function handleDuplicate(eventId: string) {
+    setDuplicatingId(eventId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/duplicate-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ eventId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.newEventId) {
+        router.push(`/dashboard/events/${data.newEventId}/edit`);
+      } else {
+        showToast(data.error || "Failed to duplicate event", "error");
+        setDuplicatingId(null);
+      }
+    } catch {
+      showToast("Something went wrong. Please try again.", "error");
+      setDuplicatingId(null);
     }
   }
 
@@ -300,19 +438,70 @@ export default function DashboardPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {[
           { icon: <DollarSign className="h-6 w-6 text-green-600"/>, bg: "bg-green-100", label: "Total Revenue", value: `₦${stats.revenue.toLocaleString()}` },
           { icon: <Ticket className="h-6 w-6 text-[#480082]"/>, bg: "bg-[#480082]/10", label: "Tickets Sold", value: stats.ticketsSold },
           { icon: <Users className="h-6 w-6 text-amber-600"/>, bg: "bg-amber-100", label: "Your Events", value: stats.activeEvents },
         ].map(s => (
-          <div key={s.label} className="p-6 rounded-2xl shadow-sm" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-            <div className={`p-2 ${s.bg} rounded-lg w-fit mb-4`}>{s.icon}</div>
-            <p className="text-theme-2 text-sm">{s.label}</p>
-            <h3 className="text-2xl sm:text-3xl font-bold text-theme mt-1 truncate">{s.value}</h3>
+          <div key={s.label} className="p-4 sm:p-6 rounded-2xl shadow-sm" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+            <div className={`p-2 ${s.bg} rounded-lg w-fit mb-3 sm:mb-4`}>{s.icon}</div>
+            <p className="text-theme-2 text-xs sm:text-sm">{s.label}</p>
+            <h3 className="text-xl sm:text-3xl font-bold text-theme mt-1 truncate">{s.value}</h3>
           </div>
         ))}
+        <div className="p-4 sm:p-6 rounded-2xl shadow-sm" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+          <div className="flex items-center gap-2 mb-3 sm:mb-4">
+            <div className="p-2 rounded-lg w-fit" style={{ backgroundColor: "rgba(159,103,254,0.12)" }}><Percent className="h-6 w-6" style={{ color: "var(--brand-indigo)" }} /></div>
+            <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(159,103,254,0.14)", color: "var(--brand-indigo)" }}>New</span>
+          </div>
+          <p className="text-theme-2 text-xs sm:text-sm">Checkout Completion</p>
+          <h3 className="text-xl sm:text-3xl font-bold text-theme mt-1 truncate">
+            {checkoutStats.conversionPct !== null ? `${checkoutStats.conversionPct}%` : "—"}
+          </h3>
+          <Link href="/dashboard/analytics" className="inline-flex items-center gap-1 text-xs font-bold mt-2" style={{ color: "var(--brand-indigo)" }}>
+            See funnel <ArrowUpRight size={11} />
+          </Link>
+        </div>
       </div>
+
+      {/* Needs attention */}
+      {attention.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="font-bold text-base text-theme">Needs your attention</h3>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(250,178,25,0.16)", color: "#b9740a" }}>{attention.length}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {attention.map(item => {
+              const style = ATTENTION_STYLES[item.tone];
+              const isDuplicating = !!item.relatedEventId && duplicatingId === item.relatedEventId;
+              return (
+                <div key={item.id} className="relative flex gap-3 p-4 rounded-2xl overflow-hidden shadow-sm"
+                  style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+                  <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ backgroundColor: style.color }} />
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: style.bg, color: style.color }}>
+                    {item.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-theme">{item.title}</p>
+                    <p className="text-xs mt-0.5 leading-relaxed text-theme-2">{item.text}</p>
+                    <button
+                      onClick={item.onClick}
+                      disabled={isDuplicating}
+                      className="inline-flex items-center gap-1 text-xs font-bold mt-2 disabled:opacity-60"
+                      style={{ color: style.color }}
+                    >
+                      {isDuplicating ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpRight size={12} />}
+                      {isDuplicating ? "Duplicating…" : item.ctaLabel}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Empty state */}
       {stats.myEvents.length === 0 && (
@@ -327,15 +516,6 @@ export default function DashboardPage() {
               Create Event
             </button>
           </Link>
-        </div>
-      )}
-
-      {/* Chart */}
-      {stats.chartData.length > 0 && (
-        <div className="p-6 rounded-2xl shadow-sm" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-          <h3 className="font-bold text-lg text-theme mb-1">Revenue by Event</h3>
-          <p className="text-theme-2 text-sm mb-6">See which experiences are performing best.</p>
-          <SalesChart data={stats.chartData} />
         </div>
       )}
 
@@ -356,7 +536,10 @@ export default function DashboardPage() {
                       {event.image_url && <img src={event.image_url} alt={event.title} className="object-cover w-full h-full" />}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-bold text-theme truncate text-sm sm:text-base">{event.title}</h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-theme truncate text-sm sm:text-base">{event.title}</h4>
+                        {paceByEvent[event.id] && <EventPaceChip status={paceByEvent[event.id]} size="xs" />}
+                      </div>
                       <div className="flex items-center gap-2 sm:gap-3 text-xs text-theme-2 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1"><Calendar size={11} /> {new Date(event.date).toLocaleDateString()}</span>
                         <span className="flex items-center gap-1"><Ticket size={11} /> {event._sold} sold</span>
