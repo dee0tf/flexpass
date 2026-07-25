@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, Minus, Loader2, Check, X } from "lucide-react";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { PaystackButton } from "react-paystack";
 import { useRouter } from "next/navigation";
+import { trackCheckoutEvent } from "@/lib/trackCheckoutEvent";
 
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY;
 
@@ -70,11 +71,23 @@ export default function CheckoutModal({
     setToast({ message, type });
   }, []);
   const router = useRouter();
+  // Tracks whether the current Paystack popup ended in onSuccess, so onClose
+  // (which also fires after a successful payment) doesn't double-log it as
+  // an abandoned checkout.
+  const paidRef = useRef(false);
 
   useEffect(() => {
     const code = sessionStorage.getItem(`ref_${eventId}`);
     if (code) setReferralCode(code);
   }, [eventId]);
+
+  // Funnel: fires once per modal open — the closest thing to "started checkout".
+  useEffect(() => {
+    if (open) {
+      paidRef.current = false;
+      trackCheckoutEvent("checkout_opened", { eventId });
+    }
+  }, [open, eventId]);
 
   useEffect(() => {
     fetch(`/api/event-subaccount?eventId=${eventId}`)
@@ -113,6 +126,10 @@ export default function CheckoutModal({
   };
 
   const handleClaimFree = async () => {
+    trackCheckoutEvent("checkout_initiated", {
+      eventId, email, tierId: selectedTier?.id || null, tierName: selectedTier?.name || null,
+      quantity, isFree: true,
+    });
     setIsSaving(true);
     try {
       const res = await fetch("/api/claim-free-ticket", {
@@ -140,6 +157,7 @@ export default function CheckoutModal({
   };
 
   const handleSuccess = async (reference: PaystackSuccessResponse) => {
+    paidRef.current = true;
     setPaystackActive(false);
     document.body.style.overflow = "";
     setIsSaving(true);
@@ -177,6 +195,14 @@ export default function CheckoutModal({
     text: `Pay ₦${totalAmount.toLocaleString()}`,
     onSuccess: handleSuccess,
     onClose: () => {
+      // react-paystack calls onClose after a successful payment too, once
+      // the popup itself closes — only log abandonment if onSuccess never fired.
+      if (!paidRef.current) {
+        trackCheckoutEvent("checkout_abandoned", {
+          eventId, email, tierId: selectedTier?.id || null, tierName: selectedTier?.name || null,
+          quantity, isFree: false,
+        });
+      }
       setPaystackActive(false);
       document.body.style.overflow = "";
     },
@@ -454,6 +480,10 @@ export default function CheckoutModal({
                             {...componentProps}
                             onClick={() => {
                               if (!canProceed) return;
+                              trackCheckoutEvent("checkout_initiated", {
+                                eventId, email, tierId: selectedTier?.id || null,
+                                tierName: selectedTier?.name || null, quantity, isFree: false,
+                              });
                               // Hide our modal + backdrop before Paystack opens
                               // so Paystack has a clean, unobstructed viewport
                               setPaystackActive(true);

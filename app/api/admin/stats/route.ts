@@ -36,6 +36,8 @@ export async function GET(request: Request) {
     { count: pendingDeleteCount },
     { data: hostRows },
     { data: paystackFeeRows },
+    { count: checkoutInitiatedCount },
+    { count: completedCheckoutCount },
   ] = await Promise.all([
     db.from("events").select("*", { count: "exact", head: true }),
     db.from("tickets").select("*", { count: "exact", head: true }).eq("status", "valid"),
@@ -51,6 +53,13 @@ export async function GET(request: Request) {
     // because the 5% we charge buyers doesn't equal what Paystack actually
     // keeps, so it can't be derived from ticket data alone.
     db.from("payment_events").select("reference, metadata").eq("event_type", "paystack_fee_recorded"),
+    // Checkout funnel — logged client-side from CheckoutModal (checkout_opened/
+    // checkout_initiated/checkout_abandoned) since that's the only place a
+    // started-but-not-yet-paid checkout is ever recorded.
+    db.from("payment_events").select("*", { count: "exact", head: true })
+      .eq("source", "checkout-funnel").eq("event_type", "checkout_initiated"),
+    db.from("payment_events").select("*", { count: "exact", head: true })
+      .eq("status", "success").in("event_type", ["ticket_created", "ticket_issued"]),
   ]);
 
   // Count distinct hosts from events table
@@ -108,5 +117,13 @@ export async function GET(request: Request) {
     pendingPayouts: pendingPayoutRows?.length || 0,
     pendingPayoutAmount,
     pendingDeletes: pendingDeleteCount || 0,
+    // Best-effort: checkout_initiated is only counted from when funnel
+    // tracking was added, so this ratio will look artificially low until
+    // enough post-instrumentation data accumulates.
+    checkoutInitiated: checkoutInitiatedCount || 0,
+    completedCheckouts: completedCheckoutCount || 0,
+    checkoutCompletionRate: checkoutInitiatedCount
+      ? Math.round(((completedCheckoutCount || 0) / checkoutInitiatedCount) * 1000) / 1000
+      : null,
   });
 }

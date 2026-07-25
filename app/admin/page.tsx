@@ -6,7 +6,7 @@ import {
   Loader2, CheckCircle2, XCircle, RefreshCw, Building2,
   Users, Ticket, TrendingUp, Clock, AlertCircle, Trash2, BadgeCheck, ShieldOff,
   ScanLine, ArrowDownToLine, CalendarDays, ChevronDown, ChevronUp, CreditCard, Share2,
-  Download, LogOut,
+  Download, LogOut, Percent,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import Link from "next/link";
@@ -34,6 +34,8 @@ type Stats = {
   paystackFeesCost: number; netPlatformRevenue: number; totalPaidOut: number;
   pendingPayouts: number; pendingPayoutAmount: number;
   pendingDeletes: number;
+  checkoutInitiated: number; completedCheckouts: number;
+  checkoutCompletionRate: number | null;
 };
 
 type Host = {
@@ -443,7 +445,7 @@ export default function AdminPage() {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                   {[
                     {
                       label: "Tickets Admitted", sublabel: `${stats.scannedTickets.toLocaleString()} scanned`,
@@ -471,6 +473,12 @@ export default function AdminPage() {
                       color: stats.pendingPayouts > 0 ? "#ef4444" : "#6b7280",
                       bg: stats.pendingPayouts > 0 ? "rgba(239,68,68,0.06)" : "var(--card-bg)",
                       highlight: stats.pendingPayouts > 0,
+                    },
+                    {
+                      label: "Checkout Completion", sublabel: `${stats.completedCheckouts.toLocaleString()} of ${stats.checkoutInitiated.toLocaleString()} started`,
+                      value: stats.checkoutCompletionRate == null ? "—" : `${Math.round(stats.checkoutCompletionRate * 100)}%`,
+                      icon: <Percent size={16} />,
+                      color: "#ec4899", bg: "rgba(236,72,153,0.06)", highlight: false,
                     },
                   ].map(s => (
                     <div key={s.label} className="rounded-2xl p-5"

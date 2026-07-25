@@ -17,7 +17,7 @@ export async function logPaymentEvent({
   message,
   metadata,
 }: {
-  source: 'verify-payment' | 'claim-free-ticket' | 'webhook' | 'reconciliation' | 'request-withdrawal' | 'issue-ticket';
+  source: 'verify-payment' | 'claim-free-ticket' | 'webhook' | 'reconciliation' | 'request-withdrawal' | 'issue-ticket' | 'checkout-funnel';
   eventType: string;
   status: 'success' | 'error' | 'skipped';
   reference?: string | null;
