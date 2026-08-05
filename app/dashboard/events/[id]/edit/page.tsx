@@ -20,7 +20,7 @@ import { use } from "react";
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
 interface TierFormData {
-  id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean; group_size: string; is_hidden: boolean;
+  id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean; group_size: string; is_hidden: boolean; description: string;
 }
 
 // ── Issue Giveaway Ticket panel ─────────────────────────────────────
@@ -304,10 +304,11 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString().slice(0, 16) : "",
           group_size: (t.group_size ?? 1).toString(),
           is_hidden: t.is_hidden ?? false,
+          description: t.description || "",
         }))
       );
       if (!existingTiers || existingTiers.length === 0) {
-        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1", is_hidden: false }]);
+        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1", is_hidden: false, description: "" }]);
       }
 
       // Sold count per tier, so the host can see how many are left without
@@ -362,7 +363,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     loadData();
   }, [id, router]);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true, group_size: "1", is_hidden: false }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true, group_size: "1", is_hidden: false, description: "" }]);
   const removeTier = (i: number) => {
     if (tiers.length <= 1) return;
     const removed = tiers[i];
@@ -448,6 +449,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
           group_size: Number(t.group_size) || 1,
           is_hidden: t.is_hidden ?? false,
+          description: t.description.trim() || null,
         }));
       const newTiers = tiers
         .filter(t => !t.id)
@@ -458,6 +460,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
           group_size: Number(t.group_size) || 1,
           is_hidden: t.is_hidden ?? false,
+          description: t.description.trim() || null,
         }));
 
       if (existingTiers.length) {
@@ -676,6 +679,18 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                       style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
                     <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                       Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
+                    </p>
+                  </div>
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+                      Description (optional)
+                    </label>
+                    <textarea placeholder="e.g. Table of 5 — includes 2 bottles of champagne, reserved seating near the stage" value={tier.description} rows={2}
+                      onChange={e => updateTier(i, "description", e.target.value)}
+                      className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition resize-none"
+                      style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                      Shown to buyers when they pick this ticket class — useful for spelling out what a table/bundle includes.
                     </p>
                   </div>
                   <div className="mt-3">

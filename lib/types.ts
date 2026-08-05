@@ -28,5 +28,6 @@ export interface TicketTier {
   ends_at?: string | null;
   group_size?: number;
   is_hidden?: boolean;
+  description?: string | null;
 }
 

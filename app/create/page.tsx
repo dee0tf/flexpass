@@ -23,6 +23,7 @@ interface TicketTier {
   ends_at?: string;
   group_size: string;
   is_hidden: boolean;
+  description: string;
 }
 
 function SuccessModal({ eventId, onClose }: { eventId: string; onClose: () => void }) {
@@ -97,7 +98,7 @@ export default function CreateEvent() {
     locationReveal: false,
   });
 
-  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false }]);
+  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false, description: "" }]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
@@ -125,7 +126,7 @@ export default function CreateEvent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false, description: "" }]);
   const removeTier = (i: number) => { if (tiers.length > 1) { const n = [...tiers]; n.splice(i, 1); setTiers(n); } };
   const updateTier = (i: number, field: Exclude<keyof TicketTier, "is_hidden">, value: string) => {
     const n = [...tiers]; n[i][field] = value; setTiers(n);
@@ -186,6 +187,7 @@ export default function CreateEvent() {
           ends_at: t.ends_at ? new Date(t.ends_at).toISOString() : null,
           group_size: Number(t.group_size) || 1,
           is_hidden: t.is_hidden ?? false,
+          description: t.description.trim() || null,
         }))
       );
       if (tierError) throw tierError;
@@ -350,6 +352,18 @@ export default function CreateEvent() {
                           style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
                         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                           Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
+                        </p>
+                      </div>
+                      <div className="mt-3">
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+                          Description (optional)
+                        </label>
+                        <textarea placeholder="e.g. Table of 5 — includes 2 bottles of champagne, reserved seating near the stage" value={tier.description} rows={2}
+                          onChange={e => updateTier(i, "description", e.target.value)}
+                          className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition resize-none"
+                          style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                          Shown to buyers when they pick this ticket class — useful for spelling out what a table/bundle includes.
                         </p>
                       </div>
                       <div className="mt-3">

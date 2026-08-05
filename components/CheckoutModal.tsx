@@ -16,6 +16,7 @@ export interface TicketTier {
   remaining?: number;
   ends_at?: string | null;
   group_size?: number;
+  description?: string | null;
 }
 
 interface CheckoutModalProps {
@@ -303,6 +304,9 @@ export default function CheckoutModal({
                                 {tier.price === 0 ? "Free" : `₦${tier.price.toLocaleString()}`}
                                 {tier.group_size !== undefined && tier.group_size > 1 && " total"}
                               </p>
+                              {tier.description && (
+                                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{tier.description}</p>
+                              )}
                               {soldOut
                                 ? <p className="text-xs font-semibold text-red-500 mt-0.5">Sold out</p>
                                 : expired
@@ -374,6 +378,9 @@ export default function CheckoutModal({
                           </button>
                         </div>
                       </div>
+                      {selectedTier?.description && tiers.length <= 1 && (
+                        <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>{selectedTier.description}</p>
+                      )}
                       {(() => {
                         const rem = isLegacyEvent ? legacyRemaining : selectedTier?.remaining;
                         if (!rem || rem > 10) return null;
