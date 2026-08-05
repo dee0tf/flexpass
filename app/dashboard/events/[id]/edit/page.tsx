@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
   Image as ImageIcon, Type, Clock, User, Plus, Trash2, Download, Ticket,
-  CheckCircle2, AlertTriangle, AlertCircle, Tag, Mail,
+  CheckCircle2, AlertTriangle, AlertCircle, Tag, Mail, EyeOff, Copy, Check,
 } from "lucide-react";
 import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
@@ -276,6 +276,8 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const [locationData, setLocationData] = useState<LocationData>({
     location: "", lat: null, lng: null, locationReveal: false,
   });
+  const [isUnlisted, setIsUnlisted] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [tiers, setTiers] = useState<TierFormData[]>([]);
   const [removedTierIds, setRemovedTierIds] = useState<string[]>([]);
   // Individual attendee tickets sold per tier (keyed by tier id) — not
@@ -335,6 +337,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         lng: event.longitude ?? null,
         locationReveal: event.location_reveal ?? false,
       });
+      setIsUnlisted(event.is_unlisted ?? false);
       setFormData({
         title: event.title,
         description: event.description || "",
@@ -427,6 +430,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         sales_end_date: formData.sales_end_date ? new Date(formData.sales_end_date).toISOString() : null,
         organizer_name: formData.organizer_name, image_url: formData.image_url,
         category: finalCategory,
+        is_unlisted: isUnlisted,
       }).eq("id", id);
       if (error) throw error;
 
@@ -587,6 +591,28 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                 <div className="col-span-2">
                   <label className={labelClass} style={labelStyle}>Location / Venue</label>
                   <LocationPicker value={locationData} onChange={setLocationData} />
+                </div>
+                <div className="col-span-2 p-3 rounded-xl" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
+                  <label className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                    <input type="checkbox" checked={isUnlisted} onChange={() => setIsUnlisted(v => !v)} />
+                    <EyeOff className="h-4 w-4" style={{ color: "var(--brand-indigo)" }} />
+                    Make this a private / secret event
+                  </label>
+                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                    Won&apos;t appear on the home page, the Browse Events page, or search — only people with the direct event link can view and buy tickets.
+                  </p>
+                  {isUnlisted && (
+                    <button type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/events/${id}`);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }}
+                      className="mt-3 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition hover:opacity-80"
+                      style={{ backgroundColor: "var(--card-bg)", color: "var(--brand-indigo)", border: "1px solid var(--card-border)" }}>
+                      {linkCopied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy shareable link</>}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

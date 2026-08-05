@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import { Calendar, MapPin, Clock, Lock, ExternalLink, BadgeCheck } from "lucide-react";
+import { Calendar, MapPin, Clock, Lock, ExternalLink, BadgeCheck, EyeOff } from "lucide-react";
 import ClientEventPage from "./ClientEventPage";
 import CountdownTimer from "@/components/CountdownTimer";
 
@@ -103,6 +103,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     alternates: {
       canonical: `/events/${id}`,
     },
+    // Unlisted events are reachable by direct link but must never surface via
+    // search — they're already excluded from the sitemap; this also stops a
+    // search engine from indexing the page if it finds the link some other way.
+    ...(event.is_unlisted ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
       type: "website",
       locale: "en_NG",
@@ -221,12 +225,20 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100">
           <div className="flex items-start justify-between gap-3 mb-2">
             <h1 className="text-3xl font-bold text-slate-900">{event.title}</h1>
-            {event.organizer_verified && (
-              <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0 mt-1"
-                style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
-                <BadgeCheck size={13} /> Verified Organiser
-              </span>
-            )}
+            <div className="flex flex-col items-end gap-1.5 shrink-0 mt-1">
+              {event.organizer_verified && (
+                <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full"
+                  style={{ backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
+                  <BadgeCheck size={13} /> Verified Organiser
+                </span>
+              )}
+              {event.is_unlisted && (
+                <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-full"
+                  style={{ backgroundColor: "rgba(72,0,130,0.1)", color: "#480082", border: "1px solid rgba(72,0,130,0.25)" }}>
+                  <EyeOff size={13} /> Private Event
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 mt-4 text-slate-600">

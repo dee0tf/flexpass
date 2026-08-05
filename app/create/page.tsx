@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
   Image as ImageIcon, Type, Clock,
-  AlertCircle, User, Plus, Trash2, CheckCircle2, Tag,
+  AlertCircle, User, Plus, Trash2, CheckCircle2, Tag, EyeOff,
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import AuthModal from "@/components/AuthModal";
@@ -88,6 +88,8 @@ export default function CreateEvent() {
     custom_category: "",
   });
 
+  const [isUnlisted, setIsUnlisted] = useState(false);
+
   const [locationData, setLocationData] = useState<LocationData>({
     location: "",
     lat: null,
@@ -166,6 +168,7 @@ export default function CreateEvent() {
         organizer_name: formData.organizer_name,
         image_url: formData.image_url,
         category: finalCategory,
+        is_unlisted: isUnlisted,
         user_id: user.id,
         instagram_url: meta.instagram_url || null,
         tiktok_url: meta.tiktok_url || null,
@@ -280,6 +283,16 @@ export default function CreateEvent() {
                   <div className="col-span-2">
                     <label className={labelClass} style={labelStyle}>Location / Venue</label>
                     <LocationPicker value={locationData} onChange={setLocationData} />
+                  </div>
+                  <div className="col-span-2 p-3 rounded-xl" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
+                    <label className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                      <input type="checkbox" checked={isUnlisted} onChange={() => setIsUnlisted(v => !v)} />
+                      <EyeOff className="h-4 w-4" style={{ color: "var(--brand-indigo)" }} />
+                      Make this a private / secret event
+                    </label>
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                      Won&apos;t appear on the home page, the Browse Events page, or search — only people with the direct event link can view and buy tickets.
+                    </p>
                   </div>
                 </div>
               </div>

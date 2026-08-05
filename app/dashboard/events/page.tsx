@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Loader2, Calendar, MapPin, ExternalLink, Copy, Check, Edit } from "lucide-react";
+import { Loader2, Calendar, MapPin, ExternalLink, Copy, Check, Edit, EyeOff } from "lucide-react";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 
 export default function MyEventsPage() {
@@ -94,6 +94,11 @@ export default function MyEventsPage() {
               <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold text-[#480082]">
                 ₦{(event.price ?? 0).toLocaleString()}
               </div>
+              {event.is_unlisted && (
+                <div className="absolute top-2 left-2 flex items-center gap-1 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold text-[#480082]">
+                  <EyeOff size={11} /> Private
+                </div>
+              )}
             </div>
             <div className="p-4">
               <h3 className="font-bold text-theme truncate">{event.title}</h3>

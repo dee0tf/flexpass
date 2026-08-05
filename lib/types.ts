@@ -16,6 +16,7 @@ export interface Event {
   longitude?: number | null;
   location_reveal?: boolean | null;
   organizer_verified?: boolean | null;
+  is_unlisted?: boolean | null;
 }
 
 export interface TicketTier {

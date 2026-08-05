@@ -36,6 +36,7 @@ export default async function Home() {
     .from("events")
     .select("*")
     .gte("date", now)
+    .eq("is_unlisted", false)
     .order("date", { ascending: true })
     .limit(9);
 
@@ -43,6 +44,7 @@ export default async function Home() {
     .from("events")
     .select("*")
     .gte("date", now)
+    .eq("is_unlisted", false)
     .order("created_at", { ascending: false })
     .limit(3);
 

@@ -23,6 +23,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const { data: events } = await db
       .from("events")
       .select("id, updated_at")
+      .eq("is_unlisted", false)
       .order("date", { ascending: false })
       .limit(1000);
 
