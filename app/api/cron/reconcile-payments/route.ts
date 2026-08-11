@@ -170,6 +170,15 @@ export async function GET(request: Request) {
     const amountNaira = txn.amount / 100;
     const customerEmail: string | undefined = txn.customer?.email;
     let metadata = txn.metadata || {};
+    // Paystack has been observed returning metadata as a JSON string rather
+    // than a parsed object (in the worst case, truncated mid-string) — this
+    // caused a real ticket to get permanently flagged as "missing metadata"
+    // instead of being recognized. Parse it when possible so this job can
+    // actually self-heal that case instead of only flagging it.
+    if (typeof metadata === 'string') {
+      try { metadata = JSON.parse(metadata); }
+      catch { metadata = {}; } // genuinely unrecoverable — falls through to the sibling-recovery/flagging logic below
+    }
     let recoveredFromSibling = false;
 
     const { data: existing } = await supabase

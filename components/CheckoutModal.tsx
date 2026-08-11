@@ -60,6 +60,7 @@ export default function CheckoutModal({
   const [emailError, setEmailError] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [nameError, setNameError] = useState("");
   const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
   const [gender, setGender] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -112,6 +113,12 @@ export default function CheckoutModal({
   }, [open, paystackActive]);
 
   const validateEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.toLowerCase());
+  // Emoji in the name broke ticket delivery for at least one buyer — it can
+  // blow past a byte-length limit somewhere downstream (Paystack metadata)
+  // and truncate the JSON payload mid-string, silently losing event_id along
+  // with it. Reject it here, with a clear reason, before it ever gets that far.
+  const EMOJI_REGEX = /\p{Extended_Pictographic}/u;
+  const hasEmoji = (v: string) => EMOJI_REGEX.test(v);
 
   const isLegacyEvent = tiers.length === 0;
   const finalPrice = isLegacyEvent ? basePrice : (selectedTier ? selectedTier.price : 0);
@@ -124,9 +131,16 @@ export default function CheckoutModal({
 
   const resetForm = () => {
     setQuantity(1); setEmail(""); setFirstName(""); setLastName(""); setGender(""); setSelectedTier(null);
+    setNameError("");
   };
 
   const handleClaimFree = async () => {
+    // Synchronous re-check — don't rely solely on onBlur/canProceed timing,
+    // since a paste-then-click can reach here before a blur event fires.
+    if (hasEmoji(firstName) || hasEmoji(lastName)) {
+      setNameError('Emoji aren\'t supported in your name — please remove it and use letters only.');
+      return;
+    }
     trackCheckoutEvent("checkout_initiated", {
       eventId, email, tierId: selectedTier?.id || null, tierName: selectedTier?.name || null,
       quantity, isFree: true,
@@ -223,7 +237,7 @@ export default function CheckoutModal({
     ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
   };
 
-  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !emailError;
+  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !emailError && !nameError;
 
   if (!open) return null;
 
@@ -401,18 +415,29 @@ export default function CheckoutModal({
                       <div>
                         <label className="text-sm font-medium block mb-1.5" style={labelStyle}>First Name</label>
                         <input type="text" placeholder="First name" value={firstName}
-                          onChange={e => setFirstName(e.target.value)}
+                          onChange={e => { setFirstName(e.target.value); if (nameError) setNameError(""); }}
+                          onBlur={() => {
+                            if (hasEmoji(firstName) || hasEmoji(lastName)) {
+                              setNameError('Emoji aren\'t supported in your name — please remove it and use letters only.');
+                            }
+                          }}
                           className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
-                          style={inputStyle} required />
+                          style={{ ...inputStyle, border: nameError ? "1px solid #f87171" : inputStyle.border }} required />
                       </div>
                       <div>
                         <label className="text-sm font-medium block mb-1.5" style={labelStyle}>Last Name</label>
                         <input type="text" placeholder="Last name" value={lastName}
-                          onChange={e => setLastName(e.target.value)}
+                          onChange={e => { setLastName(e.target.value); if (nameError) setNameError(""); }}
+                          onBlur={() => {
+                            if (hasEmoji(firstName) || hasEmoji(lastName)) {
+                              setNameError('Emoji aren\'t supported in your name — please remove it and use letters only.');
+                            }
+                          }}
                           className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
-                          style={inputStyle} required />
+                          style={{ ...inputStyle, border: nameError ? "1px solid #f87171" : inputStyle.border }} required />
                       </div>
                     </div>
+                    {nameError && <p className="text-red-500 text-xs -mt-2">{nameError}</p>}
 
                     {/* Gender */}
                     <div>
@@ -487,6 +512,12 @@ export default function CheckoutModal({
                             {...componentProps}
                             onClick={() => {
                               if (!canProceed) return;
+                              // Same synchronous re-check as handleClaimFree — a
+                              // paste-then-click can beat the onBlur handler here too.
+                              if (hasEmoji(firstName) || hasEmoji(lastName)) {
+                                setNameError('Emoji aren\'t supported in your name — please remove it and use letters only.');
+                                return;
+                              }
                               trackCheckoutEvent("checkout_initiated", {
                                 eventId, email, tierId: selectedTier?.id || null,
                                 tierName: selectedTier?.name || null, quantity, isFree: false,

@@ -4,9 +4,15 @@ import { sendTicketEmail } from '@/lib/sendTicketEmail';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
 
+// Service role — create_tickets_atomic's EXECUTE grant is restricted to
+// service_role only (see supabase/migrations/20260712_create_tickets_atomic.sql),
+// so calling it with the anon key here always failed with "permission denied"
+// and silently depended on the Paystack webhook's fallback to rescue every
+// purchase. That's fine when the webhook succeeds, but leaves a buyer with
+// nothing if the webhook's own fallback also fails for any reason.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function POST(request: Request) {

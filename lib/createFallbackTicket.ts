@@ -33,6 +33,26 @@ export async function createFallbackTicket({
   // compute FlexPass's true net revenue, not just the gross fee charged.
   feesKobo?: number;
 }): Promise<{ outcome: 'already_exists' | 'created' | 'insert_failed' | 'no_event_id'; ticketIds?: string[] }> {
+  // Paystack normally returns metadata as a parsed object, but has been
+  // observed sending it back as a JSON string instead (once truncated
+  // mid-string, which broke JSON.parse entirely and lost event_id along
+  // with it — the actual root cause behind one buyer never receiving a
+  // ticket despite a successful charge). Recover what we can rather than
+  // silently treating a parseable-but-stringified payload as "missing".
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch (parseErr) {
+      await logPaymentEvent({
+        source, eventType: 'metadata_parse_failed', status: 'error',
+        reference, email: customerEmail || null,
+        message: `metadata arrived as an unparseable string (likely truncated): ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
+        metadata: { rawMetadataSnippet: metadata.slice(0, 300) },
+      });
+      return { outcome: 'no_event_id' };
+    }
+  }
+
   const quantity = metadata?.quantity && Number(metadata.quantity) > 0 ? Number(metadata.quantity) : 1;
 
   // verify-payment stores a bare reference for a single ticket, or
