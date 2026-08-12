@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import EventCard from "@/components/EventCard";
+import HomeEventsTabs from "@/components/HomeEventsTabs";
 import { createServerSupabase } from "@/lib/supabase";
 import HomeSearchBar from "@/components/HomeSearchBar";
 import { Event } from "@/lib/types";
@@ -48,8 +49,17 @@ export default async function Home() {
     .order("created_at", { ascending: false })
     .limit(3);
 
+  const { data: concludedEvents } = await supabase
+    .from("events")
+    .select("*")
+    .lt("date", now)
+    .eq("is_unlisted", false)
+    .order("date", { ascending: false })
+    .limit(9);
+
   const upcomingList: Event[] = await attachEffectivePrices(supabase, events || []);
   const featured: Event[] = await attachEffectivePrices(supabase, featuredEvents || []);
+  const concludedList: Event[] = await attachEffectivePrices(supabase, concludedEvents || []);
 
   return (
     <main className="min-h-screen">
@@ -130,35 +140,8 @@ export default async function Home() {
         </section>
       )}
 
-      {/* ── Upcoming Events ─────────────────────────── */}
-      <section className="bg-[#F9F8FF] py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: "#6B32A8" }}>Don&apos;t Miss Out</p>
-              <h2 className="font-display text-3xl font-bold text-[#0E0D0D]">Upcoming Events</h2>
-            </div>
-            <Link href="/events" className="flex items-center gap-1 text-[#480082] hover:text-[#9F67FE] text-sm font-medium transition-colors">
-              View all <ArrowRight size={16} />
-            </Link>
-          </div>
-
-          {upcomingList.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl border border-[#eDdedd]">
-              <p className="text-[#480082]/50 font-display text-xl">No upcoming events yet.</p>
-              <Link href="/create" className="mt-4 inline-block text-[#480082] font-medium hover:underline">
-                Be the first to host one →
-              </Link>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {upcomingList.map(event => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+      {/* ── Upcoming / Concluded Events ──────────────── */}
+      <HomeEventsTabs upcoming={upcomingList} concluded={concludedList} />
 
       {/* ── Why FlexPass ────────────────────────────── */}
       <section className="bg-white py-20 px-4 sm:px-6 lg:px-8">
