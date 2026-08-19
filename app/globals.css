@@ -45,6 +45,27 @@
   --color-fp-light:    #eDdedd;
   --color-flex-purple: #480082;
   --color-flex-orange: #FFB700;
+
+  /* shadcn/ui semantic tokens (components.json: cssVariables, baseColor "neutral") —
+     mapped onto FlexPass's own brand tokens so Button/Dialog/Input etc. pick up
+     real colors instead of resolving to nothing. */
+  --color-primary:              var(--primary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-secondary:            var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:                var(--muted);
+  --color-muted-foreground:     var(--muted-foreground);
+  --color-accent:               var(--accent);
+  --color-accent-foreground:    var(--accent-foreground);
+  --color-destructive:          var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border:               var(--border);
+  --color-input:                var(--input);
+  --color-ring:                 var(--ring);
+  --color-card:                 var(--card);
+  --color-card-foreground:      var(--card-foreground);
+  --color-popover:              var(--popover);
+  --color-popover-foreground:   var(--popover-foreground);
 }
 
 /* ── Light mode tokens ──────────────────────────── */
@@ -90,6 +111,25 @@
   --chart-cat-3:       #1baf7a;
   --chart-cat-4:       #c98200;
   --chart-cat-5:       #e87ba4;
+
+  /* shadcn/ui semantic tokens — light */
+  --primary:            var(--brand-indigo);
+  --primary-foreground: #F9F8FF;
+  --secondary:            var(--surface-raised);
+  --secondary-foreground: var(--text-primary);
+  --muted:            var(--surface-raised);
+  --muted-foreground: var(--text-secondary);
+  --accent:            var(--surface-raised);
+  --accent-foreground: var(--text-primary);
+  --destructive:            #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: var(--border-color);
+  --input:  var(--input-border);
+  --ring:   var(--input-focus);
+  --card:            var(--card-bg);
+  --card-foreground: var(--text-primary);
+  --popover:            var(--surface);
+  --popover-foreground: var(--text-primary);
 }
 
 /* ── Dark mode tokens ───────────────────────────── */
@@ -134,6 +174,25 @@
   --chart-cat-3:       #199e70;
   --chart-cat-4:       #c98500;
   --chart-cat-5:       #d55181;
+
+  /* shadcn/ui semantic tokens — dark */
+  --primary:            var(--brand-indigo);
+  --primary-foreground: #F9F8FF;
+  --secondary:            var(--surface-raised);
+  --secondary-foreground: var(--text-primary);
+  --muted:            var(--surface-raised);
+  --muted-foreground: var(--text-secondary);
+  --accent:            var(--surface-raised);
+  --accent-foreground: var(--text-primary);
+  --destructive:            #f87171;
+  --destructive-foreground: #0E0D0D;
+  --border: var(--border-color);
+  --input:  var(--input-border);
+  --ring:   var(--input-focus);
+  --card:            var(--card-bg);
+  --card-foreground: var(--text-primary);
+  --popover:            var(--surface);
+  --popover-foreground: var(--text-primary);
 }
 
 /* ── Base layer ─────────────────────────────────── */

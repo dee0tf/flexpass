@@ -1,0 +1,28 @@
+{
+  "projectId": "320b72c8-5cae-4922-bb96-2d1367b14d97",
+  "shape": "package",
+  "pkg": "flexpass-ui",
+  "globalName": "FlexPassUI",
+  "srcDir": "components/ui",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": ".ds-sync/app-compiled.css",
+  "extraFonts": [".ds-sync/extra-fonts.css"],
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "Dialog": { "cardMode": "single", "viewport": "480x420" }
+  },
+  "componentSrcMap": {
+    "Button": "components/ui/button.tsx",
+    "Dialog": "components/ui/dialog.tsx",
+    "DialogClose": "components/ui/dialog.tsx",
+    "DialogContent": "components/ui/dialog.tsx",
+    "DialogDescription": "components/ui/dialog.tsx",
+    "DialogFooter": "components/ui/dialog.tsx",
+    "DialogHeader": "components/ui/dialog.tsx",
+    "DialogOverlay": "components/ui/dialog.tsx",
+    "DialogPortal": "components/ui/dialog.tsx",
+    "DialogTitle": "components/ui/dialog.tsx",
+    "DialogTrigger": "components/ui/dialog.tsx",
+    "Input": "components/ui/input.tsx"
+  }
+}
