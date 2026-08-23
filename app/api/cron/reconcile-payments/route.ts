@@ -28,7 +28,7 @@ const AMOUNT_TOLERANCE_KOBO = 100;
 // across two consecutive runs (harmless — far better than staying silent).
 const EMAIL_ALERT_LOOKBACK_MS = 20 * 60 * 1000;
 
-interface FixedRecord { reference: string; email: string; amountNaira: number; ticketIds: string[]; recovered?: boolean }
+interface FixedRecord { reference: string; email: string; amountNaira: number; ticketIds: string[]; recoveredVia?: 'sibling' | 'amount_match' }
 interface FlaggedRecord { reference: string; email: string | null; amountNaira: number; reason: string }
 interface EmailFailureRecord { reference: string | null; email: string | null; source: string; message: string }
 
@@ -71,6 +71,53 @@ async function findSiblingMetadata(
   return candidates[0].metadata;
 }
 
+// Last-resort recovery when metadata arrived truncated (observed on the bank
+// transfer/USSD channel, cut off at a fixed ~69-char length by Paystack
+// itself — confirmed via /transaction/verify, not just the webhook payload)
+// and no sibling transaction exists to recover from either. event_id is the
+// first key written into metadata client-side, so it usually survives the
+// cut even when everything after it (name, tier, quantity) doesn't.
+// Only trusts a match when the paid amount uniquely identifies one
+// tier/quantity=1 combination for that event — an ambiguous match (e.g. two
+// tiers priced the same) still falls through to manual review rather than
+// guessing which one the buyer actually chose.
+const EVENT_ID_RE = /"event_id"\s*:\s*"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/i;
+
+async function recoverEventIdAndTierFromAmount(
+  rawMetadataString: string,
+  amountKobo: number
+): Promise<{ eventId: string; tierId: string | null; tierName: string } | null> {
+  const eventIdMatch = rawMetadataString.match(EVENT_ID_RE);
+  if (!eventIdMatch) return null;
+  const eventId = eventIdMatch[1];
+
+  const { data: tiers } = await supabase.from('ticket_tiers').select('id, name, price').eq('event_id', eventId);
+  const candidates: { tierId: string | null; tierName: string }[] = [];
+
+  if (tiers && tiers.length > 0) {
+    for (const tier of tiers) {
+      const fee = Math.round(tier.price * 0.05 * 100) / 100;
+      const expectedKobo = Math.round((tier.price + fee) * 100);
+      if (Math.abs(amountKobo - expectedKobo) <= AMOUNT_TOLERANCE_KOBO) {
+        candidates.push({ tierId: tier.id, tierName: tier.name });
+      }
+    }
+  } else {
+    // Legacy (no-tier) event — match against the event's own flat price.
+    const { data: eventRow } = await supabase.from('events').select('price').eq('id', eventId).single();
+    if (eventRow) {
+      const fee = Math.round(eventRow.price * 0.05 * 100) / 100;
+      const expectedKobo = Math.round((eventRow.price + fee) * 100);
+      if (Math.abs(amountKobo - expectedKobo) <= AMOUNT_TOLERANCE_KOBO) {
+        candidates.push({ tierId: null, tierName: 'Standard' });
+      }
+    }
+  }
+
+  if (candidates.length !== 1) return null;
+  return { eventId, tierId: candidates[0].tierId, tierName: candidates[0].tierName };
+}
+
 function buildReportHtml(fixed: FixedRecord[], flagged: FlaggedRecord[], emailFailures: EmailFailureRecord[]): string {
   const fixedRows = fixed.map(f => `
     <tr>
@@ -78,7 +125,11 @@ function buildReportHtml(fixed: FixedRecord[], flagged: FlaggedRecord[], emailFa
       <td style="padding:8px;border-bottom:1px solid #eee;">${f.email}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;">₦${f.amountNaira.toLocaleString()}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;">${f.ticketIds.length}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;">${f.recovered ? 'Recovered from sibling txn' : 'Normal'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${
+        f.recoveredVia === 'sibling' ? 'Recovered from sibling txn'
+        : f.recoveredVia === 'amount_match' ? 'Recovered from truncated metadata + amount match'
+        : 'Normal'
+      }</td>
     </tr>`).join('');
 
   const flaggedRows = flagged.map(f => `
@@ -175,11 +226,13 @@ export async function GET(request: Request) {
     // caused a real ticket to get permanently flagged as "missing metadata"
     // instead of being recognized. Parse it when possible so this job can
     // actually self-heal that case instead of only flagging it.
+    let rawMetadataString: string | null = null;
     if (typeof metadata === 'string') {
+      rawMetadataString = metadata;
       try { metadata = JSON.parse(metadata); }
-      catch { metadata = {}; } // genuinely unrecoverable — falls through to the sibling-recovery/flagging logic below
+      catch { metadata = {}; } // falls through to sibling-recovery, then amount-match recovery, then flagging below
     }
-    let recoveredFromSibling = false;
+    let recoveredVia: 'sibling' | 'amount_match' | undefined;
 
     const { data: existing } = await supabase
       .from('tickets')
@@ -194,11 +247,28 @@ export async function GET(request: Request) {
       const recovered = await findSiblingMetadata(secretKey, customerEmail, txn.created_at, txn.amount);
       if (recovered) {
         metadata = recovered;
-        recoveredFromSibling = true;
+        recoveredVia = 'sibling';
         await logPaymentEvent({
           source: 'reconciliation', eventType: 'recovered_metadata_from_sibling', status: 'success',
           reference, eventId: String(recovered.event_id || ''), email: customerEmail,
           message: 'Found matching metadata from a nearby transaction by the same customer',
+        });
+      }
+    }
+
+    // Last resort: metadata really did arrive truncated (not just missing)
+    // and no sibling transaction existed to recover from — try pulling
+    // event_id out of the raw string and matching the paid amount to exactly
+    // one tier for that event. Only fires when nothing above already worked.
+    if ((!metadata.event_id || !customerEmail) && customerEmail && rawMetadataString) {
+      const recovered = await recoverEventIdAndTierFromAmount(rawMetadataString, txn.amount);
+      if (recovered) {
+        metadata = { event_id: recovered.eventId, tier_id: recovered.tierId, tier_name: recovered.tierName, quantity: 1 };
+        recoveredVia = 'amount_match';
+        await logPaymentEvent({
+          source: 'reconciliation', eventType: 'recovered_metadata_from_amount_match', status: 'success',
+          reference, eventId: recovered.eventId, email: customerEmail,
+          message: `event_id recovered from truncated metadata via regex; tier inferred uniquely from paid amount (₦${amountNaira}) — tier_id=${recovered.tierId || 'legacy'}, tier_name=${recovered.tierName}`,
         });
       }
     }
@@ -208,7 +278,7 @@ export async function GET(request: Request) {
       await logPaymentEvent({
         source: 'reconciliation', eventType: 'flagged_missing_metadata', status: 'skipped',
         reference, email: customerEmail || null,
-        message: 'No event_id in metadata or no customer email, and no recoverable sibling found — cannot safely auto-create', metadata,
+        message: 'No event_id in metadata or no customer email, and no recoverable sibling or amount match found — cannot safely auto-create', metadata,
       });
       continue;
     }
@@ -268,7 +338,7 @@ export async function GET(request: Request) {
     });
 
     if (result.outcome === 'created' && result.ticketIds) {
-      fixed.push({ reference, email: customerEmail, amountNaira, ticketIds: result.ticketIds, recovered: recoveredFromSibling });
+      fixed.push({ reference, email: customerEmail, amountNaira, ticketIds: result.ticketIds, recoveredVia });
     } else if (result.outcome === 'insert_failed') {
       flagged.push({ reference, email: customerEmail, amountNaira, reason: 'Ticket insert failed — see payment_events' });
     }

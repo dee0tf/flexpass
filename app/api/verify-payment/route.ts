@@ -37,19 +37,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
     }
 
-    // --- 2. Prevent replay attacks (reference already used) ---
-    const { data: existing } = await supabase
+    // --- 2. A ticket may already exist for this reference — either a real
+    // replay of an old request, or (far more commonly) the Paystack webhook's
+    // fallback path won a race and created it a moment before this call
+    // landed. Paystack verification below is what actually proves the charge
+    // succeeded, so it's safe to just hand back the existing ticket(s) here
+    // rather than error out on a buyer who was charged and does have a
+    // ticket — see the identical duplicate_reference handling further down.
+    const { data: existingTickets } = await supabase
       .from('tickets')
       .select('id')
-      .eq('purchase_reference', reference)
-      .maybeSingle();
+      .or(`purchase_reference.eq.${reference},purchase_reference.like.${reference}-%`)
+      .order('created_at', { ascending: true });
 
-    if (existing) {
+    if (existingTickets && existingTickets.length > 0) {
       await logPaymentEvent({
-        source: 'verify-payment', eventType: 'replay_blocked', status: 'skipped',
-        reference, eventId, email, message: 'Reference already has a ticket',
+        source: 'verify-payment', eventType: 'ticket_created_by_webhook_race', status: 'success',
+        reference, eventId, email, message: `Ticket(s) already existed for this reference (${existingTickets.length})`,
       });
-      return NextResponse.json({ error: 'Payment reference already used' }, { status: 409 });
+      return NextResponse.json({ ticketIds: existingTickets.map(t => t.id) });
     }
 
     // --- 2a. Reject if ticket sales have closed for this event ---
