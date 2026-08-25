@@ -274,30 +274,41 @@ export default function DashboardPage() {
   const handleExport = () => {
     if (!stats.recentSales.length) { showToast("No data to export yet", "warning"); return; }
 
-    // Group tickets by event so the CSV reads as one section per event
-    // (with its own subtotal) instead of one flat alphabetized list.
+    // Group tickets by event ID (not title) so the CSV reads as one section
+    // per event with its own subtotal — grouping by title alone would merge
+    // separate events that happen to share a name (e.g. a recurring host's
+    // repeat editions of the same event) into a single blended section.
     const grouped = new Map<string, typeof stats.recentSales>();
     for (const t of stats.recentSales) {
-      const title = t.events?.title || "Unknown";
-      if (!grouped.has(title)) grouped.set(title, []);
-      grouped.get(title)!.push(t);
+      const id = t.event_id || "unknown";
+      if (!grouped.has(id)) grouped.set(id, []);
+      grouped.get(id)!.push(t);
     }
-    const sortedTitles = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+    const labelFor = (id: string, tickets: typeof stats.recentSales) => {
+      const title = tickets[0]?.events?.title || "Unknown";
+      const event = stats.myEvents.find((e: any) => e.id === id);
+      const date = event?.date ? new Date(event.date).toLocaleDateString("en-NG") : null;
+      return date ? `${title} (${date})` : title;
+    };
+    const sortedIds = Array.from(grouped.keys()).sort((a, b) =>
+      labelFor(a, grouped.get(a)!).localeCompare(labelFor(b, grouped.get(b)!))
+    );
 
     const header = ["Event", "Ticket ID", "Tier", "First Name", "Last Name", "Email", "Amount (NGN)", "Status", "Date"];
     const rows: string[][] = [header];
     let grandTotal = 0;
     let grandCount = 0;
 
-    for (const title of sortedTitles) {
-      const eventTickets = [...grouped.get(title)!].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    for (const id of sortedIds) {
+      const label = labelFor(id, grouped.get(id)!);
+      const eventTickets = [...grouped.get(id)!].sort((a, b) => a.created_at.localeCompare(b.created_at));
       let subtotal = 0;
       for (const t of eventTickets) {
         const amount = hostAmount(t);
         subtotal += amount;
         const { firstName, lastName } = splitName(t.user_name);
         rows.push([
-          csvCell(title),
+          csvCell(label),
           csvCell(t.id),
           csvCell(t.tier_name || "Standard"),
           csvCell(firstName || "N/A"),

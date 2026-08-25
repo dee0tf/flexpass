@@ -163,7 +163,11 @@ export default function AnalyticsPage() {
               style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--text-primary)" }}
             >
               <option value="all">All events</option>
-              {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+              {events.map(ev => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.title} — {new Date(ev.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                </option>
+              ))}
             </select>
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-muted)" }} />
           </div>
