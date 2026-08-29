@@ -240,6 +240,36 @@ export async function GET(request: Request) {
       .in('purchase_reference', [reference, `${reference}-1`]);
     if (existing && existing.length > 0) continue; // already fine — most common case, no log noise
 
+    // The transaction LIST endpoint above has been observed collapsing a
+    // truncated metadata string down to plain `null` for some bank-transfer
+    // charges — discarding it entirely, even though it's still readable from
+    // the single-transaction verify endpoint for the exact same reference.
+    // Without rawMetadataString, the amount-match recovery below can never
+    // run (nothing to regex event_id out of), so a charge with an otherwise
+    // unambiguous amount was falling straight through to "flagged missing
+    // metadata" instead of being recoverable. Re-fetch before giving up.
+    if (!metadata.event_id && !rawMetadataString && customerEmail) {
+      try {
+        const verifyRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+          headers: { Authorization: `Bearer ${secretKey}` },
+        });
+        if (verifyRes.ok) {
+          const verifyJson = await verifyRes.json();
+          const verifyMetadata = verifyJson?.data?.metadata;
+          if (typeof verifyMetadata === 'string') {
+            rawMetadataString = verifyMetadata;
+            try { metadata = JSON.parse(verifyMetadata); }
+            catch { metadata = {}; } // still falls through to amount-match recovery below
+          } else if (verifyMetadata && typeof verifyMetadata === 'object') {
+            metadata = verifyMetadata;
+          }
+        }
+      } catch {
+        // Fall through to sibling/amount-match recovery, then flagging — a
+        // failed refetch here just means one less recovery path, not a hard error.
+      }
+    }
+
     if ((!metadata.event_id || !customerEmail) && customerEmail) {
       // txn itself is already confirmed status=success (see the candidates
       // filter above) — this lookup only recovers what the purchase was
