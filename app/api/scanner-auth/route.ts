@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { constantTimeEqual } from '@/lib/constantTimeEqual';
 
-// Service-role client — scan_code must be readable regardless of RLS, and
-// this route is the only thing that ever checks it server-side.
+// Service-role client. scan_code lives in event_scan_codes, a table with
+// RLS enabled and zero policies — only the service role can read it at all
+// (see the move-scan-code migration for why it isn't a column on `events`,
+// which the anon key can already read for the public event page).
 const db = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -23,13 +26,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'Invalid request' }, { status: 400 });
     }
 
-    const { data: event } = await db
-      .from('events')
-      .select('id, title, date, scan_code')
-      .eq('id', eventId)
-      .single();
+    const [{ data: event }, { data: scanCodeRow }] = await Promise.all([
+      db.from('events').select('id, title, date').eq('id', eventId).single(),
+      db.from('event_scan_codes').select('scan_code').eq('event_id', eventId).single(),
+    ]);
 
-    if (!event || !event.scan_code || event.scan_code !== code) {
+    if (!event || !scanCodeRow?.scan_code || !constantTimeEqual(scanCodeRow.scan_code, code)) {
       return NextResponse.json({ ok: false, error: 'Incorrect access code' }, { status: 401 });
     }
 

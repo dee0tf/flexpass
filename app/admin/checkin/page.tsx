@@ -7,16 +7,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CheckInScanner, { CheckInEvent } from "@/components/CheckInScanner";
 
-interface AdminEvent extends CheckInEvent {
-  scan_code: string | null;
-}
-
 export default function AdminCheckInPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
-  const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [events, setEvents] = useState<CheckInEvent[]>([]);
   const [codeEventId, setCodeEventId] = useState("");
+  const [currentCode, setCurrentCode] = useState<string | null>(null);
+  const [codeLoading, setCodeLoading] = useState(false);
   const [codeBusy, setCodeBusy] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -39,7 +37,7 @@ export default function AdminCheckInPage() {
 
         const { data } = await supabase
           .from("events")
-          .select("id, title, date, organizer_name, scan_code")
+          .select("id, title, date, organizer_name")
           .order("date", { ascending: false });
         setEvents(data || []);
         setLoading(false);
@@ -57,6 +55,28 @@ export default function AdminCheckInPage() {
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
+  // scan_code lives in event_scan_codes now (RLS-locked, service-role only)
+  // — fetch it fresh via the admin API whenever the selected event changes,
+  // rather than pulling it in with the events list.
+  useEffect(() => {
+    if (!codeEventId) { setCurrentCode(null); return; }
+    setCodeLoading(true);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { setCodeLoading(false); return; }
+      try {
+        const res = await fetch(`/api/admin/generate-scan-code?eventId=${codeEventId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const data = await res.json();
+        setCurrentCode(res.ok ? (data.code ?? null) : null);
+      } catch {
+        setCurrentCode(null);
+      } finally {
+        setCodeLoading(false);
+      }
+    });
+  }, [codeEventId]);
+
   const handleGenerateScanCode = async () => {
     if (!codeEventId) return;
     setCodeBusy(true);
@@ -70,7 +90,7 @@ export default function AdminCheckInPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to generate code");
-      setEvents(prev => prev.map(e => e.id === codeEventId ? { ...e, scan_code: data.code } : e));
+      setCurrentCode(data.code);
       setLinkCopied(false);
     } catch {
       // Silently no-op on failure — the button staying in its "generate"
@@ -80,8 +100,6 @@ export default function AdminCheckInPage() {
       setCodeBusy(false);
     }
   };
-
-  const codeEvent = events.find(e => e.id === codeEventId);
 
   if (loading) {
     return (
@@ -152,11 +170,13 @@ export default function AdminCheckInPage() {
 
           {codeEventId && (
             <div className="mt-3 space-y-2">
-              {codeEvent?.scan_code && (
+              {codeLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--text-muted)" }} />
+              ) : currentCode && (
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm font-bold tracking-widest px-3 py-1.5 rounded-lg"
                     style={{ backgroundColor: "var(--surface)", border: "1px solid var(--card-border)", color: "var(--text-primary)" }}>
-                    {codeEvent.scan_code}
+                    {currentCode}
                   </span>
                   <button onClick={() => {
                     navigator.clipboard.writeText(`${window.location.origin}/checkin/${codeEventId}`);
@@ -173,7 +193,7 @@ export default function AdminCheckInPage() {
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition hover:opacity-80 disabled:opacity-50"
                 style={{ backgroundColor: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--card-border)" }}>
                 {codeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
-                {codeEvent?.scan_code ? "Regenerate code" : "Generate code"}
+                {currentCode ? "Regenerate code" : "Generate code"}
               </button>
             </div>
           )}

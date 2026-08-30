@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { constantTimeEqual } from '@/lib/constantTimeEqual';
 
 // Anon client — only used for token verification
 const authClient = createClient(
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     // Confirm this user owns the event (via service-role client)
     const { data: event } = await db
       .from('events')
-      .select('id, title, user_id, scan_code')
+      .select('id, title, user_id')
       .eq('id', eventId)
       .single();
 
@@ -45,12 +46,17 @@ export async function POST(request: Request) {
     }
 
     // Two ways in: a door-staff access code scoped to exactly this event
-    // (see /api/scanner-auth and the scan_code migration), or a real
+    // (see /api/scanner-auth and the move-scan-code migration), or a real
     // Supabase session belonging to the event's host or a FlexPass admin.
     // The access code, once matched, needs no further ownership check — the
     // code itself is what's scoped to the event.
     if (typeof scanCode === 'string' && scanCode.length > 0) {
-      if (!event.scan_code || event.scan_code !== scanCode) {
+      const { data: scanCodeRow } = await db
+        .from('event_scan_codes')
+        .select('scan_code')
+        .eq('event_id', eventId)
+        .single();
+      if (!scanCodeRow?.scan_code || !constantTimeEqual(scanCodeRow.scan_code, scanCode)) {
         return NextResponse.json({ code: 'not_your_event', error: "You don't have access to scan tickets for this event" }, { status: 403 });
       }
     } else {

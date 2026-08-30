@@ -15,7 +15,6 @@ import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { hostAmount } from "@/lib/hostAmount";
 import { splitName } from "@/lib/splitName";
-import { generateScanCode } from "@/lib/generateScanCode";
 import { use } from "react";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -343,7 +342,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         locationReveal: event.location_reveal ?? false,
       });
       setIsUnlisted(event.is_unlisted ?? false);
-      setScanCode(event.scan_code ?? null);
+
+      // scan_code lives in event_scan_codes now, not on `events` — that
+      // table has RLS enabled with zero policies, so it's only reachable
+      // through this server route (using the host's own session to prove
+      // ownership), never through the client's anon-keyed queries above.
+      fetch(`/api/host/generate-scan-code?eventId=${id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).then(res => res.json()).then(data => setScanCode(data.code ?? null)).catch(() => {});
       setFormData({
         title: event.title,
         description: event.description || "",
@@ -389,10 +395,16 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const handleGenerateScanCode = async () => {
     setScanCodeBusy(true);
     try {
-      const newCode = generateScanCode();
-      const { error } = await supabase.from("events").update({ scan_code: newCode }).eq("id", id);
-      if (error) throw error;
-      setScanCode(newCode);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not signed in");
+      const res = await fetch("/api/host/generate-scan-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ eventId: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate code");
+      setScanCode(data.code);
       setScanLinkCopied(false);
       showToast(scanCode ? "Access code regenerated — the old code/link no longer works" : "Access code generated", "success");
     } catch (err) {
