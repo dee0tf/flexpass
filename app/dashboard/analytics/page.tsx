@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, type CSSProperties, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
   Loader2, TrendingUp, Ticket, Percent, Wallet, MousePointerClick, Gauge,
@@ -62,6 +63,7 @@ export default function AnalyticsPage() {
   const [scope, setScope] = useState<string>("all");
   const [range, setRange] = useState<Range>("30");
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +71,13 @@ export default function AnalyticsPage() {
     const checkSession = () => {
       supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (cancelled) return;
-        if (!session) { window.location.replace("/login"); return; }
+        if (!session) {
+          // Soft navigation — the dashboard layout's own guard (see
+          // lib/useAuthGuard) already redirects on session loss; this stays
+          // as a defense-in-depth check but no longer hard-reloads the page.
+          router.push("/login");
+          return;
+        }
         setToken(session.access_token);
         const { data: myEvents } = await supabase
           .from("events").select("id, title, date")
@@ -82,7 +90,7 @@ export default function AnalyticsPage() {
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") window.location.replace("/login");
+      if (event === "SIGNED_OUT") router.push("/login");
     });
     const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) checkSession(); };
     window.addEventListener("pageshow", onPageShow);
@@ -92,7 +100,7 @@ export default function AnalyticsPage() {
       subscription.unsubscribe();
       window.removeEventListener("pageshow", onPageShow);
     };
-  }, []);
+  }, [router]);
 
   const loadAnalytics = useCallback(async (tok: string, evId: string, rng: Range) => {
     setDataLoading(true);

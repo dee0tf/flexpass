@@ -49,9 +49,10 @@ export default function LoginPage() {
         const res = await fetch("/api/admin/check-auth", {
           headers: { Authorization: `Bearer ${data.session.access_token}` },
         });
-        setTimeout(() => {
-          window.location.href = res.ok ? "/admin" : "/dashboard";
-        }, 100);
+        // signInWithPassword's promise only resolves after the session is
+        // already persisted, so there's nothing to wait out here — the
+        // arbitrary delay this used to have just added latency for nothing.
+        window.location.href = res.ok ? "/admin" : "/dashboard";
       } else {
         throw new Error("Login succeeded but no session was returned.");
       }

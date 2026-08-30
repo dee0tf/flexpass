@@ -60,7 +60,10 @@ export default function DashboardPage() {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (cancelled) return;
         if (!session) {
-          window.location.replace("/login");
+          // Soft navigation — the dashboard layout's own guard (see
+          // lib/useAuthGuard) already redirects on session loss; this stays
+          // as a defense-in-depth check but no longer hard-reloads the page.
+          router.push("/login");
           return;
         }
         setUser(session.user);
@@ -73,7 +76,7 @@ export default function DashboardPage() {
     // Also listen for sign-out so the page reacts if user logs out in another tab
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
-        window.location.replace("/login");
+        router.push("/login");
       }
     });
 

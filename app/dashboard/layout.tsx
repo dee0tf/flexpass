@@ -3,24 +3,26 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen, ShieldCheck, BarChart3
+  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen, ShieldCheck, BarChart3, Loader2
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useState, useEffect, useRef } from "react";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { session, loading: authLoading } = useAuthGuard();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
   const notifChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) return;
+    if (!session) return;
+    (async () => {
       const userId = session.user.id;
 
       // Only the FlexPass admin account gets a link back to /admin — everyone
@@ -82,19 +84,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           notifChannelRef.current = channel;
         }
       }
-    });
+    })();
 
     return () => {
       if (notifChannelRef.current) {
         supabase.removeChannel(notifChannelRef.current);
       }
     };
-  }, []);
+  }, [session]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/login");
   };
+
+  // Covers every /dashboard route from one place — see lib/useAuthGuard for
+  // why this used to be ~9 separate, inconsistent per-page checks instead.
+  // Blocking on this (rather than rendering the shell around a null
+  // session) avoids a flash of sidebar/nav for a visitor who's about to be
+  // redirected to /login anyway.
+  if (authLoading || !session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--background)" }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "var(--brand-indigo)" }} />
+      </div>
+    );
+  }
 
   const navItems = [
     { name: "Overview",   href: "/dashboard",           icon: LayoutDashboard },
