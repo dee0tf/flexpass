@@ -2,16 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Loader2, AlertCircle, LogOut } from "lucide-react";
+import { Loader2, AlertCircle, LogOut, KeyRound, Copy, Check } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CheckInScanner, { CheckInEvent } from "@/components/CheckInScanner";
+
+interface AdminEvent extends CheckInEvent {
+  scan_code: string | null;
+}
 
 export default function AdminCheckInPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
-  const [events, setEvents] = useState<CheckInEvent[]>([]);
+  const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [codeEventId, setCodeEventId] = useState("");
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -32,7 +39,7 @@ export default function AdminCheckInPage() {
 
         const { data } = await supabase
           .from("events")
-          .select("id, title, date, organizer_name")
+          .select("id, title, date, organizer_name, scan_code")
           .order("date", { ascending: false });
         setEvents(data || []);
         setLoading(false);
@@ -49,6 +56,32 @@ export default function AdminCheckInPage() {
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
+
+  const handleGenerateScanCode = async () => {
+    if (!codeEventId) return;
+    setCodeBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/admin/generate-scan-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ eventId: codeEventId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate code");
+      setEvents(prev => prev.map(e => e.id === codeEventId ? { ...e, scan_code: data.code } : e));
+      setLinkCopied(false);
+    } catch {
+      // Silently no-op on failure — the button staying in its "generate"
+      // state is signal enough that nothing changed; this panel is a small
+      // convenience tool, not a flow worth a full toast/error system for.
+    } finally {
+      setCodeBusy(false);
+    }
+  };
+
+  const codeEvent = events.find(e => e.id === codeEventId);
 
   if (loading) {
     return (
@@ -94,7 +127,58 @@ export default function AdminCheckInPage() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-8">
+      <div className="max-w-lg mx-auto px-4 py-8 space-y-6">
+        <div className="p-4 rounded-2xl" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+          <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            <KeyRound className="h-4 w-4" style={{ color: "var(--brand-indigo)" }} />
+            Door Staff Access Codes
+          </p>
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+            Generate a scan-only code for any host&apos;s event — useful when FlexPass is running the door directly.
+          </p>
+          <select
+            value={codeEventId}
+            onChange={e => { setCodeEventId(e.target.value); setLinkCopied(false); }}
+            className="w-full mt-3 p-2.5 rounded-xl text-sm"
+            style={{ backgroundColor: "var(--surface)", border: "1px solid var(--card-border)", color: "var(--text-primary)" }}>
+            <option value="">— choose an event —</option>
+            {events.map(ev => (
+              <option key={ev.id} value={ev.id}>
+                {ev.title} — {new Date(ev.date).toLocaleDateString()}
+                {ev.organizer_name ? ` (${ev.organizer_name})` : ""}
+              </option>
+            ))}
+          </select>
+
+          {codeEventId && (
+            <div className="mt-3 space-y-2">
+              {codeEvent?.scan_code && (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold tracking-widest px-3 py-1.5 rounded-lg"
+                    style={{ backgroundColor: "var(--surface)", border: "1px solid var(--card-border)", color: "var(--text-primary)" }}>
+                    {codeEvent.scan_code}
+                  </span>
+                  <button onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/checkin/${codeEventId}`);
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 2000);
+                  }}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition hover:opacity-80"
+                    style={{ backgroundColor: "var(--surface)", color: "var(--brand-indigo)", border: "1px solid var(--card-border)" }}>
+                    {linkCopied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy scanner link</>}
+                  </button>
+                </div>
+              )}
+              <button onClick={handleGenerateScanCode} disabled={codeBusy}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition hover:opacity-80 disabled:opacity-50"
+                style={{ backgroundColor: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--card-border)" }}>
+                {codeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+                {codeEvent?.scan_code ? "Regenerate code" : "Generate code"}
+              </button>
+            </div>
+          )}
+        </div>
+
         <CheckInScanner
           events={events}
           title="Admin Check-In Scanner"

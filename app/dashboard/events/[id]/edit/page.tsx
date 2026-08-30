@@ -15,6 +15,7 @@ import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { hostAmount } from "@/lib/hostAmount";
 import { splitName } from "@/lib/splitName";
+import { generateScanCode } from "@/lib/generateScanCode";
 import { use } from "react";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -388,14 +389,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const handleGenerateScanCode = async () => {
     setScanCodeBusy(true);
     try {
-      // Unambiguous alphabet (no 0/O/1/I/L) since this gets read aloud or
-      // typed by hand at the door; 8 chars is plenty against guessing since
-      // it's scoped to one event and worth nothing beyond scan access.
-      const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-      const bytes = new Uint8Array(8);
-      crypto.getRandomValues(bytes);
-      const newCode = Array.from(bytes, b => alphabet[b % alphabet.length]).join("");
-
+      const newCode = generateScanCode();
       const { error } = await supabase.from("events").update({ scan_code: newCode }).eq("id", id);
       if (error) throw error;
       setScanCode(newCode);
