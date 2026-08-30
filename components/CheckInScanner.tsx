@@ -446,65 +446,6 @@ export default function CheckInScanner({
             </div>
           )}
 
-          {/* Result card */}
-          {result && !loading && (
-            <div className="rounded-2xl overflow-hidden shadow-xl">
-              <div className="p-6 text-white text-center" style={{ backgroundColor: resultColor }}>
-                {result.valid
-                  ? <CheckCircle2 className="h-14 w-14 mx-auto mb-3" />
-                  : resultPreset?.icon === "warning"
-                  ? <AlertCircle className="h-14 w-14 mx-auto mb-3" />
-                  : <XCircle className="h-14 w-14 mx-auto mb-3" />}
-                <h2 className="text-2xl font-bold">
-                  {result.valid ? "Access Granted ✓"
-                    : resultPreset ? `${resultPreset.title}${resultPreset.icon === "warning" ? " ⚠️" : " ✗"}`
-                    : "Access Denied ✗"}
-                </h2>
-                {result.reason && (
-                  <p className="text-sm mt-1 opacity-90">{result.reason}</p>
-                )}
-                {isDuplicate && result.checkedInAt && (
-                  <p className="text-xs mt-1 opacity-70">
-                    First admitted at {new Date(result.checkedInAt).toLocaleTimeString()}
-                  </p>
-                )}
-              </div>
-
-              <div className="p-5 space-y-2.5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-                {result.giveaway && (
-                  <div className="flex justify-center">
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full"
-                      style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706" }}>
-                      🎁 Giveaway
-                    </span>
-                  </div>
-                )}
-                {result.holder && <InfoRow label="Name" value={result.holder} />}
-                {result.email && <InfoRow label="Email" value={result.email} />}
-                {result.tier && <InfoRow label="Ticket Type" value={result.tier} />}
-                {result.valid && result.checkedInAt && (
-                  <InfoRow label="Admitted At" value={new Date(result.checkedInAt).toLocaleTimeString()} />
-                )}
-
-                {isDuplicate && (
-                  <div className="flex items-start gap-2 p-3 rounded-xl mt-1"
-                    style={{ backgroundColor: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
-                    <ShieldAlert size={14} className="text-amber-600 mt-0.5 shrink-0" />
-                    <p className="text-xs text-amber-700">
-                      This ticket was already scanned. Do not admit — the QR code may be a duplicate or screenshot.
-                    </p>
-                  </div>
-                )}
-
-                <button onClick={handleScanNext}
-                  className="mt-2 w-full py-3 rounded-xl text-sm font-bold text-white hover:opacity-90 transition"
-                  style={{ backgroundColor: "var(--brand-indigo)" }}>
-                  Scan Next →
-                </button>
-              </div>
-            </div>
-          )}
-
           {!result && !loading && (
             <div className="flex items-start gap-2 p-3 rounded-xl text-xs"
               style={{ backgroundColor: "rgba(72,0,130,0.04)", border: "1px solid rgba(72,0,130,0.1)", color: "var(--text-muted)" }}>
@@ -513,6 +454,76 @@ export default function CheckInScanner({
             </div>
           )}
         </>
+      )}
+
+      {/* Scan result — a full-screen popup rather than an inline card, so it
+          reads as an immediate go/no-go signal at a glance during a fast
+          door-scanning flow instead of pushing the camera view down. */}
+      {result && !loading && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+          onClick={handleScanNext}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-6 text-white text-center" style={{ backgroundColor: resultColor }}>
+              {result.valid
+                ? <CheckCircle2 className="h-14 w-14 mx-auto mb-3" />
+                : resultPreset?.icon === "warning"
+                ? <AlertCircle className="h-14 w-14 mx-auto mb-3" />
+                : <XCircle className="h-14 w-14 mx-auto mb-3" />}
+              <h2 className="text-2xl font-bold">
+                {result.valid ? "Access Granted ✓"
+                  : resultPreset ? `${resultPreset.title}${resultPreset.icon === "warning" ? " ⚠️" : " ✗"}`
+                  : "Access Denied ✗"}
+              </h2>
+              {result.reason && (
+                <p className="text-sm mt-1 opacity-90">{result.reason}</p>
+              )}
+              {isDuplicate && result.checkedInAt && (
+                <p className="text-xs mt-1 opacity-70">
+                  First admitted at {new Date(result.checkedInAt).toLocaleTimeString()}
+                </p>
+              )}
+            </div>
+
+            <div className="p-5 space-y-2.5" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+              {result.giveaway && (
+                <div className="flex justify-center">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706" }}>
+                    🎁 Giveaway
+                  </span>
+                </div>
+              )}
+              {result.holder && <InfoRow label="Name" value={result.holder} />}
+              {result.email && <InfoRow label="Email" value={result.email} />}
+              {result.tier && <InfoRow label="Ticket Type" value={result.tier} />}
+              {result.valid && result.checkedInAt && (
+                <InfoRow label="Admitted At" value={new Date(result.checkedInAt).toLocaleTimeString()} />
+              )}
+
+              {isDuplicate && (
+                <div className="flex items-start gap-2 p-3 rounded-xl mt-1"
+                  style={{ backgroundColor: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)" }}>
+                  <ShieldAlert size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-700">
+                    This ticket was already scanned. Do not admit — the QR code may be a duplicate or screenshot.
+                  </p>
+                </div>
+              )}
+
+              <button onClick={handleScanNext}
+                className="mt-2 w-full py-3 rounded-xl text-sm font-bold text-white hover:opacity-90 transition"
+                style={{ backgroundColor: "var(--brand-indigo)" }}>
+                Scan Next →
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
