@@ -78,18 +78,24 @@ function extractTicketId(raw: string): string {
 }
 
 /**
- * Shared scanning UI/logic for both the host's own check-in page
- * (/dashboard/checkin) and the admin check-in page (/admin/checkin) — the
- * only difference between the two is which events the caller passes in and
- * which account is authenticating; /api/checkin authorizes either the
- * event's owner or an admin.
+ * Shared scanning UI/logic for the host's own check-in page
+ * (/dashboard/checkin), the admin check-in page (/admin/checkin), and the
+ * code-gated door-staff page (/checkin/[eventId]) — the differences between
+ * them are which events the caller passes in and how the scanner
+ * authenticates; /api/checkin accepts either a Supabase session (host/admin)
+ * or a `scanCode` scoped to one event (door staff, see /api/scanner-auth).
  */
 export default function CheckInScanner({
   events,
+  scanCode,
   title = "Check-In Scanner",
   subtitle = "Each QR can only be admitted once — re-scans are blocked.",
 }: {
   events: CheckInEvent[];
+  // When set, every request authenticates with this event-scoped access
+  // code instead of a Supabase session — used by the door-staff page, which
+  // has no logged-in user at all.
+  scanCode?: string;
   title?: string;
   subtitle?: string;
 }) {
@@ -128,15 +134,21 @@ export default function CheckInScanner({
 
   // POST /api/checkin and normalize the response into a ScanResult.
   // Returns null on a network-level failure (caller decides the message).
-  const postCheckIn = useCallback(async (ticketId: string, token: string): Promise<{ res: Response; data: CheckInApiResponse } | null> => {
+  // Either `token` (Supabase session) or `scanCode` (door-staff access code)
+  // must be provided — never both, /api/checkin only looks at one per call.
+  const postCheckIn = useCallback(async (ticketId: string, auth: { token: string } | { scanCode: string }): Promise<{ res: Response; data: CheckInApiResponse } | null> => {
     try {
       const res = await fetch("/api/checkin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...("token" in auth ? { Authorization: `Bearer ${auth.token}` } : {}),
         },
-        body: JSON.stringify({ ticketId, eventId: selectedEvent }),
+        body: JSON.stringify({
+          ticketId,
+          eventId: selectedEvent,
+          ...("scanCode" in auth ? { scanCode: auth.scanCode } : {}),
+        }),
       });
       const data = await res.json();
       return { res, data };
@@ -167,29 +179,37 @@ export default function CheckInScanner({
       return;
     }
 
-    let session: any = null;
-    try {
-      const { data } = await supabase.auth.getSession();
-      session = data?.session;
-    } catch {
-      // getSession failure — treat as logged out
-    }
-    if (!session) {
-      setResult({ valid: false, code: "session_expired", reason: "You're signed out — sign in again to keep scanning." });
-      setLoading(false);
-      isCheckingIn.current = false;
-      return;
-    }
+    let outcome: Awaited<ReturnType<typeof postCheckIn>>;
 
-    let outcome = await postCheckIn(ticketId, session.access_token);
+    if (scanCode) {
+      // Door-staff path — no Supabase session exists at all, the access
+      // code itself is the credential on every request.
+      outcome = await postCheckIn(ticketId, { scanCode });
+    } else {
+      let session: any = null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+      } catch {
+        // getSession failure — treat as logged out
+      }
+      if (!session) {
+        setResult({ valid: false, code: "session_expired", reason: "You're signed out — sign in again to keep scanning." });
+        setLoading(false);
+        isCheckingIn.current = false;
+        return;
+      }
 
-    // A stale access token (e.g. the tab sat backgrounded past its expiry)
-    // surfaces as a 401 here — refresh once and retry before telling the
-    // door staff the ticket itself is the problem.
-    if (outcome && outcome.data.code === "session_expired") {
-      const { data: refreshed } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
-      if (refreshed?.session) {
-        outcome = await postCheckIn(ticketId, refreshed.session.access_token);
+      outcome = await postCheckIn(ticketId, { token: session.access_token });
+
+      // A stale access token (e.g. the tab sat backgrounded past its expiry)
+      // surfaces as a 401 here — refresh once and retry before telling the
+      // door staff the ticket itself is the problem.
+      if (outcome && outcome.data.code === "session_expired") {
+        const { data: refreshed } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
+        if (refreshed?.session) {
+          outcome = await postCheckIn(ticketId, { token: refreshed.session.access_token });
+        }
       }
     }
 
@@ -219,7 +239,7 @@ export default function CheckInScanner({
     }
     setLoading(false);
     isCheckingIn.current = false;
-  }, [selectedEvent, isOnline, postCheckIn]);
+  }, [selectedEvent, isOnline, postCheckIn, scanCode]);
 
   useEffect(() => {
     if (mode !== "camera" || !selectedEvent || scannerStarted.current) return;

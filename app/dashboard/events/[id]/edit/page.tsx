@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
   Image as ImageIcon, Type, Clock, User, Plus, Trash2, Download, Ticket,
-  CheckCircle2, AlertTriangle, AlertCircle, Tag, Mail, EyeOff, Copy, Check,
+  CheckCircle2, AlertTriangle, AlertCircle, Tag, Mail, EyeOff, Copy, Check, KeyRound,
 } from "lucide-react";
 import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
@@ -278,6 +278,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   });
   const [isUnlisted, setIsUnlisted] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [scanCode, setScanCode] = useState<string | null>(null);
+  const [scanCodeBusy, setScanCodeBusy] = useState(false);
+  const [scanLinkCopied, setScanLinkCopied] = useState(false);
   const [tiers, setTiers] = useState<TierFormData[]>([]);
   const [removedTierIds, setRemovedTierIds] = useState<string[]>([]);
   // Individual attendee tickets sold per tier (keyed by tier id) — not
@@ -339,6 +342,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         locationReveal: event.location_reveal ?? false,
       });
       setIsUnlisted(event.is_unlisted ?? false);
+      setScanCode(event.scan_code ?? null);
       setFormData({
         title: event.title,
         description: event.description || "",
@@ -375,6 +379,33 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   };
   const toggleTierHidden = (i: number) => {
     const u = [...tiers]; u[i] = { ...u[i], is_hidden: !u[i].is_hidden }; setTiers(u);
+  };
+
+  // Generates (or regenerates) the door-staff access code for this event.
+  // Regenerating overwrites the stored value immediately, which is also how
+  // a previously shared code/link gets revoked — /api/checkin and
+  // /api/scanner-auth only ever compare against whatever's currently there.
+  const handleGenerateScanCode = async () => {
+    setScanCodeBusy(true);
+    try {
+      // Unambiguous alphabet (no 0/O/1/I/L) since this gets read aloud or
+      // typed by hand at the door; 8 chars is plenty against guessing since
+      // it's scoped to one event and worth nothing beyond scan access.
+      const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      const newCode = Array.from(bytes, b => alphabet[b % alphabet.length]).join("");
+
+      const { error } = await supabase.from("events").update({ scan_code: newCode }).eq("id", id);
+      if (error) throw error;
+      setScanCode(newCode);
+      setScanLinkCopied(false);
+      showToast(scanCode ? "Access code regenerated — the old code/link no longer works" : "Access code generated", "success");
+    } catch (err) {
+      showToast("Failed to generate access code: " + (err instanceof Error ? err.message : String(err)), "error");
+    } finally {
+      setScanCodeBusy(false);
+    }
   };
 
   const handleExportTierCsv = async (tierId: string, tierName: string) => {
@@ -616,6 +647,39 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                       {linkCopied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy shareable link</>}
                     </button>
                   )}
+                </div>
+                <div className="col-span-2 p-3 rounded-xl" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
+                  <p className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                    <KeyRound className="h-4 w-4" style={{ color: "var(--brand-indigo)" }} />
+                    Door Staff Access
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                    Share a code with whoever is scanning tickets at the door — they can check people in without needing your login. Regenerating replaces the old code, so a previously shared link stops working.
+                  </p>
+                  {scanCode && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="font-mono text-sm font-bold tracking-widest px-3 py-1.5 rounded-lg"
+                        style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--text-primary)" }}>
+                        {scanCode}
+                      </span>
+                      <button type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/checkin/${id}`);
+                          setScanLinkCopied(true);
+                          setTimeout(() => setScanLinkCopied(false), 2000);
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition hover:opacity-80"
+                        style={{ backgroundColor: "var(--card-bg)", color: "var(--brand-indigo)", border: "1px solid var(--card-border)" }}>
+                        {scanLinkCopied ? <><Check className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy scanner link</>}
+                      </button>
+                    </div>
+                  )}
+                  <button type="button" onClick={handleGenerateScanCode} disabled={scanCodeBusy}
+                    className="mt-3 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition hover:opacity-80 disabled:opacity-50"
+                    style={{ backgroundColor: "var(--card-bg)", color: "var(--text-secondary)", border: "1px solid var(--card-border)" }}>
+                    {scanCodeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+                    {scanCode ? "Regenerate code" : "Generate code"}
+                  </button>
                 </div>
               </div>
             </div>

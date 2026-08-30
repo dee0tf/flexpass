@@ -21,7 +21,7 @@ const ID_PREFIX_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}$/i;
 
 export async function POST(request: Request) {
   try {
-    const { ticketId, eventId } = await request.json();
+    const { ticketId, eventId, scanCode } = await request.json();
 
     if (!ticketId || !eventId) {
       return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — no ticket code detected' }, { status: 400 });
@@ -33,33 +33,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — this is not a valid FlexPass ticket code' }, { status: 400 });
     }
 
-    // Verify the scanner is an authenticated user
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '');
-    if (!token) {
-      return NextResponse.json({ code: 'session_expired', error: 'Your scanner session has expired — sign in again to keep scanning' }, { status: 401 });
-    }
-
-    const { data: { user }, error: authError } = await authClient.auth.getUser(token);
-    if (authError || !user) {
-      return NextResponse.json({ code: 'session_expired', error: 'Your scanner session has expired — sign in again to keep scanning' }, { status: 401 });
-    }
-
     // Confirm this user owns the event (via service-role client)
     const { data: event } = await db
       .from('events')
-      .select('id, title, user_id')
+      .select('id, title, user_id, scan_code')
       .eq('id', eventId)
       .single();
 
     if (!event) {
       return NextResponse.json({ code: 'event_not_found', error: 'Event not found' }, { status: 404 });
     }
-    // Either the event's own host, or a FlexPass admin scanning on a host's
-    // behalf (e.g. running the door for an event FlexPass staff is covering).
-    const isAdmin = !!process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL;
-    if (event.user_id !== user.id && !isAdmin) {
-      return NextResponse.json({ code: 'not_your_event', error: "You don't have access to scan tickets for this event" }, { status: 403 });
+
+    // Two ways in: a door-staff access code scoped to exactly this event
+    // (see /api/scanner-auth and the scan_code migration), or a real
+    // Supabase session belonging to the event's host or a FlexPass admin.
+    // The access code, once matched, needs no further ownership check — the
+    // code itself is what's scoped to the event.
+    if (typeof scanCode === 'string' && scanCode.length > 0) {
+      if (!event.scan_code || event.scan_code !== scanCode) {
+        return NextResponse.json({ code: 'not_your_event', error: "You don't have access to scan tickets for this event" }, { status: 403 });
+      }
+    } else {
+      const authHeader = request.headers.get('Authorization');
+      const token = authHeader?.replace('Bearer ', '');
+      if (!token) {
+        return NextResponse.json({ code: 'session_expired', error: 'Your scanner session has expired — sign in again to keep scanning' }, { status: 401 });
+      }
+
+      const { data: { user }, error: authError } = await authClient.auth.getUser(token);
+      if (authError || !user) {
+        return NextResponse.json({ code: 'session_expired', error: 'Your scanner session has expired — sign in again to keep scanning' }, { status: 401 });
+      }
+
+      // Either the event's own host, or a FlexPass admin scanning on a host's
+      // behalf (e.g. running the door for an event FlexPass staff is covering).
+      const isAdmin = !!process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL;
+      if (event.user_id !== user.id && !isAdmin) {
+        return NextResponse.json({ code: 'not_your_event', error: "You don't have access to scan tickets for this event" }, { status: 403 });
+      }
     }
 
     // Fetch the ticket — exact match on a full ID, prefix match on the
