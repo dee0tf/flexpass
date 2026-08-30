@@ -13,6 +13,17 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// This is the highest-traffic page in the app (everyone lands here before
+// buying), and had no caching at all — every visitor re-ran the full
+// event+tiers+sold-count fetch. A short revalidation window collapses many
+// concurrent visitors to the same event into one fetch per window instead of
+// one per request, which matters most exactly when it's needed most: many
+// people hitting the same event page at once. Actual purchase safety doesn't
+// depend on this number being fresh-to-the-second — capacity is still
+// enforced atomically at checkout (see create_tickets_atomic) regardless of
+// what "remaining" this page happens to display.
+export const revalidate = 30;
+
 async function getEvent(id: string) {
   const { data: event } = await supabase
     .from("events")
@@ -40,30 +51,20 @@ async function getEvent(id: string) {
   // slot and must keep counting, or remaining capacity appears to free up
   // as attendees check in mid-event.
   //
-  // Uses a head-count query per tier (not a row fetch) because Supabase/
-  // PostgREST caps a plain select's rows at 1000 by default — a row fetch
-  // would silently truncate the sold count on any tier that's sold past
-  // that, understating how many are sold and overstating "remaining".
+  // One aggregate RPC (get_tier_sold_counts, see
+  // supabase/migrations/20260830_tier_sold_counts_and_indexes.sql) replaces
+  // what used to be a separate head-count query per tier plus one more for
+  // legacy events — this page is the highest-traffic one in the app, so an
+  // event with N tiers was costing N+1 round trips per visitor. The
+  // aggregation happens in Postgres via COUNT(*), which stays exact
+  // regardless of row count, so this doesn't reintroduce the 1000-row
+  // PostgREST cap the original per-tier head-count queries were dodging.
   const soldByTier: Record<string, number> = {};
-  await Promise.all(
-    (tiers || []).map(async (t: any) => {
-      const { count } = await supabase
-        .from("tickets")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", id)
-        .eq("tier_id", t.id)
-        .in("status", ["valid", "scanned"]);
-      soldByTier[t.id] = count || 0;
-    })
-  );
-  {
-    const { count: legacyCount } = await supabase
-      .from("tickets")
-      .select("id", { count: "exact", head: true })
-      .eq("event_id", id)
-      .is("tier_id", null)
-      .in("status", ["valid", "scanned"]);
-    soldByTier["__legacy__"] = legacyCount || 0;
+  const { data: tierCounts } = await supabase.rpc("get_tier_sold_counts", { p_event_id: id });
+  for (const row of tierCounts || []) {
+    // Postgres bigint comes back over PostgREST as a numeric string to avoid
+    // precision loss — coerce explicitly rather than relying on `/` to do it.
+    soldByTier[row.tier_id ?? "__legacy__"] = Number(row.sold_count) || 0;
   }
 
   const tiersWithRemaining = (tiers || [])
