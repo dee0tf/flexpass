@@ -146,7 +146,7 @@ export default function CheckoutModal({
   const bulkDiscountActive = isFlexibleGroup
     && !!selectedTier?.bulk_discount_qty
     && !!selectedTier?.bulk_discount_percent
-    && quantity > (selectedTier!.bulk_discount_qty as number);
+    && quantity >= (selectedTier!.bulk_discount_qty as number);
   const effectiveUnitPrice = bulkDiscountActive
     ? Math.round(finalPrice * (1 - (selectedTier!.bulk_discount_percent as number) / 100) * 100) / 100
     : finalPrice;
@@ -452,7 +452,7 @@ export default function CheckoutModal({
                           {" "}{bulkDiscountActive
                             ? `🎉 ${selectedTier!.bulk_discount_percent}% discount applied for booking ${selectedTier!.bulk_discount_qty}+ tickets.`
                             : selectedTier?.bulk_discount_qty
-                              ? ` Buy more than ${selectedTier.bulk_discount_qty} for ${selectedTier.bulk_discount_percent}% off.`
+                              ? ` Buy ${selectedTier.bulk_discount_qty} or more to get ${selectedTier.bulk_discount_percent}% off.`
                               : ""}
                         </p>
                       )}

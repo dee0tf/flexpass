@@ -801,7 +801,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                             style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount Above (qty)</label>
+                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount From (qty)</label>
                           <input type="number" placeholder="10" value={tier.bulk_discount_qty} min="1" max="50"
                             onChange={e => updateTier(i, "bulk_discount_qty", e.target.value)}
                             className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
@@ -818,7 +818,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     )}
                     {tier.is_flexible_group && (
                       <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                        Buyers must select at least {tier.min_quantity || "10"} tickets (up to 50). {tier.bulk_discount_percent ? `Above ${tier.bulk_discount_qty || tier.min_quantity || "10"} tickets, each ticket is ${tier.bulk_discount_percent}% off.` : "Leave the discount fields blank to charge the flat price regardless of headcount."}
+                        Buyers must select at least {tier.min_quantity || "10"} tickets (up to 50). {tier.bulk_discount_percent ? `At ${tier.bulk_discount_qty || tier.min_quantity || "10"}+ tickets, each ticket is ${tier.bulk_discount_percent}% off.` : "Leave the discount fields blank to charge the flat price regardless of headcount."}
                       </p>
                     )}
                   </div>

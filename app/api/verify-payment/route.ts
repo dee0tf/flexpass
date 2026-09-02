@@ -159,7 +159,7 @@ export async function POST(request: Request) {
       // Authoritative per-ticket price — the client-submitted `price` is
       // never trusted for a tiered purchase, since that's exactly what a
       // discount claim would otherwise let a buyer forge.
-      unitPrice = tier.min_quantity && tier.bulk_discount_qty && tier.bulk_discount_percent && quantity > tier.bulk_discount_qty
+      unitPrice = tier.min_quantity && tier.bulk_discount_qty && tier.bulk_discount_percent && quantity >= tier.bulk_discount_qty
         ? Math.round(tier.price * (1 - tier.bulk_discount_percent / 100) * 100) / 100
         : tier.price;
     }
