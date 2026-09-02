@@ -29,5 +29,8 @@ export interface TicketTier {
   group_size?: number;
   is_hidden?: boolean;
   description?: string | null;
+  min_quantity?: number | null;
+  bulk_discount_qty?: number | null;
+  bulk_discount_percent?: number | null;
 }
 

@@ -21,6 +21,7 @@ const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "O
 
 interface TierFormData {
   id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean; group_size: string; is_hidden: boolean; description: string;
+  is_flexible_group: boolean; min_quantity: string; bulk_discount_qty: string; bulk_discount_percent: string;
 }
 
 // ── Issue Giveaway Ticket panel ─────────────────────────────────────
@@ -308,10 +309,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           group_size: (t.group_size ?? 1).toString(),
           is_hidden: t.is_hidden ?? false,
           description: t.description || "",
+          is_flexible_group: !!t.min_quantity,
+          min_quantity: (t.min_quantity ?? "10").toString(),
+          bulk_discount_qty: (t.bulk_discount_qty ?? t.min_quantity ?? "10").toString(),
+          bulk_discount_percent: (t.bulk_discount_percent ?? "").toString(),
         }))
       );
       if (!existingTiers || existingTiers.length === 0) {
-        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1", is_hidden: false, description: "" }]);
+        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1", is_hidden: false, description: "", is_flexible_group: false, min_quantity: "10", bulk_discount_qty: "10", bulk_discount_percent: "" }]);
       }
 
       // Sold count per tier, so the host can see how many are left without
@@ -374,18 +379,21 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     loadData();
   }, [id, router]);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true, group_size: "1", is_hidden: false, description: "" }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true, group_size: "1", is_hidden: false, description: "", is_flexible_group: false, min_quantity: "10", bulk_discount_qty: "10", bulk_discount_percent: "" }]);
   const removeTier = (i: number) => {
     if (tiers.length <= 1) return;
     const removed = tiers[i];
     if (removed.id) setRemovedTierIds(prev => [...prev, removed.id!]);
     setTiers(tiers.filter((_, idx) => idx !== i));
   };
-  const updateTier = (i: number, field: Exclude<keyof TierFormData, "is_hidden">, value: string) => {
+  const updateTier = (i: number, field: Exclude<keyof TierFormData, "is_hidden" | "is_flexible_group">, value: string) => {
     const u = [...tiers]; u[i] = { ...u[i], [field]: value }; setTiers(u);
   };
   const toggleTierHidden = (i: number) => {
     const u = [...tiers]; u[i] = { ...u[i], is_hidden: !u[i].is_hidden }; setTiers(u);
+  };
+  const toggleTierFlexibleGroup = (i: number) => {
+    const u = [...tiers]; u[i] = { ...u[i], is_flexible_group: !u[i].is_flexible_group }; setTiers(u);
   };
 
   // Generates (or regenerates) the door-staff access code for this event.
@@ -447,6 +455,24 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (tiers.some(t => !t.name || !t.price || !t.quantity)) return;
+    for (const t of tiers) {
+      if (!t.is_flexible_group) continue;
+      const minQty = Number(t.min_quantity);
+      const discQty = Number(t.bulk_discount_qty);
+      const discPct = Number(t.bulk_discount_percent);
+      if (!minQty || minQty < 1) {
+        showToast(`"${t.name || "Untitled"}" is a flexible group ticket — set a minimum quantity.`, "error");
+        return;
+      }
+      if (t.bulk_discount_qty && discQty < minQty) {
+        showToast(`"${t.name || "Untitled"}": the discount threshold can't be below the minimum quantity.`, "error");
+        return;
+      }
+      if (t.bulk_discount_percent && (discPct < 0 || discPct > 100)) {
+        showToast(`"${t.name || "Untitled"}": discount percent must be between 0 and 100.`, "error");
+        return;
+      }
+    }
     setIsSaving(true);
     try {
       const minPrice = Math.min(...tiers.map(t => Number(t.price)));
@@ -487,6 +513,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           group_size: Number(t.group_size) || 1,
           is_hidden: t.is_hidden ?? false,
           description: t.description.trim() || null,
+          min_quantity: t.is_flexible_group ? Number(t.min_quantity) || null : null,
+          bulk_discount_qty: t.is_flexible_group && t.bulk_discount_qty ? Number(t.bulk_discount_qty) : null,
+          bulk_discount_percent: t.is_flexible_group && t.bulk_discount_percent ? Number(t.bulk_discount_percent) : null,
         }));
       const newTiers = tiers
         .filter(t => !t.id)
@@ -498,6 +527,9 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           group_size: Number(t.group_size) || 1,
           is_hidden: t.is_hidden ?? false,
           description: t.description.trim() || null,
+          min_quantity: t.is_flexible_group ? Number(t.min_quantity) || null : null,
+          bulk_discount_qty: t.is_flexible_group && t.bulk_discount_qty ? Number(t.bulk_discount_qty) : null,
+          bulk_discount_percent: t.is_flexible_group && t.bulk_discount_percent ? Number(t.bulk_discount_percent) : null,
         }));
 
       if (existingTiers.length) {
@@ -750,6 +782,45 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                     <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                       Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
                     </p>
+                  </div>
+                  <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--card-border)" }}>
+                    <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                      <input type="checkbox" checked={tier.is_flexible_group} onChange={() => toggleTierFlexibleGroup(i)} />
+                      Family / group ticket (flexible headcount)
+                    </label>
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                      For groups that don&apos;t fit a fixed bundle — the buyer picks their own headcount (at least the minimum below) instead of a preset table size, priced per ticket, with an optional bulk discount.
+                    </p>
+                    {tier.is_flexible_group && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Minimum Tickets</label>
+                          <input type="number" placeholder="10" value={tier.min_quantity} min="1" max="50"
+                            onChange={e => updateTier(i, "min_quantity", e.target.value)}
+                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                            style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount Above (qty)</label>
+                          <input type="number" placeholder="10" value={tier.bulk_discount_qty} min="1" max="50"
+                            onChange={e => updateTier(i, "bulk_discount_qty", e.target.value)}
+                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                            style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount (%)</label>
+                          <input type="number" placeholder="10" value={tier.bulk_discount_percent} min="0" max="100"
+                            onChange={e => updateTier(i, "bulk_discount_percent", e.target.value)}
+                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                            style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                        </div>
+                      </div>
+                    )}
+                    {tier.is_flexible_group && (
+                      <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                        Buyers must select at least {tier.min_quantity || "10"} tickets (up to 50). {tier.bulk_discount_percent ? `Above ${tier.bulk_discount_qty || tier.min_quantity || "10"} tickets, each ticket is ${tier.bulk_discount_percent}% off.` : "Leave the discount fields blank to charge the flat price regardless of headcount."}
+                      </p>
+                    )}
                   </div>
                   <div className="mt-3">
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>

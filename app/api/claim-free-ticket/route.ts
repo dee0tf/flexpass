@@ -9,6 +9,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Must match components/CheckoutModal.tsx / app/api/verify-payment/route.ts.
+const MAX_FLEXIBLE_GROUP_QUANTITY = 50;
+
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: Request) {
@@ -27,7 +30,7 @@ export async function POST(request: Request) {
     if (!emailRegex.test(email)) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
     }
-    if (typeof quantity !== 'number' || quantity < 1 || quantity > 10) {
+    if (typeof quantity !== 'number' || quantity < 1 || quantity > MAX_FLEXIBLE_GROUP_QUANTITY) {
       return NextResponse.json({ error: 'Invalid quantity' }, { status: 400 });
     }
 
@@ -56,11 +59,12 @@ export async function POST(request: Request) {
     // DB too, never the client. ---
     let verifiedPrice: number;
     let groupSize = 1;
+    let isFlexibleGroup = false;
 
     if (tierId) {
       const { data: tier, error: tierErr } = await supabase
         .from('ticket_tiers')
-        .select('price, event_id, group_size')
+        .select('price, event_id, group_size, min_quantity')
         .eq('id', tierId)
         .single();
 
@@ -80,6 +84,14 @@ export async function POST(request: Request) {
 
       verifiedPrice = tier.price;
       groupSize = tier.group_size || 1;
+      isFlexibleGroup = !!tier.min_quantity;
+
+      if (tier.min_quantity && quantity < tier.min_quantity) {
+        return NextResponse.json(
+          { error: `This ticket type requires a minimum of ${tier.min_quantity} tickets.` },
+          { status: 400 }
+        );
+      }
     } else {
       verifiedPrice = eventRow.price;
     }
@@ -100,7 +112,10 @@ export async function POST(request: Request) {
     // Total individual attendee tickets this claim will issue.
     const attendeeCount = quantity * groupSize;
 
-    // --- 3b. Anti-bulk-buying: max 6 individual tickets per email per event ---
+    // --- 3b. Anti-bulk-buying: max 6 individual tickets per email per event —
+    // raised for flexible group/family tiers, since one person claiming 10+
+    // tickets there is the expected use case, not abuse.
+    const bulkCap = isFlexibleGroup ? MAX_FLEXIBLE_GROUP_QUANTITY : 6;
     const { count: alreadyOwned } = await supabase
       .from('tickets')
       .select('id', { count: 'exact', head: true })
@@ -108,8 +123,8 @@ export async function POST(request: Request) {
       .eq('user_email', email.toLowerCase())
       .in('status', ['valid', 'scanned']);
 
-    if ((alreadyOwned || 0) + attendeeCount > 6) {
-      const remaining = Math.max(0, 6 - (alreadyOwned || 0));
+    if ((alreadyOwned || 0) + attendeeCount > bulkCap) {
+      const remaining = Math.max(0, bulkCap - (alreadyOwned || 0));
       await logPaymentEvent({
         source: 'claim-free-ticket', eventType: 'anti_bulk_rejected', status: 'error',
         eventId, email, message: `alreadyOwned=${alreadyOwned} attendeeCount=${attendeeCount}`,

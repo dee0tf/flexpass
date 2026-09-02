@@ -15,6 +15,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Flexible group (family/table) tickets have a host-set minimum quantity —
+// this is the hard ceiling regardless of that minimum, so one checkout can't
+// become an unbounded bulk buy. Must match components/CheckoutModal.tsx.
+const MAX_FLEXIBLE_GROUP_QUANTITY = 50;
+// Per-checkout cap for ordinary (non-flexible-group) tiers — unchanged from
+// the original hardcoded limit.
+const MAX_STANDARD_QUANTITY = 10;
+
 export async function POST(request: Request) {
   let reference: string | undefined;
   let eventId: string | undefined;
@@ -29,7 +37,7 @@ export async function POST(request: Request) {
     if (!reference || !eventId || !email || !fullName || !quantity || price == null) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-    if (typeof quantity !== 'number' || quantity < 1 || quantity > 10) {
+    if (typeof quantity !== 'number' || quantity < 1 || quantity > MAX_FLEXIBLE_GROUP_QUANTITY) {
       return NextResponse.json({ error: 'Invalid quantity' }, { status: 400 });
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -106,32 +114,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Payment not successful' }, { status: 400 });
     }
 
-    // --- 4. Validate that the paid amount matches what we expect ---
-    // Paystack returns amount in kobo; our price is in naira. `price` is
-    // already the bundle price for group tiers, so this math is unaffected
-    // by group_size — `quantity` here means "groups purchased".
-    const paidKobo = paystackData.data.amount;
-    const expectedKobo = Math.round((price * quantity + fee) * 100);
-
-    if (paidKobo < expectedKobo) {
-      await logPaymentEvent({
-        source: 'verify-payment', eventType: 'amount_mismatch', status: 'error',
-        reference, eventId, email, message: `paid=${paidKobo} expected=${expectedKobo}`,
-      });
-      return NextResponse.json({ error: 'Paid amount does not match order total' }, { status: 400 });
-    }
-
-    // --- 5. Look up the tier (if any) to get group_size — never trust the
-    // client for it. group_size is how many individual attendee tickets one
-    // purchased "unit" issues (1 for a normal tier, e.g. 5 for a "Table of 5"
-    // bundle). Capacity itself is checked atomically inside
-    // create_tickets_atomic below, under a row lock, so it can't race with a
-    // concurrent purchase of the same tier.
+    // --- 4. Look up the tier (if any) — never trust the client for group_size,
+    // min_quantity, or the bulk-discount fields. group_size is how many
+    // individual attendee tickets one purchased "unit" issues (1 for a normal
+    // tier, e.g. 5 for a "Table of 5" bundle). min_quantity / bulk_discount_*
+    // drive the flexible "family/group" ticket type: buyer picks their own
+    // headcount (>= min_quantity, capped at MAX_FLEXIBLE_GROUP_QUANTITY) and
+    // gets a per-ticket discount above bulk_discount_qty. Capacity itself is
+    // checked atomically inside create_tickets_atomic below, under a row
+    // lock, so it can't race with a concurrent purchase of the same tier.
     let groupSize = 1;
+    let unitPrice = price;
+    let isFlexibleGroup = false;
     if (tierId) {
       const { data: tier } = await supabase
         .from('ticket_tiers')
-        .select('group_size, event_id')
+        .select('price, group_size, event_id, min_quantity, bulk_discount_qty, bulk_discount_percent')
         .eq('id', tierId)
         .single();
 
@@ -145,12 +143,50 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid ticket tier for this event' }, { status: 400 });
       }
       groupSize = tier.group_size || 1;
+      isFlexibleGroup = !!tier.min_quantity;
+
+      if (tier.min_quantity) {
+        if (quantity < tier.min_quantity) {
+          return NextResponse.json(
+            { error: `This ticket type requires a minimum of ${tier.min_quantity} tickets.` },
+            { status: 400 }
+          );
+        }
+      } else if (quantity > MAX_STANDARD_QUANTITY) {
+        return NextResponse.json({ error: 'Invalid quantity' }, { status: 400 });
+      }
+
+      // Authoritative per-ticket price — the client-submitted `price` is
+      // never trusted for a tiered purchase, since that's exactly what a
+      // discount claim would otherwise let a buyer forge.
+      unitPrice = tier.min_quantity && tier.bulk_discount_qty && tier.bulk_discount_percent && quantity > tier.bulk_discount_qty
+        ? Math.round(tier.price * (1 - tier.bulk_discount_percent / 100) * 100) / 100
+        : tier.price;
+    }
+
+    // --- 4a. Validate that the paid amount matches what we expect ---
+    // Paystack returns amount in kobo; our price is in naira. `unitPrice` is
+    // already the bundle price for group tiers, so this math is unaffected
+    // by group_size — `quantity` here means "groups purchased".
+    const paidKobo = paystackData.data.amount;
+    const expectedKobo = Math.round((unitPrice * quantity + fee) * 100);
+
+    if (paidKobo < expectedKobo) {
+      await logPaymentEvent({
+        source: 'verify-payment', eventType: 'amount_mismatch', status: 'error',
+        reference, eventId, email, message: `paid=${paidKobo} expected=${expectedKobo}`,
+      });
+      return NextResponse.json({ error: 'Paid amount does not match order total' }, { status: 400 });
     }
 
     // Total individual attendee tickets this purchase will issue.
     const attendeeCount = quantity * groupSize;
 
-    // --- 5a. Anti-bulk-buying: max 6 individual tickets per email per event ---
+    // --- 5a. Anti-bulk-buying: max 6 individual tickets per email per event —
+    // raised to MAX_FLEXIBLE_GROUP_QUANTITY for flexible group/family tiers,
+    // since one person buying 10+ tickets there is the expected use case,
+    // not abuse.
+    const bulkCap = isFlexibleGroup ? MAX_FLEXIBLE_GROUP_QUANTITY : 6;
     const { count: alreadyOwned } = await supabase
       .from('tickets')
       .select('id', { count: 'exact', head: true })
@@ -158,15 +194,15 @@ export async function POST(request: Request) {
       .eq('user_email', email.toLowerCase())
       .in('status', ['valid', 'scanned']);
 
-    if ((alreadyOwned || 0) + attendeeCount > 6) {
-      const remaining = Math.max(0, 6 - (alreadyOwned || 0));
+    if ((alreadyOwned || 0) + attendeeCount > bulkCap) {
+      const remaining = Math.max(0, bulkCap - (alreadyOwned || 0));
       await logPaymentEvent({
         source: 'verify-payment', eventType: 'anti_bulk_rejected', status: 'error',
         reference, eventId, email, message: `alreadyOwned=${alreadyOwned} attendeeCount=${attendeeCount}`,
       });
       return NextResponse.json(
         { error: remaining <= 0
-            ? 'You have already reached the maximum tickets allowed for this event (6 per person).'
+            ? `You have already reached the maximum tickets allowed for this event (${bulkCap} per person).`
             : `You can only buy ${remaining} more ticket${remaining === 1 ? '' : 's'} for this event.` },
         { status: 409 }
       );
@@ -177,7 +213,7 @@ export async function POST(request: Request) {
     // under a row lock on the tier (or event, for legacy events), so two
     // simultaneous purchases for the last slot can't both succeed.
     const perTicketFee = fee / attendeeCount;
-    const perTicketPrice = price / groupSize;
+    const perTicketPrice = unitPrice / groupSize;
     // Each row gets a unique purchase_reference so the UNIQUE constraint holds.
     // For a single ticket: use the reference as-is.
     // For multi-ticket/group purchases: suffix with position (e.g. ref-1, ref-2).

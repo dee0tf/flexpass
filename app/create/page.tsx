@@ -24,6 +24,10 @@ interface TicketTier {
   group_size: string;
   is_hidden: boolean;
   description: string;
+  is_flexible_group: boolean;
+  min_quantity: string;
+  bulk_discount_qty: string;
+  bulk_discount_percent: string;
 }
 
 function SuccessModal({ eventId, onClose }: { eventId: string; onClose: () => void }) {
@@ -98,7 +102,7 @@ export default function CreateEvent() {
     locationReveal: false,
   });
 
-  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false, description: "" }]);
+  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false, description: "", is_flexible_group: false, min_quantity: "10", bulk_discount_qty: "10", bulk_discount_percent: "" }]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
@@ -126,13 +130,16 @@ export default function CreateEvent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false, description: "" }]);
+  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false, description: "", is_flexible_group: false, min_quantity: "10", bulk_discount_qty: "10", bulk_discount_percent: "" }]);
   const removeTier = (i: number) => { if (tiers.length > 1) { const n = [...tiers]; n.splice(i, 1); setTiers(n); } };
-  const updateTier = (i: number, field: Exclude<keyof TicketTier, "is_hidden">, value: string) => {
+  const updateTier = (i: number, field: Exclude<keyof TicketTier, "is_hidden" | "is_flexible_group">, value: string) => {
     const n = [...tiers]; n[i][field] = value; setTiers(n);
   };
   const toggleTierHidden = (i: number) => {
     const n = [...tiers]; n[i] = { ...n[i], is_hidden: !n[i].is_hidden }; setTiers(n);
+  };
+  const toggleTierFlexibleGroup = (i: number) => {
+    const n = [...tiers]; n[i] = { ...n[i], is_flexible_group: !n[i].is_flexible_group }; setTiers(n);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -142,6 +149,25 @@ export default function CreateEvent() {
 
     if (tiers.some(t => !t.name || !t.price || !t.quantity)) {
       setIsLoading(false); return;
+    }
+
+    for (const t of tiers) {
+      if (!t.is_flexible_group) continue;
+      const minQty = Number(t.min_quantity);
+      const discQty = Number(t.bulk_discount_qty);
+      const discPct = Number(t.bulk_discount_percent);
+      if (!minQty || minQty < 1) {
+        showToast(`"${t.name || "Untitled"}" is a flexible group ticket — set a minimum quantity.`, "error");
+        setIsLoading(false); return;
+      }
+      if (t.bulk_discount_qty && discQty < minQty) {
+        showToast(`"${t.name || "Untitled"}": the discount threshold can't be below the minimum quantity.`, "error");
+        setIsLoading(false); return;
+      }
+      if (t.bulk_discount_percent && (discPct < 0 || discPct > 100)) {
+        showToast(`"${t.name || "Untitled"}": discount percent must be between 0 and 100.`, "error");
+        setIsLoading(false); return;
+      }
     }
 
     const finalCategory = formData.category === "Others" && formData.custom_category
@@ -188,6 +214,9 @@ export default function CreateEvent() {
           group_size: Number(t.group_size) || 1,
           is_hidden: t.is_hidden ?? false,
           description: t.description.trim() || null,
+          min_quantity: t.is_flexible_group ? Number(t.min_quantity) || null : null,
+          bulk_discount_qty: t.is_flexible_group && t.bulk_discount_qty ? Number(t.bulk_discount_qty) : null,
+          bulk_discount_percent: t.is_flexible_group && t.bulk_discount_percent ? Number(t.bulk_discount_percent) : null,
         }))
       );
       if (tierError) throw tierError;
@@ -353,6 +382,45 @@ export default function CreateEvent() {
                         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                           Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
                         </p>
+                      </div>
+                      <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--card-border)" }}>
+                        <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                          <input type="checkbox" checked={tier.is_flexible_group} onChange={() => toggleTierFlexibleGroup(i)} />
+                          Family / group ticket (flexible headcount)
+                        </label>
+                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                          For groups that don&apos;t fit a fixed bundle — the buyer picks their own headcount (at least the minimum below) instead of a preset table size, priced per ticket, with an optional bulk discount.
+                        </p>
+                        {tier.is_flexible_group && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                            <div>
+                              <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Minimum Tickets</label>
+                              <input type="number" placeholder="10" value={tier.min_quantity} min="1" max="50"
+                                onChange={e => updateTier(i, "min_quantity", e.target.value)}
+                                className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount Above (qty)</label>
+                              <input type="number" placeholder="10" value={tier.bulk_discount_qty} min="1" max="50"
+                                onChange={e => updateTier(i, "bulk_discount_qty", e.target.value)}
+                                className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount (%)</label>
+                              <input type="number" placeholder="10" value={tier.bulk_discount_percent} min="0" max="100"
+                                onChange={e => updateTier(i, "bulk_discount_percent", e.target.value)}
+                                className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
+                                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+                            </div>
+                          </div>
+                        )}
+                        {tier.is_flexible_group && (
+                          <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                            Buyers must select at least {tier.min_quantity || "10"} tickets (up to 50). {tier.bulk_discount_percent ? `Above ${tier.bulk_discount_qty || tier.min_quantity || "10"} tickets, each ticket is ${tier.bulk_discount_percent}% off.` : "Leave the discount fields blank to charge the flat price regardless of headcount."}
+                          </p>
+                        )}
                       </div>
                       <div className="mt-3">
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>

@@ -17,7 +17,15 @@ export interface TicketTier {
   ends_at?: string | null;
   group_size?: number;
   description?: string | null;
+  min_quantity?: number | null;
+  bulk_discount_qty?: number | null;
+  bulk_discount_percent?: number | null;
 }
+
+// Flexible group tickets (min_quantity set) can never exceed this per
+// checkout, regardless of remaining stock or the tier's own min_quantity —
+// keeps a single family/table purchase from becoming an unbounded bulk buy.
+const MAX_FLEXIBLE_GROUP_QUANTITY = 50;
 
 interface CheckoutModalProps {
   open: boolean;
@@ -102,6 +110,12 @@ export default function CheckoutModal({
     if (tiers.length === 1) setSelectedTier(tiers[0]);
   }, [tiers]);
 
+  // Flexible group tiers have a minimum headcount — default the stepper to
+  // it (instead of 1) whenever the buyer (re)selects such a tier.
+  useEffect(() => {
+    setQuantity(selectedTier?.min_quantity ? selectedTier.min_quantity : 1);
+  }, [selectedTier]);
+
   // Lock/unlock body scroll with modal open state
   useEffect(() => {
     if (open && !paystackActive) {
@@ -123,8 +137,21 @@ export default function CheckoutModal({
   const isLegacyEvent = tiers.length === 0;
   const finalPrice = isLegacyEvent ? basePrice : (selectedTier ? selectedTier.price : 0);
   const groupSize = !isLegacyEvent && selectedTier?.group_size ? selectedTier.group_size : 1;
+  const isFlexibleGroup = !isLegacyEvent && !!selectedTier?.min_quantity;
+  const minQuantity = isFlexibleGroup ? (selectedTier!.min_quantity as number) : 1;
+  // A flexible-group order is still one person's own checkout — cap it well
+  // below "unbounded" regardless of remaining stock or the tier's own
+  // min_quantity, so it can't be used to sidestep the per-buyer ticket limit.
+  const perOrderCap = isFlexibleGroup ? MAX_FLEXIBLE_GROUP_QUANTITY : 10;
+  const bulkDiscountActive = isFlexibleGroup
+    && !!selectedTier?.bulk_discount_qty
+    && !!selectedTier?.bulk_discount_percent
+    && quantity > (selectedTier!.bulk_discount_qty as number);
+  const effectiveUnitPrice = bulkDiscountActive
+    ? Math.round(finalPrice * (1 - (selectedTier!.bulk_discount_percent as number) / 100) * 100) / 100
+    : finalPrice;
   const FEE_PERCENTAGE = 0.05;
-  const subtotal = finalPrice * quantity;
+  const subtotal = effectiveUnitPrice * quantity;
   const fee = Math.round(subtotal * FEE_PERCENTAGE * 100) / 100;
   const totalAmount = subtotal + fee;
   const isFree = totalAmount === 0 && (isLegacyEvent || !!selectedTier);
@@ -237,7 +264,7 @@ export default function CheckoutModal({
     ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
   };
 
-  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !emailError && !nameError;
+  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !emailError && !nameError && quantity >= minQuantity;
 
   if (!open) return null;
 
@@ -313,6 +340,12 @@ export default function CheckoutModal({
                                     Group of {tier.group_size}
                                   </span>
                                 )}
+                                {!!tier.min_quantity && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                                    style={{ backgroundColor: "rgba(72,0,130,0.1)", color: "var(--brand-indigo)" }}>
+                                    Family/Group · min {tier.min_quantity}
+                                  </span>
+                                )}
                               </p>
                               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                                 {tier.price === 0 ? "Free" : `₦${tier.price.toLocaleString()}`}
@@ -372,20 +405,25 @@ export default function CheckoutModal({
                             {selectedTier ? `${selectedTier.name} Ticket` : "Standard Ticket"}
                           </span>
                           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                            {finalPrice === 0 ? "Free" : `₦${finalPrice.toLocaleString()} ${groupSize > 1 ? "per group" : "each"}`}
+                            {finalPrice === 0 ? "Free" : bulkDiscountActive
+                              ? <>
+                                  <span className="line-through mr-1" style={{ opacity: 0.6 }}>₦{finalPrice.toLocaleString()}</span>
+                                  ₦{effectiveUnitPrice.toLocaleString()} each
+                                </>
+                              : `₦${finalPrice.toLocaleString()} ${groupSize > 1 ? "per group" : "each"}`}
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
                           <button
-                            onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                            onClick={() => setQuantity(q => Math.max(minQuantity, q - 1))}
                             className="h-9 w-9 rounded-full flex items-center justify-center transition hover:opacity-80"
                             style={{ border: "1px solid var(--card-border)", color: "var(--text-primary)", backgroundColor: "var(--card-bg)" }}>
                             <Minus className="h-4 w-4" />
                           </button>
                           <span className="text-xl font-bold w-6 text-center" style={{ color: "var(--text-primary)" }}>{quantity}</span>
                           <button
-                            onClick={() => setQuantity(q => Math.min(isLegacyEvent ? Math.min(10, legacyRemaining ?? 10) : Math.min(10, selectedTier?.remaining ?? 10), q + 1))}
-                            disabled={isLegacyEvent ? quantity >= (legacyRemaining ?? 10) : quantity >= (selectedTier?.remaining ?? 10)}
+                            onClick={() => setQuantity(q => Math.min(isLegacyEvent ? Math.min(perOrderCap, legacyRemaining ?? perOrderCap) : Math.min(perOrderCap, selectedTier?.remaining ?? perOrderCap), q + 1))}
+                            disabled={isLegacyEvent ? quantity >= (legacyRemaining ?? perOrderCap) : quantity >= Math.min(perOrderCap, selectedTier?.remaining ?? perOrderCap)}
                             className="h-9 w-9 rounded-full flex items-center justify-center transition hover:opacity-80 disabled:opacity-40"
                             style={{ border: "1px solid var(--card-border)", color: "var(--text-primary)", backgroundColor: "var(--card-bg)" }}>
                             <Plus className="h-4 w-4" />
@@ -406,6 +444,16 @@ export default function CheckoutModal({
                       {groupSize > 1 && (
                         <p className="text-xs font-semibold mt-2" style={{ color: "var(--brand-indigo)" }}>
                           You'll receive {quantity * groupSize} separate QR codes — one for each person in your group{quantity > 1 ? "s" : ""}.
+                        </p>
+                      )}
+                      {isFlexibleGroup && (
+                        <p className="text-xs font-semibold mt-2" style={{ color: "var(--brand-indigo)" }}>
+                          Family/group ticket — minimum {minQuantity} tickets{quantity < minQuantity ? ` (add ${minQuantity - quantity} more)` : ""}.
+                          {" "}{bulkDiscountActive
+                            ? `🎉 ${selectedTier!.bulk_discount_percent}% discount applied for booking ${selectedTier!.bulk_discount_qty}+ tickets.`
+                            : selectedTier?.bulk_discount_qty
+                              ? ` Buy more than ${selectedTier.bulk_discount_qty} for ${selectedTier.bulk_discount_percent}% off.`
+                              : ""}
                         </p>
                       )}
                     </div>
