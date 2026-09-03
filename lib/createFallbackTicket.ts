@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendTicketEmail } from './sendTicketEmail';
 import { logPaymentEvent } from './logPaymentEvent';
 import { createTicketsAtomic } from './createTicketsAtomic';
+import { sanitizeEmail } from './sanitizeEmail';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,6 +34,12 @@ export async function createFallbackTicket({
   // compute FlexPass's true net revenue, not just the gross fee charged.
   feesKobo?: number;
 }): Promise<{ outcome: 'already_exists' | 'created' | 'insert_failed' | 'no_event_id'; ticketIds?: string[] }> {
+  // Paystack's customer.email is normally clean, but sanitize it anyway —
+  // this is the value that ends up stored on the ticket and used as the
+  // Resend `to` address, so it's the last line of defense against an
+  // invisible Unicode character silently making the address undeliverable.
+  customerEmail = sanitizeEmail(customerEmail);
+
   // Paystack normally returns metadata as a parsed object, but has been
   // observed sending it back as a JSON string instead (once truncated
   // mid-string, which broke JSON.parse entirely and lost event_id along

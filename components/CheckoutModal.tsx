@@ -6,6 +6,7 @@ import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { PaystackButton } from "react-paystack";
 import { useRouter } from "next/navigation";
 import { trackCheckoutEvent } from "@/lib/trackCheckoutEvent";
+import { sanitizeEmail } from "@/lib/sanitizeEmail";
 
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY;
 
@@ -507,7 +508,7 @@ export default function CheckoutModal({
                         Where should we send your ticket?
                       </label>
                       <input type="email" placeholder="Enter your email" value={email}
-                        onChange={e => { setEmail(e.target.value); if (emailError) setEmailError(""); }}
+                        onChange={e => { setEmail(sanitizeEmail(e.target.value)); if (emailError) setEmailError(""); }}
                         onBlur={() => { if (email && !validateEmail(email)) setEmailError("Please enter a valid email address"); }}
                         className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
                         style={{ ...inputStyle, border: emailError ? "1px solid #f87171" : "1px solid var(--input-border)" }} />

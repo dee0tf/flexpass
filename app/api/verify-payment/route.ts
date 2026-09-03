@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendTicketEmail } from '@/lib/sendTicketEmail';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
+import { sanitizeEmail } from '@/lib/sanitizeEmail';
 
 // Service role — create_tickets_atomic's EXECUTE grant is restricted to
 // service_role only (see supabase/migrations/20260712_create_tickets_atomic.sql),
@@ -32,6 +33,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     ({ reference, eventId, email } = body);
     const { fullName, gender, quantity, tierId, tierName, price, fee, referralCode } = body;
+
+    // Strips invisible Unicode (zero-width space/joiners, BOM, soft hyphen) a
+    // mobile keyboard can silently insert — it passes the \s-based regex
+    // below looking completely normal, then silently fails to deliver the
+    // confirmation email. Client already sanitizes, this is defense-in-depth.
+    if (typeof email === 'string') email = sanitizeEmail(email);
 
     // --- 1. Input validation ---
     if (!reference || !eventId || !email || !fullName || !quantity || price == null) {
