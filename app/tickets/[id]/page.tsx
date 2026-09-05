@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, Calendar, MapPin, ExternalLink } from "lucide-react";
+import { CheckCircle2, Calendar, MapPin, ExternalLink, Sun } from "lucide-react";
 import TicketQR from "@/components/TicketQR";
 import TicketActions from "@/components/TicketActions";
 
@@ -110,6 +110,13 @@ export default async function TicketPage({ params }: Props) {
             <p className="text-xs mt-4 font-medium italic" style={{ color: "var(--text-muted)" }}>
               Scan at the entrance to check in
             </p>
+            <div className="flex items-start gap-2 mt-4 p-3 rounded-xl text-xs w-full"
+              style={{ backgroundColor: "rgba(255,183,0,0.08)", border: "1px solid rgba(255,183,0,0.2)" }}>
+              <Sun size={14} className="mt-0.5 shrink-0" style={{ color: "var(--brand-amber)" }} />
+              <p style={{ color: "var(--text-secondary)" }}>
+                Turn your screen brightness all the way up and tilt it away from glare before scanning — that&apos;s the #1 reason a good QR code fails to scan.
+              </p>
+            </div>
           </div>
 
           {/* Add to Calendar + Share */}

@@ -72,7 +72,11 @@ function extractTicketId(raw: string): string {
       if (UUID_RE.test(segments[i])) return segments[i];
     }
   } catch {
-    // not a URL, return as-is
+    // not a URL — a hand-typed reference code. Strip anything that isn't a
+    // hex digit or dash (a copied "ID:" label, stray spaces, or invisible
+    // Unicode from a paste) so only the code itself reaches /api/checkin,
+    // which matches it as a case-insensitive, dash-insensitive prefix.
+    return trimmed.replace(/[^0-9a-fA-F-]/g, "");
   }
   return trimmed;
 }

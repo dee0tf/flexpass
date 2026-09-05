@@ -15,10 +15,12 @@ const db = createClient(
 );
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// The reference code printed under a ticket's QR (TicketQR.tsx) is the
-// ticket ID truncated to its first 3 groups — not a full ID. Accept it too
-// so staff can type it in by hand when a QR won't scan.
-const ID_PREFIX_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}$/i;
+// Staff typing a ticket ID by hand may be looking at either identifier shown
+// on the ticket page — the "ID: DEA4B292" header (8 hex chars) or the fuller
+// "#DEA4B292-10DA-430D" reference code under the QR (16 hex chars, dashes
+// included) — so accept any hex-only prefix in that range, dashes stripped,
+// case-insensitive.
+const HEX_PREFIX_RE = /^[0-9a-f]{8,32}$/i;
 
 export async function POST(request: Request) {
   try {
@@ -28,8 +30,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — no ticket code detected' }, { status: 400 });
     }
 
-    const isFullId = UUID_RE.test(ticketId);
-    const isPrefixId = !isFullId && ID_PREFIX_RE.test(ticketId);
+    const isFullId = typeof ticketId === 'string' && UUID_RE.test(ticketId);
+    // Normalize a hand-typed reference code — strip dashes and case so
+    // "DEA4B292-10DA-430D", "dea4b29210da430d", and "ID: DEA4B292" (once the
+    // caller strips the "ID:" label) all resolve to the same lookup key.
+    const normalizedPrefix = typeof ticketId === 'string' ? ticketId.replace(/-/g, '').toLowerCase() : '';
+    const isPrefixId = !isFullId && HEX_PREFIX_RE.test(normalizedPrefix);
     if ((!isFullId && !isPrefixId) || !UUID_RE.test(eventId)) {
       return NextResponse.json({ code: 'unrecognized', error: 'Unrecognized barcode — this is not a valid FlexPass ticket code' }, { status: 400 });
     }
@@ -79,19 +85,19 @@ export async function POST(request: Request) {
       }
     }
 
-    // Fetch the ticket — exact match on a full ID, prefix match on the
-    // shortened reference code shown under the QR (see ID_PREFIX_RE above).
-    // Postgres' uuid columns don't support pattern matching, so the prefix
-    // lookup is scoped to this event and matched in memory instead.
+    // Fetch the ticket — exact match on a full ID, prefix match on a
+    // hand-typed reference code (see HEX_PREFIX_RE above). Postgres' uuid
+    // columns don't support pattern matching, so the prefix lookup is
+    // scoped to this event and matched in memory instead, with dashes and
+    // case stripped from both sides so formatting differences never matter.
     const ticketFields = 'id, status, user_name, user_email, tier_name, checked_in_at, event_id, is_giveaway';
     let ticket: { id: string; status: string; user_name: string; user_email: string; tier_name: string | null; checked_in_at: string | null; event_id: string; is_giveaway: boolean } | undefined;
     if (isFullId) {
       const { data } = await db.from('tickets').select(ticketFields).eq('id', ticketId.toLowerCase());
       ticket = data?.[0];
     } else {
-      const prefix = ticketId.toLowerCase();
       const { data } = await db.from('tickets').select(ticketFields).eq('event_id', eventId);
-      ticket = data?.find(t => t.id.toLowerCase().startsWith(prefix));
+      ticket = data?.find(t => t.id.replace(/-/g, '').toLowerCase().startsWith(normalizedPrefix));
     }
 
     if (!ticket) {
