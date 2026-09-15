@@ -2,8 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Refund Policy | FlexPass",
+  title: "Refund Policy",
   description: "Understand FlexPass's refund and cancellation policy for ticket purchases.",
+  alternates: {
+    canonical: "/refund",
+  },
+  openGraph: {
+    title: "Refund Policy | FlexPass",
+    description: "Understand FlexPass's refund and cancellation policy for ticket purchases.",
+    url: "/refund",
+  },
 };
 
 const sections = [
