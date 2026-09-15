@@ -202,11 +202,25 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           ],
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://www.flexpasshq.com" },
+      { "@type": "ListItem", position: 2, name: "Events", item: "https://www.flexpasshq.com/events" },
+      { "@type": "ListItem", position: 3, name: event.title, item: `https://www.flexpasshq.com/events/${id}` },
+    ],
+  };
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
     <div className="min-h-screen bg-[#F8FAFC] pb-24">
       {/* Hero Image */}

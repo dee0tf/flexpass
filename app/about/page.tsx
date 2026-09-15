@@ -3,9 +3,18 @@ import Link from "next/link";
 import { ArrowRight, Zap, ShieldCheck, Smartphone, Users } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "About | FlexPass",
+  title: "About",
   description:
     "FlexPass is a modern ticketing platform built to simplify how people discover, access, and experience events in Nigeria.",
+  alternates: {
+    canonical: "/about",
+  },
+  openGraph: {
+    title: "About | FlexPass",
+    description:
+      "FlexPass is a modern ticketing platform built to simplify how people discover, access, and experience events in Nigeria.",
+    url: "/about",
+  },
 };
 
 const pillars = [

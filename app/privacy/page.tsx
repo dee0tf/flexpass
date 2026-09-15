@@ -1,9 +1,18 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | FlexPass",
+  title: "Privacy Policy",
   description:
     "Learn how FlexPass collects, uses, and protects your personal data in accordance with the Nigeria Data Protection Act (NDPA) 2023.",
+  alternates: {
+    canonical: "/privacy",
+  },
+  openGraph: {
+    title: "Privacy Policy | FlexPass",
+    description:
+      "Learn how FlexPass collects, uses, and protects your personal data in accordance with the Nigeria Data Protection Act (NDPA) 2023.",
+    url: "/privacy",
+  },
 };
 
 const sections = [

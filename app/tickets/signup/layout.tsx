@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Create Account | FlexPass",
+  title: "Create Account",
   description: "Join FlexPass to discover and host events in Nigeria.",
 };
 

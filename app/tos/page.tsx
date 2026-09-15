@@ -2,8 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | FlexPass",
+  title: "Terms of Service",
   description: "Read the Terms of Service governing your use of the FlexPass platform.",
+  alternates: {
+    canonical: "/tos",
+  },
+  openGraph: {
+    title: "Terms of Service | FlexPass",
+    description: "Read the Terms of Service governing your use of the FlexPass platform.",
+    url: "/tos",
+  },
 };
 
 const sections = [
