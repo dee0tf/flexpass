@@ -129,6 +129,7 @@ export async function createFallbackTicket({
     eventId: metadata.event_id,
     quantity,
     tickets: ticketsToCreate,
+    reference,
   });
 
   if (result.outcome === 'duplicate_reference') {

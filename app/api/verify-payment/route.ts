@@ -243,6 +243,7 @@ export async function POST(request: Request) {
       eventId,
       quantity,
       tickets: ticketsToCreate,
+      reference,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

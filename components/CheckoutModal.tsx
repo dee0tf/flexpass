@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, Minus, Loader2, Check, X } from "lucide-react";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
-import { PaystackButton } from "react-paystack";
+import { usePaystackPayment } from "react-paystack";
 import { useRouter } from "next/navigation";
 import { trackCheckoutEvent } from "@/lib/trackCheckoutEvent";
 import { sanitizeEmail } from "@/lib/sanitizeEmail";
@@ -86,6 +86,14 @@ export default function CheckoutModal({
   // (which also fires after a successful payment) doesn't double-log it as
   // an abandoned checkout.
   const paidRef = useRef(false);
+  // Reference of the ticket hold placed for the current Paystack attempt —
+  // the charge is made under this reference so verify-payment/webhook can
+  // match it to the hold. Released if the buyer closes Paystack unpaid.
+  const holdRefRef = useRef<string | null>(null);
+  // Bank transfers can still land after the popup closes — don't release the
+  // hold in that case, just let it expire naturally.
+  const transferPendingRef = useRef(false);
+  const [isReserving, setIsReserving] = useState(false);
 
   useEffect(() => {
     const code = sessionStorage.getItem(`ref_${eventId}`);
@@ -231,24 +239,37 @@ export default function CheckoutModal({
     }
   };
 
-  const componentProps: any = {
+  const releaseHold = (reference: string) => {
+    // keepalive so the release still goes out if the tab is closing.
+    fetch("/api/ticket-hold", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reference }),
+      keepalive: true,
+    }).catch(() => {});
+  };
+
+  const handlePaystackClose = () => {
+    // react-paystack calls onClose after a successful payment too, once
+    // the popup itself closes — only log abandonment if onSuccess never fired.
+    if (!paidRef.current) {
+      trackCheckoutEvent("checkout_abandoned", {
+        eventId, email, tierId: selectedTier?.id || null, tierName: selectedTier?.name || null,
+        quantity, isFree: false,
+      });
+      // Unpaid — hand the reserved slot(s) straight back to other buyers.
+      if (holdRefRef.current && !transferPendingRef.current) releaseHold(holdRefRef.current);
+    }
+    holdRefRef.current = null;
+    setPaystackActive(false);
+    document.body.style.overflow = "";
+  };
+
+  const paystackConfig: any = {
     email,
     amount: Math.round(totalAmount * 100),
     publicKey: PAYSTACK_KEY || "",
-    text: `Pay ₦${totalAmount.toLocaleString()}`,
-    onSuccess: handleSuccess,
-    onClose: () => {
-      // react-paystack calls onClose after a successful payment too, once
-      // the popup itself closes — only log abandonment if onSuccess never fired.
-      if (!paidRef.current) {
-        trackCheckoutEvent("checkout_abandoned", {
-          eventId, email, tierId: selectedTier?.id || null, tierName: selectedTier?.name || null,
-          quantity, isFree: false,
-        });
-      }
-      setPaystackActive(false);
-      document.body.style.overflow = "";
-    },
+    onBankTransferConfirmationPending: () => { transferPendingRef.current = true; },
     // Carried through to the Paystack webhook as event.data.metadata — the
     // webhook's fallback ticket creation needs these to recover a purchase
     // if the client never reaches /api/verify-payment (closed tab, dropped
@@ -263,6 +284,53 @@ export default function CheckoutModal({
       referral_code: referralCode || null,
     },
     ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
+  };
+  const initializePayment = usePaystackPayment(paystackConfig);
+
+  // Reserve the ticket(s) first, then open Paystack — whoever clicks Pay
+  // first on the last slot holds it while they pay, so nobody else can be
+  // charged for a ticket that's no longer there.
+  const handlePay = async () => {
+    if (!canProceed || isReserving) return;
+    // Same synchronous re-check as handleClaimFree — a
+    // paste-then-click can beat the onBlur handler here too.
+    if (hasEmoji(firstName) || hasEmoji(lastName)) {
+      setNameError('Emoji aren\'t supported in your name — please remove it and use letters only.');
+      return;
+    }
+    trackCheckoutEvent("checkout_initiated", {
+      eventId, email, tierId: selectedTier?.id || null,
+      tierName: selectedTier?.name || null, quantity, isFree: false,
+    });
+    setIsReserving(true);
+    try {
+      const res = await fetch("/api/ticket-hold", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId, email, tierId: selectedTier?.id || null, quantity }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        showToast(result.error || "Could not reserve your ticket, please try again.", "error");
+        return;
+      }
+      holdRefRef.current = result.reference;
+      transferPendingRef.current = false;
+      paidRef.current = false;
+      // Hide our modal + backdrop before Paystack opens
+      // so Paystack has a clean, unobstructed viewport
+      setPaystackActive(true);
+      document.body.style.overflow = "";
+      initializePayment({
+        config: { ...paystackConfig, reference: result.reference },
+        onSuccess: handleSuccess,
+        onClose: handlePaystackClose,
+      });
+    } catch {
+      showToast("Could not reserve your ticket, please check your connection and try again.", "error");
+    } finally {
+      setIsReserving(false);
+    }
   };
 
   const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !emailError && !nameError && quantity >= minQuantity;
@@ -555,31 +623,13 @@ export default function CheckoutModal({
                           Claim Free Ticket
                         </button>
                       ) : (
-                        // Paystack button rendered outside any overflow container
-                        <div className="w-full rounded-xl overflow-hidden" style={{ backgroundColor: "var(--brand-indigo)" }}>
-                          <PaystackButton
-                            {...componentProps}
-                            onClick={() => {
-                              if (!canProceed) return;
-                              // Same synchronous re-check as handleClaimFree — a
-                              // paste-then-click can beat the onBlur handler here too.
-                              if (hasEmoji(firstName) || hasEmoji(lastName)) {
-                                setNameError('Emoji aren\'t supported in your name — please remove it and use letters only.');
-                                return;
-                              }
-                              trackCheckoutEvent("checkout_initiated", {
-                                eventId, email, tierId: selectedTier?.id || null,
-                                tierName: selectedTier?.name || null, quantity, isFree: false,
-                              });
-                              // Hide our modal + backdrop before Paystack opens
-                              // so Paystack has a clean, unobstructed viewport
-                              setPaystackActive(true);
-                              document.body.style.overflow = "";
-                            }}
-                            disabled={!canProceed}
-                            className={`w-full py-4 font-bold text-lg text-white bg-transparent hover:opacity-90 transition ${!canProceed ? "opacity-50 cursor-not-allowed" : ""}`}
-                          />
-                        </div>
+                        <button onClick={handlePay} disabled={!canProceed || isReserving}
+                          className="w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          style={{ backgroundColor: "var(--brand-indigo)" }}>
+                          {isReserving
+                            ? <><Loader2 className="h-5 w-5 animate-spin" /> Reserving your ticket...</>
+                            : `Pay ₦${totalAmount.toLocaleString()}`}
+                        </button>
                       )}
                     </div>
                   </>
