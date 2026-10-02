@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { platformFeeFromGross } from "@/lib/platformFee";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,11 +31,13 @@ export async function GET(request: Request) {
 
   // ── Buyer list for a specific event ──
   if (eventId) {
-    const { data: tickets, error } = await db
+    const { data: tickets, error } = await fetchAllRows((from, to) => db
       .from("tickets")
       .select("id, user_name, user_email, tier_name, total_amount_paid, status, created_at, referral_code, checked_in_at")
       .eq("event_id", eventId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to));
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ tickets: tickets || [] });
@@ -49,10 +52,12 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Ticket counts and revenue per event
-  const { data: ticketRows } = await db
+  const { data: ticketRows } = await fetchAllRows((from, to) => db
     .from("tickets")
     .select("event_id, total_amount_paid")
-    .in("status", ["valid", "scanned"]);
+    .in("status", ["valid", "scanned"])
+    .order("id")
+    .range(from, to));
 
   const ticketStats = new Map<string, { count: number; revenue: number; fee: number }>();
   for (const t of ticketRows || []) {

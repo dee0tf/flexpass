@@ -16,6 +16,7 @@ import { csvCell, downloadCSV } from "@/lib/exportCsv";
 import { hostAmount } from "@/lib/hostAmount";
 import { splitName } from "@/lib/splitName";
 import { use } from "react";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
@@ -423,12 +424,14 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   };
 
   const handleExportTierCsv = async (tierId: string, tierName: string) => {
-    const { data: tickets, error } = await supabase
+    const { data: tickets, error } = await fetchAllRows((from, to) => supabase
       .from("tickets")
       .select("id, user_name, user_email, total_amount_paid, fee_amount, status, created_at")
       .eq("event_id", id)
       .eq("tier_id", tierId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to));
 
     if (error || !tickets?.length) {
       showToast(`No ticket data for "${tierName}" yet`, "warning");

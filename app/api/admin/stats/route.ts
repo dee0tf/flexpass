@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { platformFeeFromGross } from "@/lib/platformFee";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
     db.from("events").select("*", { count: "exact", head: true }),
     db.from("tickets").select("*", { count: "exact", head: true }).eq("status", "valid"),
     db.from("tickets").select("*", { count: "exact", head: true }).eq("status", "scanned"),
-    db.from("tickets").select("total_amount_paid").in("status", ["valid", "scanned"]),
+    fetchAllRows((from, to) => db.from("tickets").select("total_amount_paid").in("status", ["valid", "scanned"]).order("id").range(from, to)),
     db.from("payouts").select("amount").eq("status", "pending"),
     db.from("payouts").select("amount").eq("status", "paid"),
     db.from("delete_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),

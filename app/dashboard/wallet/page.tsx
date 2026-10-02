@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import BankSettings from "@/components/BankSettings";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { hostAmount } from "@/lib/hostAmount";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:    { label: "Pending Review", color: "bg-yellow-100 text-yellow-700" },
@@ -45,11 +46,13 @@ export default function WalletPage() {
     const { data: myEvents } = await supabase.from("events").select("id").eq("user_id", user.id);
     const myEventIds = myEvents?.map(e => e.id) || [];
 
-    const { data: tickets } = await supabase
+    const { data: tickets } = await fetchAllRows((from, to) => supabase
       .from("tickets")
       .select("*, events(price)")
       .in("event_id", myEventIds.length > 0 ? myEventIds : ["__none__"])
-      .in("status", ["valid", "scanned"]);
+      .in("status", ["valid", "scanned"])
+      .order("id")
+      .range(from, to));
 
     // Each ticket's total_amount_paid includes FlexPass's service fee on top
     // of the ticket price — hostAmount strips that out so the withdrawable

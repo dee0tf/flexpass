@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { computeEventCapacity, computeEventPace, PaceStatus } from "@/lib/eventPacing";
 import { platformFeeFromGross } from "@/lib/platformFee";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -55,9 +56,11 @@ export async function GET(request: Request) {
   ] = await Promise.all([
     db.from("events").select("id, title, date, user_id, organizer_name, organizer_verified, total_tickets"),
     db.from("ticket_tiers").select("id, event_id, quantity_available, group_size"),
-    db.from("tickets")
+    fetchAllRows((from, to) => db.from("tickets")
       .select("id, event_id, user_email, user_gender, total_amount_paid, tier_id, referral_code, status, created_at")
-      .in("status", ["valid", "scanned"]),
+      .in("status", ["valid", "scanned"])
+      .order("id")
+      .range(from, to)),
     db.from("payment_events")
       .select("source, event_type, status, event_id, created_at")
       .or("source.eq.checkout-funnel,event_type.eq.ticket_created,event_type.eq.ticket_issued"),

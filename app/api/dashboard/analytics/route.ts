@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { computeEventCapacity, computeEventPace, PaceStatus } from "@/lib/eventPacing";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -109,9 +110,11 @@ export async function GET(request: Request) {
   // so scope and table numbers can never drift apart.
   const [tiersRes, allTicketsRes, paymentEventsRes, promotersRes] = await Promise.all([
     db.from("ticket_tiers").select("id, event_id, name, quantity_available, group_size, is_hidden").in("event_id", allEventIds),
-    db.from("tickets")
+    fetchAllRows((from, to) => db.from("tickets")
       .select("id, event_id, user_email, user_gender, total_amount_paid, tier_id, tier_name, referral_code, status, created_at, checked_in_at")
-      .in("event_id", allEventIds).in("status", ["valid", "scanned"]),
+      .in("event_id", allEventIds).in("status", ["valid", "scanned"])
+      .order("id")
+      .range(from, to)),
     db.from("payment_events")
       .select("source, event_type, status, event_id, created_at")
       .in("event_id", allEventIds)

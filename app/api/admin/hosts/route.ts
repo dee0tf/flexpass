@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { platformFeeFromGross } from "@/lib/platformFee";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
     { data: promoterRows },
   ] = await Promise.all([
     db.from("events").select("id, user_id, organizer_name, organizer_verified"),
-    db.from("tickets").select("event_id, total_amount_paid").in("status", ["valid", "scanned"]),
+    fetchAllRows((from, to) => db.from("tickets").select("event_id, total_amount_paid").in("status", ["valid", "scanned"]).order("id").range(from, to)),
     db.from("bank_accounts").select("user_id, bank_name, account_number, account_name"),
     db.from("event_promoters").select("host_user_id"),
   ]);

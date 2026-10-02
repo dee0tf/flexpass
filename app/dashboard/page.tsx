@@ -14,6 +14,7 @@ import { hostAmount } from "@/lib/hostAmount";
 import { splitName } from "@/lib/splitName";
 import EventPaceChip from "@/components/EventPaceChip";
 import { PaceStatus } from "@/lib/eventPacing";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 interface AttentionItem {
   id: string;
@@ -113,10 +114,12 @@ export default function DashboardPage() {
       // valid + scanned — a checked-in ticket is still a completed sale;
       // excluding it would silently undercount revenue for any event
       // that's already had check-in (matches Wallet's and Admin's balance math).
-      const { data: myTickets } = await supabase
+      const { data: myTickets } = await fetchAllRows((from, to) => supabase
         .from("tickets").select("*, events(title, price)")
         .in("event_id", myEventIds).in("status", ["valid", "scanned"])
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to));
 
       const revenue = myTickets?.reduce((acc, t) => acc + hostAmount(t), 0) || 0;
 
@@ -230,9 +233,11 @@ export default function DashboardPage() {
       if (!payoutsRes.error) {
         const payouts = payoutsRes.data || [];
         const totalWithdrawn = payouts.filter((p: any) => p.status !== "rejected").reduce((s: number, p: any) => s + p.amount, 0);
-        const { data: allHostTickets } = await supabase
+        const { data: allHostTickets } = await fetchAllRows((from, to) => supabase
           .from("tickets").select("total_amount_paid, events(price)")
-          .in("event_id", myEvents.map(e => e.id)).in("status", ["valid", "scanned"]);
+          .in("event_id", myEvents.map(e => e.id)).in("status", ["valid", "scanned"])
+          .order("id")
+          .range(from, to));
         const totalRevenue = (allHostTickets || []).reduce((s: number, t: any) => s + hostAmount(t), 0);
         const balance = Math.max(0, totalRevenue - totalWithdrawn);
         if (balance >= 5000) {
@@ -333,11 +338,13 @@ export default function DashboardPage() {
   };
 
   const handleExportByEvent = async (eventId: string, eventTitle: string) => {
-    const { data: tickets, error } = await supabase
+    const { data: tickets, error } = await fetchAllRows((from, to) => supabase
       .from("tickets")
       .select("*, events(title, price)")
       .eq("event_id", eventId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to));
 
     if (error || !tickets?.length) {
       showToast("No ticket data for this event yet", "warning");
