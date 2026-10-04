@@ -48,7 +48,7 @@ export default function ThemeToggle() {
       onClick={toggle}
       aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
       title={`Switch to ${isDark ? "light" : "dark"} mode`}
-      className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 group"
+      className="fixed bottom-24 left-4 md:bottom-6 md:left-6 z-50 group"
     >
       {/* Outer ring — subtle glow. The hover-triggered variant is scoped to
           devices that actually support :hover — on touch devices, iOS Safari

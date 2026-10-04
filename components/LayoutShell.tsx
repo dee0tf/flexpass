@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ThemeToggle from "@/components/ThemeToggle";
+import TawkToWidget from "@/components/TawkToWidget";
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -19,6 +20,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       {!hasOwnLayout && <Navbar />}
       {children}
       {!hasOwnLayout && <Footer />}
+      {!hasOwnLayout && <TawkToWidget />}
       <ThemeToggle />
     </>
   );
