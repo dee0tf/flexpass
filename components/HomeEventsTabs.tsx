@@ -75,7 +75,7 @@ export default function HomeEventsTabs({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {list.map(event => (
-              <EventCard key={event.id} event={event} />
+              <EventCard key={event.id} event={event} concluded={tab === "concluded"} />
             ))}
           </div>
         )}

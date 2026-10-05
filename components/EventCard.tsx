@@ -10,6 +10,8 @@ interface EventCardProps {
   event: Event;
   variant?: "default" | "featured";
   priority?: boolean;
+  /** Force the past-event look on first render (no wait for the client-side date check). */
+  concluded?: boolean;
 }
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
@@ -22,7 +24,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
   Others:    { bg: "rgba(100,116,139,0.15)", text: "#64748b" },
 };
 
-export default function EventCard({ event, variant = "default", priority = false }: EventCardProps) {
+export default function EventCard({ event, variant = "default", priority = false, concluded = false }: EventCardProps) {
   const [imgError, setImgError] = useState(false);
   const eventDate = new Date(event.date);
 
@@ -40,18 +42,20 @@ export default function EventCard({ event, variant = "default", priority = false
     setIsSoon(!ended && (cmpDate.getTime() - now.getTime()) < 7 * 24 * 60 * 60 * 1000);
   }, [event.date]);
 
+  const ended = concluded || isEnded;
+
   const cat = CATEGORY_COLORS[event.category || "Others"] ?? CATEGORY_COLORS.Others;
 
   return (
     <Link href={`/events/${event.id}`} className="block group">
       <div
         className={`rounded-2xl overflow-hidden border transition-all duration-300 ${
-          isEnded ? "opacity-60" : "hover:-translate-y-1"
+          ended ? "opacity-60" : "hover:-translate-y-1"
         }`}
         style={{
           backgroundColor: "var(--card-bg)",
           borderColor: "var(--card-border)",
-          boxShadow: isEnded ? "none" : "0 4px 24px var(--card-shadow)",
+          boxShadow: ended ? "none" : "0 4px 24px var(--card-shadow)",
         }}
       >
         {/* Image */}
@@ -64,7 +68,7 @@ export default function EventCard({ event, variant = "default", priority = false
               sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
               priority={priority}
               className={`object-cover transition-transform duration-500 ${
-                isEnded ? "grayscale" : "group-hover:scale-105"
+                ended ? "grayscale" : "group-hover:scale-105"
               }`}
               onError={() => setImgError(true)}
             />
@@ -84,9 +88,9 @@ export default function EventCard({ event, variant = "default", priority = false
                 {event.category}
               </span>
             )}
-            {isEnded && (
+            {ended && (
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-black/60 text-white backdrop-blur-sm">
-                Ended
+                {concluded ? "Concluded" : "Ended"}
               </span>
             )}
             {isSoon && (

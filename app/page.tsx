@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import EventCard from "@/components/EventCard";
-import HomeEventsTabs from "@/components/HomeEventsTabs";
 import { createServerSupabase } from "@/lib/supabase";
 import HomeSearchBar from "@/components/HomeSearchBar";
+import HomeEventsTabs from "@/components/HomeEventsTabs";
 import { Event } from "@/lib/types";
 import { attachEffectivePrices } from "@/lib/effectivePrices";
 import Link from "next/link";
-import { ArrowRight, Zap, ShieldCheck, Smartphone } from "lucide-react";
+import { ArrowRight, Zap, ShieldCheck, Smartphone, History } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +134,25 @@ export default async function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {featured.map((event, index) => (
                 <EventCard key={event.id} event={event} variant="featured" priority={index === 0} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Concluded Events ────────────────────────── */}
+      {concludedList.length > 0 && (
+        <section className="bg-[#F1EDF8] py-16 px-4 sm:px-6 lg:px-8 border-t border-[#eDdedd]">
+          <div className="max-w-7xl mx-auto">
+            <div className="mb-8">
+              <p className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-widest mb-1 text-[#0E0D0D]/50">
+                <History size={14} /> Take a Look Back
+              </p>
+              <h2 className="font-display text-3xl font-bold text-[#0E0D0D]">Concluded Events</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {concludedList.map(event => (
+                <EventCard key={event.id} event={event} concluded />
               ))}
             </div>
           </div>
