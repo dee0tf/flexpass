@@ -7,6 +7,7 @@ import { usePaystackPayment } from "react-paystack";
 import { useRouter } from "next/navigation";
 import { trackCheckoutEvent } from "@/lib/trackCheckoutEvent";
 import { sanitizeEmail } from "@/lib/sanitizeEmail";
+import { genderMark, GENDERS } from "@/lib/gender";
 
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY;
 
@@ -71,7 +72,8 @@ export default function CheckoutModal({
   const [lastName, setLastName] = useState("");
   const [nameError, setNameError] = useState("");
   const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-  const [gender, setGender] = useState("");
+  // One pick per ticket (index 0 is the buyer) - see orderGenders below.
+  const [genders, setGenders] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [paystackActive, setPaystackActive] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
@@ -146,6 +148,13 @@ export default function CheckoutModal({
   const isLegacyEvent = tiers.length === 0;
   const finalPrice = isLegacyEvent ? basePrice : (selectedTier ? selectedTier.price : 0);
   const groupSize = !isLegacyEvent && selectedTier?.group_size ? selectedTier.group_size : 1;
+  // Every individual ticket carries its own gender (some events price by
+  // gender and it's checked at the door), so collect one per attendee.
+  const attendeeCount = quantity * groupSize;
+  const orderGenders = Array.from({ length: attendeeCount }, (_, i) => genders[i] || "");
+  const gender = orderGenders[0];
+  const setTicketGender = (i: number, g: string) =>
+    setGenders(prev => { const next = [...prev]; next[i] = g; return next; });
   const isFlexibleGroup = !isLegacyEvent && !!selectedTier?.min_quantity;
   const minQuantity = isFlexibleGroup ? (selectedTier!.min_quantity as number) : 1;
   // A flexible-group order is still one person's own checkout — cap it well
@@ -166,7 +175,7 @@ export default function CheckoutModal({
   const isFree = totalAmount === 0 && (isLegacyEvent || !!selectedTier);
 
   const resetForm = () => {
-    setQuantity(1); setEmail(""); setFirstName(""); setLastName(""); setGender(""); setSelectedTier(null);
+    setQuantity(1); setEmail(""); setFirstName(""); setLastName(""); setGenders([]); setSelectedTier(null);
     setNameError("");
   };
 
@@ -187,7 +196,7 @@ export default function CheckoutModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          eventId, email, fullName, gender, quantity,
+          eventId, email, fullName, gender, genders: orderGenders, quantity,
           tierId: selectedTier?.id || null,
           tierName: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
           referralCode: referralCode || null,
@@ -218,7 +227,7 @@ export default function CheckoutModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reference: reference.reference,
-          eventId, email, fullName, gender, quantity,
+          eventId, email, fullName, gender, genders: orderGenders, quantity,
           tierId: selectedTier?.id || null,
           tierName: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
           price: finalPrice, fee,
@@ -278,6 +287,8 @@ export default function CheckoutModal({
       event_id: eventId,
       full_name: fullName,
       gender: gender || null,
+      // Compact "MFF" form — metadata size is limited (see createFallbackTicket)
+      genders: orderGenders.map(g => g.charAt(0)).join(""),
       quantity,
       tier_id: selectedTier?.id || null,
       tier_name: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
@@ -333,7 +344,7 @@ export default function CheckoutModal({
     }
   };
 
-  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !!gender && !emailError && !nameError && quantity >= minQuantity;
+  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && orderGenders.every(Boolean) && !emailError && !nameError && quantity >= minQuantity;
 
   if (!open) return null;
 
@@ -556,16 +567,48 @@ export default function CheckoutModal({
                     </div>
                     {nameError && <p className="text-red-500 text-xs -mt-2">{nameError}</p>}
 
-                    {/* Gender */}
-                    <div>
-                      <label className="text-sm font-medium block mb-1.5" style={labelStyle}>Gender</label>
-                      <select required value={gender} onChange={e => setGender(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
-                        style={inputStyle}>
-                        <option value="">Select gender</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                      </select>
+                    {/* Gender - one per ticket, deliberately loud: some events
+                        price by gender and door staff check the F/M on each ticket */}
+                    <div className="rounded-xl p-4"
+                      style={{ border: "2px solid var(--brand-indigo)", backgroundColor: "rgba(72,0,130,0.05)" }}>
+                      <p className="font-display font-bold text-base" style={{ color: "var(--text-primary)" }}>
+                        {attendeeCount > 1 ? "Gender for each ticket" : "Your gender"}
+                      </p>
+                      <p className="text-xs font-semibold mt-0.5" style={{ color: "var(--brand-indigo)" }}>
+                        Printed in big bold letters on {attendeeCount > 1 ? "each" : "your"} ticket and checked at the door.
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {orderGenders.map((g, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            {attendeeCount > 1 && (
+                              <span className="text-xs font-bold w-[4.5rem] shrink-0" style={{ color: "var(--text-secondary)" }}>
+                                Ticket {i + 1}
+                                {i === 0 && <span className="block font-medium" style={{ color: "var(--text-muted)" }}>(you)</span>}
+                              </span>
+                            )}
+                            <div className="grid grid-cols-2 gap-2 flex-1" role="radiogroup"
+                              aria-label={attendeeCount > 1 ? `Gender for ticket ${i + 1}` : "Your gender"}>
+                              {GENDERS.map(opt => {
+                                const mark = genderMark(opt)!;
+                                const selected = g === opt;
+                                return (
+                                  <button key={opt} type="button" role="radio" aria-checked={selected}
+                                    onClick={() => setTicketGender(i, opt)}
+                                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition"
+                                    style={selected
+                                      ? { backgroundColor: mark.color, border: `2px solid ${mark.color}`, color: "#fff" }
+                                      : { backgroundColor: "var(--card-bg)", border: "2px solid var(--card-border)", color: "var(--text-primary)" }}>
+                                    <span className="font-display text-2xl leading-none" style={{ color: selected ? "#fff" : mark.color }}>
+                                      {mark.letter}
+                                    </span>
+                                    {mark.word}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Email */}

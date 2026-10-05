@@ -4,6 +4,7 @@ import { sendTicketEmail } from '@/lib/sendTicketEmail';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
 import { sanitizeEmail } from '@/lib/sanitizeEmail';
+import { ticketGender } from '@/lib/gender';
 
 // Service role — create_tickets_atomic's EXECUTE grant is restricted to
 // service_role only (see supabase/migrations/20260712_create_tickets_atomic.sql),
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     ({ reference, eventId, email } = body);
-    const { fullName, gender, quantity, tierId, tierName, price, fee, referralCode } = body;
+    const { fullName, gender, genders, quantity, tierId, tierName, price, fee, referralCode } = body;
 
     // Strips invisible Unicode (zero-width space/joiners, BOM, soft hyphen) a
     // mobile keyboard can silently insert — it passes the \s-based regex
@@ -228,7 +229,7 @@ export async function POST(request: Request) {
       event_id: eventId!,
       user_email: email!,
       user_name: fullName,
-      user_gender: gender || null,
+      user_gender: ticketGender(genders, gender, i),
       status: 'valid',
       purchase_reference: attendeeCount > 1 ? `${reference}-${i + 1}` : reference!,
       fee_amount: perTicketFee,

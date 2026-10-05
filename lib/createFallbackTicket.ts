@@ -3,6 +3,7 @@ import { sendTicketEmail } from './sendTicketEmail';
 import { logPaymentEvent } from './logPaymentEvent';
 import { createTicketsAtomic } from './createTicketsAtomic';
 import { sanitizeEmail } from './sanitizeEmail';
+import { ticketGender } from '@/lib/gender';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -109,7 +110,7 @@ export async function createFallbackTicket({
     event_id: metadata.event_id,
     user_email: customerEmail,
     user_name: metadata.full_name || customerEmail,
-    user_gender: metadata.gender || null,
+    user_gender: ticketGender(metadata.genders, metadata.gender, i),
     status: 'valid',
     purchase_reference: attendeeCount > 1 ? `${reference}-${i + 1}` : reference,
     fee_amount: 0,

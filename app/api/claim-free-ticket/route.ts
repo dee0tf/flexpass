@@ -4,6 +4,7 @@ import { sendTicketEmail } from '@/lib/sendTicketEmail';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
 import { sanitizeEmail } from '@/lib/sanitizeEmail';
+import { ticketGender } from '@/lib/gender';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     ({ eventId, email } = body);
-    const { fullName, gender, quantity, tierId, tierName, referralCode } = body;
+    const { fullName, gender, genders, quantity, tierId, tierName, referralCode } = body;
 
     // Strips invisible Unicode (zero-width space/joiners, BOM, soft hyphen) a
     // mobile keyboard can silently insert — it passes the \s-based regex
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
       event_id: eventId!,
       user_email: email!,
       user_name: fullName,
-      user_gender: gender || null,
+      user_gender: ticketGender(genders, gender, i),
       status: 'valid',
       purchase_reference: attendeeCount > 1 ? `${baseRef}-${i + 1}` : baseRef,
       fee_amount: 0,

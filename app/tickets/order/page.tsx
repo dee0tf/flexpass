@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, Ticket, ArrowRight } from "lucide-react";
+import { genderMark } from "@/lib/gender";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,7 +21,7 @@ export default async function OrderConfirmationPage({ searchParams }: Props) {
 
   const { data: tickets } = await supabase
     .from("tickets")
-    .select("id, tier_name, event_id, events(title)")
+    .select("id, tier_name, user_gender, event_id, events(title)")
     .in("id", ticketIds);
 
   if (!tickets || tickets.length === 0) notFound();
@@ -60,27 +61,38 @@ export default async function OrderConfirmationPage({ searchParams }: Props) {
           </p>
 
           <div className="space-y-3 pt-2">
-            {ordered.map((ticket, i) => (
+            {ordered.map((ticket, i) => {
+              const gender = genderMark(ticket.user_gender);
+              return (
               <Link key={ticket.id} href={`/tickets/${ticket.id}`}
                 className="flex items-center justify-between p-4 rounded-xl transition hover:opacity-80"
                 style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: "rgba(72,0,130,0.12)" }}>
-                    <Ticket className="h-5 w-5" style={{ color: "var(--brand-indigo)" }} />
-                  </div>
+                  {gender ? (
+                    <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 font-display text-2xl font-bold text-white"
+                      style={{ backgroundColor: gender.color }} aria-label={gender.word}>
+                      {gender.letter}
+                    </div>
+                  ) : (
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: "rgba(72,0,130,0.12)" }}>
+                      <Ticket className="h-5 w-5" style={{ color: "var(--brand-indigo)" }} />
+                    </div>
+                  )}
                   <div>
                     <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
                       Ticket {i + 1} of {ordered.length}
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {gender && <span className="font-bold" style={{ color: gender.color }}>{gender.word} &middot; </span>}
                       {ticket.tier_name || "Standard"} &middot; ID: {ticket.id.slice(0, 8).toUpperCase()}
                     </p>
                   </div>
                 </div>
                 <ArrowRight className="h-4 w-4 shrink-0" style={{ color: "var(--text-muted)" }} />
               </Link>
-            ))}
+              );
+            })}
           </div>
 
           <Link href="/">
