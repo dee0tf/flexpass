@@ -90,8 +90,8 @@ export async function POST(request: Request) {
     // columns don't support pattern matching, so the prefix lookup is
     // scoped to this event and matched in memory instead, with dashes and
     // case stripped from both sides so formatting differences never matter.
-    const ticketFields = 'id, status, user_name, user_email, tier_name, checked_in_at, event_id, is_giveaway';
-    let ticket: { id: string; status: string; user_name: string; user_email: string; tier_name: string | null; checked_in_at: string | null; event_id: string; is_giveaway: boolean } | undefined;
+    const ticketFields = 'id, status, user_name, user_email, user_gender, tier_name, checked_in_at, event_id, is_giveaway';
+    let ticket: { id: string; status: string; user_name: string; user_email: string; user_gender: string | null; tier_name: string | null; checked_in_at: string | null; event_id: string; is_giveaway: boolean } | undefined;
     if (isFullId) {
       const { data } = await db.from('tickets').select(ticketFields).eq('id', ticketId.toLowerCase());
       ticket = data?.[0];
@@ -117,6 +117,7 @@ export async function POST(request: Request) {
         checkedInAt: ticket.checked_in_at,
         holder: ticket.user_name,
         email: ticket.user_email,
+        gender: ticket.user_gender,
         tier: ticket.tier_name || 'Standard',
         giveaway: ticket.is_giveaway,
       }, { status: 409 });
@@ -139,6 +140,7 @@ export async function POST(request: Request) {
       valid: true,
       holder: ticket.user_name,
       email: ticket.user_email,
+      gender: ticket.user_gender,
       tier: ticket.tier_name || 'Standard',
       checkedInAt: now,
       giveaway: ticket.is_giveaway,

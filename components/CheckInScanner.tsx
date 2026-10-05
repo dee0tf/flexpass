@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { CheckCircle2, XCircle, AlertCircle, Loader2, Camera, Keyboard, ScanLine, ShieldAlert, WifiOff } from "lucide-react";
+import { genderMark } from "@/lib/gender";
 
 export interface CheckInEvent {
   id: string;
@@ -22,6 +23,7 @@ interface ScanResult {
   reason?: string;
   holder?: string;
   email?: string;
+  gender?: string | null;
   tier?: string;
   checkedInAt?: string;
   giveaway?: boolean;
@@ -35,6 +37,7 @@ interface CheckInApiResponse {
   error?: string;
   holder?: string;
   email?: string;
+  gender?: string | null;
   tier?: string;
   checkedInAt?: string;
   giveaway?: boolean;
@@ -232,6 +235,7 @@ export default function CheckInScanner({
       reason: data.reason || data.error,
       holder: data.holder,
       email: data.email,
+      gender: data.gender,
       tier: data.tier,
       checkedInAt: data.checkedInAt,
       giveaway: data.giveaway,
@@ -325,6 +329,7 @@ export default function CheckInScanner({
   };
 
   const resultPreset = result?.code ? RESULT_PRESETS[result.code] : undefined;
+  const resultGender = genderMark(result?.gender);
   const resultColor = result?.valid === true ? "#16a34a" : (resultPreset?.color ?? "#dc2626");
   const isDuplicate = result?.code === "already_checked_in";
 
@@ -486,6 +491,16 @@ export default function CheckInScanner({
               </h2>
               {result.reason && (
                 <p className="text-sm mt-1 opacity-90">{result.reason}</p>
+              )}
+              {/* Big F/M so door staff can match it against a gender-priced ticket */}
+              {resultGender && (
+                <div className="mt-4 flex flex-col items-center gap-1" aria-label={`Gender: ${resultGender.word}`}>
+                  <span className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white font-display text-6xl font-bold leading-none shadow-lg"
+                    style={{ color: resultGender.color }}>
+                    {resultGender.letter}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-[0.2em]">{resultGender.word}</span>
+                </div>
               )}
               {isDuplicate && result.checkedInAt && (
                 <p className="text-xs mt-1 opacity-70">

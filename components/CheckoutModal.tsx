@@ -333,7 +333,7 @@ export default function CheckoutModal({
     }
   };
 
-  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !emailError && !nameError && quantity >= minQuantity;
+  const canProceed = !!email && validateEmail(email) && !!firstName.trim() && !!lastName.trim() && !!gender && !emailError && !nameError && quantity >= minQuantity;
 
   if (!open) return null;
 
@@ -559,14 +559,12 @@ export default function CheckoutModal({
                     {/* Gender */}
                     <div>
                       <label className="text-sm font-medium block mb-1.5" style={labelStyle}>Gender</label>
-                      <select value={gender} onChange={e => setGender(e.target.value)}
+                      <select required value={gender} onChange={e => setGender(e.target.value)}
                         className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition"
                         style={inputStyle}>
                         <option value="">Select gender</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
-                        <option value="Non-binary">Non-binary</option>
-                        <option value="Prefer not to say">Prefer not to say</option>
                       </select>
                     </div>
 

@@ -5,6 +5,7 @@ import { Check, Calendar, Clock, MapPin, ExternalLink, Sun } from "lucide-react"
 import TicketQR from "@/components/TicketQR";
 import TicketActions from "@/components/TicketActions";
 import DropText from "@/components/DropText";
+import { genderMark } from "@/lib/gender";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,6 +68,8 @@ export default async function TicketPage({ params }: Props) {
   const shortCode = ticket.id.slice(0, 8).toUpperCase();
   const checkedIn = ticket.status === "scanned";
   const hasVenue = !!event.location && event.location !== "TBA";
+  // Some events price tickets by gender, so door staff need to see it at a glance.
+  const gender = genderMark(ticket.user_gender);
 
   return (
     <div className="relative min-h-screen overflow-hidden px-4 py-10 flex justify-center"
@@ -122,9 +125,23 @@ export default async function TicketPage({ params }: Props) {
               )}
             </div>
 
-            <h2 className="font-display text-[28px] font-bold leading-[1.05]">
-              <DropText text={event.title} delay={800} stagger={28} />
-            </h2>
+            <div className="flex items-start justify-between gap-4">
+              <h2 className="font-display text-[28px] font-bold leading-[1.05] min-w-0">
+                <DropText text={event.title} delay={800} stagger={28} />
+              </h2>
+              {gender && (
+                <div className="fp-pop shrink-0 flex flex-col items-center gap-1" style={{ animationDelay: "1000ms" }}
+                  aria-label={`Gender: ${gender.word}`}>
+                  <span className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl bg-white font-display text-6xl font-bold leading-none shadow-lg"
+                    style={{ color: gender.color }}>
+                    {gender.letter}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.85)" }}>
+                    {gender.word}
+                  </span>
+                </div>
+              )}
+            </div>
 
             <div className="flex flex-col gap-2.5 text-sm" style={{ color: "rgba(255,255,255,0.9)" }}>
               <div className="fp-fade-up flex items-center gap-3" style={{ animationDelay: "1200ms" }}>
