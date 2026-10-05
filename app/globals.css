@@ -354,3 +354,17 @@
 
 /* Floating theme button steps aside while the live chat is opening/open */
 html[data-chat-open] .fp-theme-fab { opacity: 0; pointer-events: none; transform: scale(0.8); }
+
+/* "Trusted by" logo marquee: the track holds the logo list twice, so sliding
+   it left by half lands exactly where it started. Pauses on hover; still for
+   reduced-motion visitors. Duration is set inline per logo count. */
+@keyframes fp-marquee { to { transform: translateX(-50%); } }
+.fp-marquee { animation: fp-marquee 40s linear infinite; }
+.fp-marquee:hover { animation-play-state: paused; }
+.fp-marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fp-marquee { animation: none; }
+}

@@ -13,6 +13,7 @@ import AuthModal from "@/components/AuthModal";
 import Link from "next/link";
 import LocationPicker, { LocationData } from "@/components/LocationPicker";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
+import BrandLogoPrompt from "@/components/BrandLogoPrompt";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
@@ -260,6 +261,7 @@ export default function CreateEvent() {
 
       {user && (
         <div className="max-w-4xl mx-auto">
+          <BrandLogoPrompt />
           <div className="text-center mb-10">
             <h1 className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>Create an Experience</h1>
             <p className="mt-2" style={{ color: "var(--text-muted)" }}>Launch your professional event in minutes.</p>

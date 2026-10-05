@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { useState, useEffect, useRef } from "react";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
+import BrandLogoPopup from "@/components/BrandLogoPopup";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -218,6 +219,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           &copy; {new Date().getFullYear()} FlexPass — Made with ♥ in Lagos
         </div>
       </main>
+      <BrandLogoPopup />
     </div>
   );
 }

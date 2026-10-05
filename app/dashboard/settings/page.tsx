@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import BrandLogoUpload from "@/components/BrandLogoUpload";
 import {
   User, Loader2, Save, Lock, Bell, ShieldAlert,
   CheckCircle2, XCircle, Eye, EyeOff, LogOut, BadgeCheck,
@@ -161,6 +162,13 @@ export default function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  // Brand logo (optional) — feeds the homepage "Trusted by" slider
+  const [userId, setUserId] = useState("");
+  const [brandLogo, setBrandLogo] = useState("");
+  const [showInTrustedBy, setShowInTrustedBy] = useState(true);
+  const [savingBrand, setSavingBrand] = useState(false);
+  const [brandMsg, setBrandMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
   // Password
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -180,6 +188,7 @@ export default function SettingsPage() {
       const user = session?.user;
       if (!user) return;
       setEmail(user.email || "");
+      setUserId(user.id);
       setFullName(user.user_metadata?.full_name || "");
       setOrganizerName(user.user_metadata?.organizer_name || "");
       setNotifySale(user.user_metadata?.notify_sale !== false);
@@ -193,6 +202,16 @@ export default function SettingsPage() {
         .eq("organizer_verified", true)
         .limit(1);
       setVerified((data?.length || 0) > 0);
+
+      const { data: brand } = await supabase
+        .from("host_brands")
+        .select("logo_url, show_in_trusted_by")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (brand) {
+        setBrandLogo(brand.logo_url || "");
+        setShowInTrustedBy(brand.show_in_trusted_by);
+      }
       setLoading(false);
     });
   }, []);
@@ -210,6 +229,23 @@ export default function SettingsPage() {
       : { text: "Profile updated.", type: "success" }
     );
     setSavingProfile(false);
+  }
+
+  async function handleSaveBrand() {
+    setSavingBrand(true);
+    setBrandMsg(null);
+    const { error } = await supabase.from("host_brands").upsert({
+      user_id: userId,
+      brand_name: organizerName || fullName || null,
+      logo_url: brandLogo || null,
+      show_in_trusted_by: showInTrustedBy,
+      updated_at: new Date().toISOString(),
+    });
+    setBrandMsg(error
+      ? { text: "Failed to save brand logo.", type: "error" }
+      : { text: "Brand logo saved.", type: "success" }
+    );
+    setSavingBrand(false);
   }
 
   async function handleChangePassword() {
@@ -311,6 +347,35 @@ export default function SettingsPage() {
           </div>
         </div>
       </SectionCard>
+
+      {/* ── Brand logo ── */}
+      <div id="brand" className="scroll-mt-24">
+        <SectionCard title="Brand Logo" description="Optional. Your logo can appear in the &quot;Trusted by&quot; section on the FlexPass homepage.">
+          <div className="space-y-5">
+            <BrandLogoUpload value={brandLogo} onChange={setBrandLogo} />
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked={showInTrustedBy} onChange={e => setShowInTrustedBy(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[#480082]" />
+              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                Show my logo in FlexPass&apos;s <span className="font-semibold">Trusted by</span> section on the homepage
+              </span>
+            </label>
+
+            <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: "var(--card-border)" }}>
+              {brandMsg && <Toast message={brandMsg.text} type={brandMsg.type} />}
+              <div className="ml-auto">
+                <button onClick={handleSaveBrand} disabled={savingBrand || !userId}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: "var(--brand-indigo)" }}>
+                  {savingBrand ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                  Save Logo
+                </button>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+      </div>
 
       {/* ── Password ── */}
       <SectionCard title="Change Password" description="Use a strong password you don't use elsewhere.">

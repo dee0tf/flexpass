@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import EventCard from "@/components/EventCard";
 import { createServerSupabase } from "@/lib/supabase";
 import HomeSearchBar from "@/components/HomeSearchBar";
+import TrustedBy from "@/components/TrustedBy";
 import HomeEventsTabs from "@/components/HomeEventsTabs";
 import { Event } from "@/lib/types";
 import { attachEffectivePrices } from "@/lib/effectivePrices";
@@ -117,6 +118,9 @@ export default async function Home() {
         </div>
 
       </section>
+
+      {/* ── Trusted by (host brand logos) ─────────────── */}
+      <TrustedBy />
 
       {/* ── Featured Events ─────────────────────────── */}
       {featured.length > 0 && (

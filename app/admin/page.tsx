@@ -17,6 +17,7 @@ import EventPaceChip from "@/components/EventPaceChip";
 import MomentumChart from "@/components/analytics/MomentumChart";
 import FunnelBars from "@/components/analytics/FunnelBars";
 import GenderDonut from "@/components/analytics/GenderDonut";
+import BrandLogoReminderCard from "@/components/BrandLogoReminderCard";
 import { PaceStatus } from "@/lib/eventPacing";
 
 type Payout = {
@@ -798,6 +799,7 @@ export default function AdminPage() {
             )}
 
             {/* ── Hosts ── */}
+            {mainTab === "hosts" && <BrandLogoReminderCard />}
             {mainTab === "hosts" && (
               <div className="rounded-2xl overflow-hidden"
                 style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
