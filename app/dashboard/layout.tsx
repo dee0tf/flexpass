@@ -175,6 +175,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <ShieldCheck size={18} /> Admin Panel
           </Link>
         )}
+        <ThemeToggle />
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-500/10 rounded-xl w-full transition-colors text-sm font-medium"
@@ -217,7 +218,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           &copy; {new Date().getFullYear()} FlexPass — Made with ♥ in Lagos
         </div>
       </main>
-      <ThemeToggle />
     </div>
   );
 }

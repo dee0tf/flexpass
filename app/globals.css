@@ -351,3 +351,6 @@
   .fp-scan, .fp-twinkle { display: none; }
   .fp-spin, .fp-orb { animation: none; }
 }
+
+/* Floating theme button steps aside while the live chat is opening/open */
+html[data-chat-open] .fp-theme-fab { opacity: 0; pointer-events: none; transform: scale(0.8); }

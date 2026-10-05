@@ -21,7 +21,9 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       {children}
       {!hasOwnLayout && <Footer />}
       {!hasOwnLayout && <TawkToWidget />}
-      <ThemeToggle />
+      {/* Dashboard has the toggle in its sidebar; everywhere else gets the
+          floating bottom-left button. */}
+      {!pathname?.startsWith("/dashboard") && <ThemeToggle variant="fab" />}
     </>
   );
 }

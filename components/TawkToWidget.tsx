@@ -73,6 +73,12 @@ function FlexPassMark({ size }: { size: number }) {
   );
 }
 
+// Flags <html data-chat-open> while the chat is opening or open, so other
+// floating UI (the theme button) can step aside. See .fp-theme-fab in globals.css.
+function setChatBusy(busy: boolean) {
+  document.documentElement.toggleAttribute("data-chat-open", busy);
+}
+
 export default function TawkToWidget() {
   const pathname = usePathname();
 
@@ -260,6 +266,7 @@ export default function TawkToWidget() {
       if (maximized === openRef.current) return;
       openRef.current = maximized;
       setOpen(maximized);
+      setChatBusy(maximized);
       if (maximized) setUnread(0);
     }, 400);
 
@@ -267,6 +274,13 @@ export default function TawkToWidget() {
   }, [status]);
 
   function handleClick() {
+    // Clear the floating theme button out of the way as soon as the visitor
+    // asks for chat, not only once the panel is fully up. If the panel never
+    // opens (script blocked, etc.), bring it back.
+    setChatBusy(true);
+    setTimeout(() => {
+      if (!openRef.current) setChatBusy(false);
+    }, 10000);
     setUnread(0);
     dismissGreeting();
     if (status === "ready") {
