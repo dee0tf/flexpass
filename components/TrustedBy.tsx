@@ -1,4 +1,4 @@
-import Image from "next/image";
+import TrustedByLogo from "@/components/TrustedByLogo";
 import { createServerSupabase } from "@/lib/supabase";
 
 // Below this many logos the strip looks empty, so it stays hidden until
@@ -38,14 +38,13 @@ export default async function TrustedBy() {
           {track.map((brand, i) => {
             // Only the first copy is announced; the rest are visual repeats
             const isRepeat = i >= logos.length;
-            // mr-5 rather than gap-5 on the <ul>: a gap would leave the two
+            // Per-item padding rather than gap on the <ul>: a gap would leave the two
             // halves half a gap apart and the loop would visibly jump
             return (
               <li key={`${brand.user_id}-${i}`} aria-hidden={isRepeat}
-                className="relative mr-5 h-16 w-40 shrink-0 rounded-xl bg-white/95 shadow-lg shadow-black/30">
-                <Image src={brand.logo_url} alt={isRepeat ? "" : brand.brand_name || "Event organizer"}
-                  title={brand.brand_name || undefined}
-                  fill sizes="160px" className="object-contain p-3" />
+                className="flex h-[76px] px-8 shrink-0 items-center opacity-90 transition-opacity duration-300 hover:opacity-100">
+                <TrustedByLogo src={brand.logo_url} alt={isRepeat ? "" : brand.brand_name || "Event organizer"}
+                  title={brand.brand_name || undefined} />
               </li>
             );
           })}

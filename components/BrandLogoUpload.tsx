@@ -4,10 +4,12 @@ import { useState } from "react";
 import Image from "next/image";
 import { Upload, Loader2, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { cleanLogoFile } from "@/lib/cleanLogo";
 
-// Logos are shown whole (object-contain) on a light tile, unlike event
-// images which ImageUpload crops to fill. SVG is left out on purpose: an
-// uploaded SVG can carry script when opened directly from storage.
+// Logos are shown whole (object-contain) on the dark "Trusted by" strip, so
+// uploads are trimmed and any solid backdrop is made transparent first.
+// SVG is left out on purpose: an uploaded SVG can carry script when opened
+// directly from storage.
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 const MAX_SIZE_BYTES = 2 * 1024 * 1024;
 
@@ -31,9 +33,9 @@ export default function BrandLogoUpload({ value, onChange }: { value: string; on
 
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-      const path = `brand-${crypto.randomUUID()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("event-images").upload(path, file);
+      const png = await cleanLogoFile(file);
+      const path = `brand-${crypto.randomUUID()}.png`;
+      const { error: uploadError } = await supabase.storage.from("event-images").upload(path, png, { contentType: "image/png" });
       if (uploadError) throw uploadError;
       const { data } = supabase.storage.from("event-images").getPublicUrl(path);
       onChange(data.publicUrl);
@@ -48,7 +50,7 @@ export default function BrandLogoUpload({ value, onChange }: { value: string; on
     <div className="space-y-2">
       <div className="flex items-center gap-4">
         <div className="relative h-24 w-40 shrink-0 rounded-xl flex items-center justify-center overflow-hidden"
-          style={{ backgroundColor: "#F9F8FF", border: "2px dashed var(--card-border)" }}>
+          style={{ backgroundColor: "#0E0D0D", border: "2px dashed var(--card-border)" }}>
           {value ? (
             <>
               <Image src={value} alt="Your brand logo" fill sizes="160px" className="object-contain p-3" />
@@ -60,7 +62,7 @@ export default function BrandLogoUpload({ value, onChange }: { value: string; on
           ) : uploading ? (
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--brand-indigo)" }} />
           ) : (
-            <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>No logo yet</span>
+            <span className="text-xs font-medium text-white/50">No logo yet</span>
           )}
         </div>
 
@@ -71,7 +73,7 @@ export default function BrandLogoUpload({ value, onChange }: { value: string; on
           <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleFile} disabled={uploading} />
         </label>
       </div>
-      <p className="text-xs" style={{ color: "var(--text-muted)" }}>PNG, JPG or WebP, max 2MB. A transparent PNG looks best.</p>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>PNG, JPG or WebP, max 2MB. We trim it and remove a plain background automatically; the preview shows how it looks on the homepage.</p>
       {error && <p className="text-xs font-medium text-red-500">{error}</p>}
     </div>
   );
