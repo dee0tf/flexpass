@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { Upload, Loader2, X } from "lucide-react";
+import TrustedByLogo from "@/components/TrustedByLogo";
 import { supabase } from "@/lib/supabase";
 import { cleanLogoFile } from "@/lib/cleanLogo";
 
@@ -48,21 +48,25 @@ export default function BrandLogoUpload({ value, onChange }: { value: string; on
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-4">
-        <div className="relative h-24 w-40 shrink-0 rounded-xl flex items-center justify-center overflow-hidden"
+      <div className="space-y-3">
+        {/* Same background, slot height, opacity and TrustedByLogo sizing as a
+            slot in the homepage strip, so the logo previews at its real size */}
+        <div className="relative w-full rounded-xl flex items-center justify-center overflow-hidden px-4 py-5"
           style={{ backgroundColor: "#0E0D0D", border: "2px dashed var(--card-border)" }}>
-          {value ? (
-            <>
-              <Image src={value} alt="Your brand logo" fill sizes="160px" className="object-contain p-3" />
-              <button type="button" onClick={() => onChange("")} aria-label="Remove logo"
-                className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full">
-                <X size={14} />
-              </button>
-            </>
-          ) : uploading ? (
-            <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--brand-indigo)" }} />
-          ) : (
-            <span className="text-xs font-medium text-white/50">No logo yet</span>
+          <div className="flex h-[76px] items-center opacity-90">
+            {value ? (
+              <TrustedByLogo key={value} src={value} alt="Your brand logo" />
+            ) : uploading ? (
+              <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--brand-indigo)" }} />
+            ) : (
+              <span className="text-xs font-medium text-white/50">No logo yet</span>
+            )}
+          </div>
+          {value && (
+            <button type="button" onClick={() => onChange("")} aria-label="Remove logo"
+              className="absolute top-1.5 right-1.5 bg-red-500 text-white p-0.5 rounded-full">
+              <X size={14} />
+            </button>
           )}
         </div>
 
@@ -73,7 +77,7 @@ export default function BrandLogoUpload({ value, onChange }: { value: string; on
           <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleFile} disabled={uploading} />
         </label>
       </div>
-      <p className="text-xs" style={{ color: "var(--text-muted)" }}>PNG, JPG or WebP, max 2MB. We trim it and remove a plain background automatically; the preview shows how it looks on the homepage.</p>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>PNG, JPG or WebP, max 2MB. We trim it and remove a plain background automatically; the preview shows it at the exact size it appears on the homepage.</p>
       {error && <p className="text-xs font-medium text-red-500">{error}</p>}
     </div>
   );
