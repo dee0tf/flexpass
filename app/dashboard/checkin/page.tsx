@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import CheckInScanner, { CheckInEvent } from "@/components/CheckInScanner";
+import AttendancePanel from "@/components/AttendancePanel";
 
 export default function CheckInPage() {
   const [events, setEvents] = useState<CheckInEvent[]>([]);
@@ -20,5 +21,10 @@ export default function CheckInPage() {
     })();
   }, []);
 
-  return <CheckInScanner events={events} />;
+  return (
+    <>
+      <CheckInScanner events={events} />
+      <AttendancePanel events={events} />
+    </>
+  );
 }

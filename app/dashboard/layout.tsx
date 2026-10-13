@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen, ShieldCheck, BarChart3, Loader2
+  LayoutDashboard, CalendarDays, Wallet, Settings, LogOut, Menu, X, ScanLine, TicketIcon, BadgeCheck, Share2, BookOpen, ShieldCheck, BarChart3, Loader2, UserCheck
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useState, useEffect, useRef } from "react";
@@ -20,6 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isVerified, setIsVerified] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
   const notifChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const [checkinAlerts, setCheckinAlerts] = useState<{ id: string; name: string; eventTitle: string; tier: string | null }[]>([]);
 
   useEffect(() => {
     if (!session) return;
@@ -41,50 +42,81 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .limit(1);
       setIsVerified((data?.length || 0) > 0);
 
-      // Browser notifications — subscribe to new ticket inserts on this host's events
-      if (
-        typeof window !== "undefined" &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-      ) {
-        const { data: myEvents } = await supabase
-          .from("events")
-          .select("id, title")
-          .eq("user_id", userId);
+      const { data: myEvents } = await supabase
+        .from("events")
+        .select("id, title")
+        .eq("user_id", userId);
+      if (!myEvents || myEvents.length === 0) return;
 
-        if (myEvents && myEvents.length > 0) {
-          const eventIds = myEvents.map(e => e.id);
-          const titleMap = Object.fromEntries(myEvents.map(e => [e.id, e.title]));
+      const eventIds = new Set(myEvents.map(e => e.id));
+      const titleMap: Record<string, string> = Object.fromEntries(myEvents.map(e => [e.id, e.title]));
+      const canNotify = () =>
+        typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted";
+      const announced = new Set<string>();
 
-          // Clean up any previous channel
-          if (notifChannelRef.current) {
-            supabase.removeChannel(notifChannelRef.current);
-          }
-
-          const channel = supabase
-            .channel("ticket-sale-notifications")
-            .on(
-              "postgres_changes",
-              { event: "INSERT", schema: "public", table: "tickets" },
-              (payload) => {
-                const ticket = payload.new as any;
-                if (!eventIds.includes(ticket.event_id)) return;
-                const eventTitle = titleMap[ticket.event_id] || "your event";
-                const tierLabel = ticket.tier_name && ticket.tier_name !== "Standard"
-                  ? ` (${ticket.tier_name})`
-                  : "";
-                new Notification("🎟️ New ticket sold!", {
-                  body: `${ticket.user_name || ticket.user_email} just bought a ticket to ${eventTitle}${tierLabel}.`,
-                  icon: "/icon.png",
-                  tag: ticket.id,
-                });
-              }
-            )
-            .subscribe();
-
-          notifChannelRef.current = channel;
-        }
+      // Clean up any previous channel
+      if (notifChannelRef.current) {
+        supabase.removeChannel(notifChannelRef.current);
       }
+
+      type TicketRow = {
+        id: string; event_id: string; status: string; checked_in_at: string | null;
+        user_name: string | null; user_email: string; tier_name: string | null;
+      };
+
+      // New sale — browser notification only
+      const onInsert = (ticket: TicketRow) => {
+        if (!eventIds.has(ticket.event_id) || !canNotify()) return;
+        const eventTitle = titleMap[ticket.event_id] || "your event";
+        const tierLabel = ticket.tier_name && ticket.tier_name !== "Standard"
+          ? ` (${ticket.tier_name})`
+          : "";
+        new Notification("🎟️ New ticket sold!", {
+          body: `${ticket.user_name || ticket.user_email} just bought a ticket to ${eventTitle}${tierLabel}.`,
+          icon: "/icon.png",
+          tag: ticket.id,
+        });
+      };
+
+      // Check-in — /api/checkin flips status to 'scanned' and stamps
+      // checked_in_at. Only announce fresh scans, once per ticket, so an
+      // unrelated later update to an old scanned ticket stays quiet.
+      const onUpdate = (ticket: TicketRow) => {
+        if (!eventIds.has(ticket.event_id) || ticket.status !== "scanned" || !ticket.checked_in_at) return;
+        if (announced.has(ticket.id)) return;
+        if (Date.now() - new Date(ticket.checked_in_at).getTime() > 2 * 60 * 1000) return;
+        announced.add(ticket.id);
+
+        const name = ticket.user_name || ticket.user_email;
+        const eventTitle = titleMap[ticket.event_id] || "your event";
+        const tier = ticket.tier_name && ticket.tier_name !== "Standard" ? ticket.tier_name : null;
+        setCheckinAlerts(prev => [...prev.slice(-3), { id: ticket.id, name, eventTitle, tier }]);
+        setTimeout(() => setCheckinAlerts(prev => prev.filter(a => a.id !== ticket.id)), 6000);
+
+        // Tab in the background — fall back to a system notification
+        if (canNotify() && document.visibilityState !== "visible") {
+          new Notification("✅ Checked in", {
+            body: `${name} just checked in to ${eventTitle}${tier ? ` (${tier})` : ""}.`,
+            icon: "/icon.png",
+            tag: `checkin-${ticket.id}`,
+          });
+        }
+      };
+
+      // Filter server-side by this host's own event IDs, so realtime never
+      // even delivers another host's ticket rows to this browser. Realtime
+      // caps an `in` filter at 100 values, hence the chunks.
+      const ids = [...eventIds];
+      let channel = supabase.channel(`host-ticket-notifications-${userId}`);
+      for (let i = 0; i < ids.length; i += 100) {
+        const filter = `event_id=in.(${ids.slice(i, i + 100).join(",")})`;
+        channel = channel
+          .on("postgres_changes", { event: "INSERT", schema: "public", table: "tickets", filter }, (p) => onInsert(p.new as TicketRow))
+          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tickets", filter }, (p) => onUpdate(p.new as TicketRow));
+      }
+      channel.subscribe();
+
+      notifChannelRef.current = channel;
     })();
 
     return () => {
@@ -220,6 +252,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </main>
       <BrandLogoPopup />
+
+      {/* Live check-in alerts — stacked so a busy door doesn't overwrite them */}
+      {checkinAlerts.length > 0 && (
+        <div className="fixed top-16 md:top-5 right-4 z-[9999] flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm">
+          {checkinAlerts.map(a => (
+            <div key={a.id}
+              className="flex items-start gap-3 px-4 py-3 rounded-2xl shadow-2xl text-white text-sm"
+              style={{ backgroundColor: "#16a34a", border: "1px solid #15803d", animation: "checkinIn 0.25s ease-out" }}>
+              <UserCheck size={18} className="shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold truncate">{a.name} just checked in</p>
+                <p className="text-xs opacity-90 truncate">{a.eventTitle}{a.tier ? ` · ${a.tier}` : ""}</p>
+              </div>
+              <button onClick={() => setCheckinAlerts(prev => prev.filter(x => x.id !== a.id))}
+                className="shrink-0 opacity-70 hover:opacity-100 transition" aria-label="Dismiss">
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+          <style>{`@keyframes checkinIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,12 +4,18 @@ import Link from "next/link";
 import { Check, Calendar, Clock, MapPin, ExternalLink, Sun } from "lucide-react";
 import TicketQR from "@/components/TicketQR";
 import TicketActions from "@/components/TicketActions";
+import SaveTicketButton from "@/components/SaveTicketButton";
 import DropText from "@/components/DropText";
 import { genderMark } from "@/lib/gender";
 
+// Service role, server-only: the tickets table isn't publicly readable, so
+// this page is what lets a buyer open their ticket from the post-purchase
+// redirect or the email link without logging in. The unguessable ticket ID
+// in the URL is the access key — only rows matching it are ever returned.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
 interface Props {
@@ -215,6 +221,17 @@ export default async function TicketPage({ params }: Props) {
               <ExternalLink size={14} /> Open in Maps
             </a>
           )}
+
+          <SaveTicketButton
+            ticketId={ticket.id}
+            eventTitle={event.title}
+            dateLabel={formatEventDate(event.date)}
+            timeLabel={time}
+            venueLabel={hasVenue ? event.location : "Venue TBA"}
+            tierName={ticket.tier_name || "Standard"}
+            holderName={ticket.user_name}
+            gender={gender ? { letter: gender.letter, color: gender.color } : null}
+          />
 
           {/* Add to Calendar + Share */}
           <TicketActions

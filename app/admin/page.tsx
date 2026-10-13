@@ -54,7 +54,7 @@ type Host = {
 type AdminEvent = {
   id: string; title: string; date: string; image_url: string | null;
   organizer_name: string; verified: boolean;
-  host_email: string; tickets: number; revenue: number; fee: number;
+  host_email: string; tickets: number; checked_in: number; revenue: number; fee: number;
 };
 
 type AdminTicket = {
@@ -496,7 +496,7 @@ export default function AdminPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                   {[
                     {
-                      label: "Tickets Admitted", sublabel: `${stats.scannedTickets.toLocaleString()} scanned`,
+                      label: "Tickets Admitted", sublabel: `${stats.scannedTickets.toLocaleString()} checked in · ${(stats.totalTickets - stats.scannedTickets).toLocaleString()} not yet`,
                       value: stats.totalTickets.toLocaleString(), icon: <ScanLine size={16} />,
                       color: "#22c55e", bg: "rgba(34,197,94,0.06)", highlight: false,
                     },
@@ -993,6 +993,14 @@ export default function AdminPage() {
                                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>Tickets</p>
                               </div>
                               <div className="text-center hidden sm:block">
+                                <p className="font-bold">
+                                  <span style={{ color: "#16a34a" }}>{ev.checked_in}</span>
+                                  <span style={{ color: "var(--text-muted)" }}> / </span>
+                                  <span style={{ color: "#d97706" }}>{ev.tickets - ev.checked_in}</span>
+                                </p>
+                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>In / Not in</p>
+                              </div>
+                              <div className="text-center hidden sm:block">
                                 <p className="font-bold" style={{ color: "var(--text-primary)" }}>₦{ev.revenue.toLocaleString()}</p>
                                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>Revenue</p>
                               </div>
@@ -1027,6 +1035,10 @@ export default function AdminPage() {
                                     style={{ borderColor: "var(--card-border)" }}>
                                     <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
                                       {buyers.length} ticket{buyers.length === 1 ? "" : "s"} across {tierGroups.size} tier{tierGroups.size === 1 ? "" : "s"}
+                                      {" · "}
+                                      <span style={{ color: "#16a34a" }}>{ev.checked_in} checked in</span>
+                                      {" · "}
+                                      <span style={{ color: "#d97706" }}>{ev.tickets - ev.checked_in} not checked in</span>
                                     </p>
                                     <button
                                       onClick={(e) => { e.stopPropagation(); handleExportEventCsv(ev.title, buyers); }}

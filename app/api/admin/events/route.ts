@@ -54,15 +54,16 @@ export async function GET(request: Request) {
   // Ticket counts and revenue per event
   const { data: ticketRows } = await fetchAllRows((from, to) => db
     .from("tickets")
-    .select("event_id, total_amount_paid")
+    .select("event_id, total_amount_paid, status")
     .in("status", ["valid", "scanned"])
     .order("id")
     .range(from, to));
 
-  const ticketStats = new Map<string, { count: number; revenue: number; fee: number }>();
+  const ticketStats = new Map<string, { count: number; checkedIn: number; revenue: number; fee: number }>();
   for (const t of ticketRows || []) {
-    const s = ticketStats.get(t.event_id) ?? { count: 0, revenue: 0, fee: 0 };
+    const s = ticketStats.get(t.event_id) ?? { count: 0, checkedIn: 0, revenue: 0, fee: 0 };
     s.count  += 1;
+    if (t.status === "scanned") s.checkedIn += 1;
     s.revenue += t.total_amount_paid || 0;
     s.fee += platformFeeFromGross(t.total_amount_paid);
     ticketStats.set(t.event_id, s);
@@ -91,6 +92,7 @@ export async function GET(request: Request) {
     verified:       e.organizer_verified || false,
     host_email:     emailMap.get(e.user_id) ?? (e.user_id ? `${String(e.user_id).slice(0, 8)}…` : "unknown"),
     tickets:        ticketStats.get(e.id)?.count   || 0,
+    checked_in:     ticketStats.get(e.id)?.checkedIn || 0,
     revenue:        ticketStats.get(e.id)?.revenue || 0,
     fee:            Math.round(ticketStats.get(e.id)?.fee || 0),
   }));

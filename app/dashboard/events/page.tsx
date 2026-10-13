@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Loader2, Calendar, MapPin, ExternalLink, Copy, Check, Edit, EyeOff } from "lucide-react";
+import { Loader2, Calendar, MapPin, ExternalLink, Copy, Check, Edit, EyeOff, UserCheck } from "lucide-react";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 
 export default function MyEventsPage() {
@@ -13,6 +14,7 @@ export default function MyEventsPage() {
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [duplicated, setDuplicated] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
+  const [attendance, setAttendance] = useState<Record<string, { in: number; total: number }>>({});
   const showToast = useCallback((message: string, type: ToastType = "error") => {
     setToast({ message, type });
   }, []);
@@ -35,6 +37,21 @@ export default function MyEventsPage() {
 
     setEvents(data || []);
     setLoading(false);
+
+    if (data?.length) {
+      const { data: tickets } = await fetchAllRows<{ event_id: string; status: string }>((from, to) => supabase
+        .from("tickets").select("event_id, status")
+        .in("event_id", data.map(e => e.id)).in("status", ["valid", "scanned"])
+        .order("id")
+        .range(from, to));
+      const counts: Record<string, { in: number; total: number }> = {};
+      for (const t of tickets) {
+        const c = (counts[t.event_id] ??= { in: 0, total: 0 });
+        c.total += 1;
+        if (t.status === "scanned") c.in += 1;
+      }
+      setAttendance(counts);
+    }
   }
 
   async function handleDuplicate(eventId: string) {
@@ -110,6 +127,16 @@ export default function MyEventsPage() {
                 <MapPin size={14} />
                 <span className="truncate">{event.location}</span>
               </div>
+              {attendance[event.id] && (
+                <div className="flex items-center gap-2 text-sm mt-1">
+                  <UserCheck size={14} style={{ color: "#16a34a" }} />
+                  <span className="text-theme-2">
+                    <strong style={{ color: "#16a34a" }}>{attendance[event.id].in}</strong> checked in
+                    {" · "}
+                    <strong style={{ color: "#d97706" }}>{attendance[event.id].total - attendance[event.id].in}</strong> not yet
+                  </span>
+                </div>
+              )}
 
               <div className="mt-4 pt-4 border-t border-slate-100 flex gap-2">
                 <Link

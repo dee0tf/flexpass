@@ -4,9 +4,14 @@ import Link from "next/link";
 import { CheckCircle2, Ticket, ArrowRight } from "lucide-react";
 import { genderMark } from "@/lib/gender";
 
+// Service role, server-only: the tickets table isn't publicly readable, so
+// this page is what lets a buyer open their ticket from the post-purchase
+// redirect or the email link without logging in. The unguessable ticket ID
+// in the URL is the access key — only rows matching it are ever returned.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
 interface Props {

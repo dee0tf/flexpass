@@ -90,6 +90,10 @@ export default function TawkToWidget() {
   const [pressed, setPressed] = useState(false);
   const [canHover, setCanHover] = useState(false);
   const [greeting, setGreeting] = useState(false);
+  // Set by the cloud's X. Hides the cloud whatever else would show it (an
+  // unread message, a stale focus/hover) until the visitor deliberately
+  // hovers or tabs to the launcher again, or a new message arrives.
+  const [suppressed, setSuppressed] = useState(false);
 
   useEffect(() => {
     setCanHover(window.matchMedia("(hover: hover)").matches);
@@ -111,6 +115,7 @@ export default function TawkToWidget() {
 
   function dismissGreeting() {
     setGreeting(false);
+    setSuppressed(true);
     try {
       sessionStorage.setItem(GREETING_DISMISSED_KEY, "1");
     } catch {
@@ -187,7 +192,9 @@ export default function TawkToWidget() {
     // Agent replies and proactive triggers both land on a hidden widget, so
     // our badge is the only thing telling the visitor someone's waiting.
     const notify = () => {
-      if (!api.isChatMaximized?.()) setUnread((n) => n + 1);
+      if (api.isChatMaximized?.()) return;
+      setUnread((n) => n + 1);
+      setSuppressed(false);
     };
     api.onChatMessageAgent = notify;
     api.onChatMessageSystem = notify;
@@ -308,7 +315,7 @@ export default function TawkToWidget() {
   // a stuck hover state after a tap (the same trap documented in ThemeToggle).
   const active = (hovered || focused) && canHover;
 
-  const showBubble = !open && (greeting || active || unread > 0);
+  const showBubble = !open && !suppressed && (greeting || active || unread > 0);
 
   return (
     <div
@@ -404,20 +411,30 @@ export default function TawkToWidget() {
             aria-hidden
           />
 
+          {/* 40px hit area around the 24px visual, so a thumb on mobile
+              lands on the X instead of the cloud underneath it. */}
           <button
             type="button"
-            onClick={dismissGreeting}
+            onClick={(e) => {
+              e.stopPropagation();
+              dismissGreeting();
+            }}
             tabIndex={showBubble ? 0 : -1}
             aria-label="Dismiss chat greeting"
-            className="absolute left-2 top-7 flex h-6 w-6 items-center justify-center rounded-full border transition hover:scale-110"
-            style={{
-              backgroundColor: "var(--card-bg)",
-              borderColor: "var(--card-border)",
-              color: "var(--text-muted)",
-              boxShadow: "0 4px 12px var(--card-shadow)",
-            }}
+            className="absolute left-0 top-5 z-10 flex h-10 w-10 items-center justify-center"
+            style={{ touchAction: "manipulation" }}
           >
-            <X size={12} aria-hidden />
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-full border transition hover:scale-110"
+              style={{
+                backgroundColor: "var(--card-bg)",
+                borderColor: "var(--card-border)",
+                color: "var(--text-muted)",
+                boxShadow: "0 4px 12px var(--card-shadow)",
+              }}
+            >
+              <X size={12} aria-hidden />
+            </span>
           </button>
         </div>
       </div>
@@ -425,12 +442,21 @@ export default function TawkToWidget() {
       <button
         type="button"
         onClick={handleClick}
-        onMouseEnter={() => setHovered(true)}
+        onMouseEnter={() => {
+          setHovered(true);
+          setSuppressed(false);
+        }}
         onMouseLeave={() => {
           setHovered(false);
           setPressed(false);
         }}
-        onFocus={() => setFocused(true)}
+        // Keyboard focus only — a mouse click also focuses the button, and
+        // that lingering focus used to pin the cloud open past its X.
+        onFocus={(e) => {
+          if (!e.currentTarget.matches(":focus-visible")) return;
+          setFocused(true);
+          setSuppressed(false);
+        }}
         onBlur={() => setFocused(false)}
         onPointerDown={() => setPressed(true)}
         onPointerUp={() => setPressed(false)}

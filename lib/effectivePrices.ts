@@ -22,21 +22,25 @@ export async function attachEffectivePrices<T extends { id: string; price: numbe
 
   if (!tiers || tiers.length === 0) return events;
 
-  // Count-only queries (not row fetches) so this stays accurate even for a
-  // tier sold past Supabase's default row cap.
-  const remainingByTier: Record<string, number> = {};
+  // Sold counts come from the get_tier_sold_counts RPC (one per event, not
+  // one per tier): the tickets table itself isn't publicly readable, and the
+  // RPC only ever returns numbers. COUNT(*) in Postgres stays exact past
+  // Supabase's 1000-row cap.
+  const soldByTier: Record<string, number> = {};
+  const withTiers = [...new Set(tiers.map(t => t.event_id))];
   await Promise.all(
-    tiers.map(async (t) => {
-      const { count } = await supabase
-        .from("tickets")
-        .select("id", { count: "exact", head: true })
-        .eq("tier_id", t.id)
-        .in("status", ["valid", "scanned"]);
-      const groupSize = t.group_size || 1;
-      const groupsSold = (count || 0) / groupSize;
-      remainingByTier[t.id] = Math.max(0, t.quantity_available - groupsSold);
+    withTiers.map(async (eventId) => {
+      const { data } = await supabase.rpc("get_tier_sold_counts", { p_event_id: eventId });
+      for (const row of (data || []) as { tier_id: string | null; sold_count: number | string }[]) {
+        if (row.tier_id) soldByTier[row.tier_id] = Number(row.sold_count) || 0;
+      }
     })
   );
+  const remainingByTier: Record<string, number> = {};
+  for (const t of tiers) {
+    const groupsSold = (soldByTier[t.id] || 0) / (t.group_size || 1);
+    remainingByTier[t.id] = Math.max(0, t.quantity_available - groupsSold);
+  }
 
   const tiersByEvent = new Map<string, typeof tiers>();
   for (const t of tiers) {
