@@ -75,14 +75,14 @@ export default function ThemeToggle({ variant = "row" }: ThemeToggleProps) {
         {/* Moon in light mode, sun in dark mode — they swap with a spin */}
         <Moon
           size={20}
-          className={`absolute text-[#480082] transition-all duration-500 ${
-            isDark ? "opacity-0 -rotate-90 scale-50" : "opacity-100 rotate-0 scale-100"
+          className={`absolute text-[#480082] transition-[opacity,transform,filter] duration-[250ms] ease-[var(--ease-out)] ${
+            isDark ? "opacity-0 -rotate-30 scale-80 blur-[2px]" : "opacity-100 rotate-0 scale-100 blur-none"
           }`}
         />
         <Sun
           size={20}
-          className={`absolute text-[#FFB700] transition-all duration-500 ${
-            isDark ? "opacity-100 rotate-0 scale-100" : "opacity-0 rotate-90 scale-50"
+          className={`absolute text-[#FFB700] transition-[opacity,transform,filter] duration-[250ms] ease-[var(--ease-out)] ${
+            isDark ? "opacity-100 rotate-0 scale-100 blur-none" : "opacity-0 rotate-30 scale-80 blur-[2px]"
           }`}
         />
       </button>

@@ -71,6 +71,15 @@
 /* ── Light mode tokens ──────────────────────────── */
 :root {
   --radius: 0.75rem;
+
+  /* Motion — one set of curves and durations for the whole app.
+     ease-out: entering/exiting · ease-in-out: moving on screen · drawer: bottom sheets */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press:   140ms;
+  --dur-pop:     180ms;
+  --dur-sheet:   320ms;
   --background:        #F9F8FF;
   --foreground:        #0E0D0D;
 
@@ -242,7 +251,7 @@
   to   { transform: rotate(360deg); }
 }
 @keyframes fade-in {
-  from { opacity: 0; transform: scale(0.92); }
+  from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
 }
 @keyframes shimmer {
@@ -257,7 +266,7 @@
 
 .animate-float     { animation: float 6s ease-in-out infinite; }
 .animate-fade-up   { animation: fade-up 0.5s ease forwards; }
-.animate-fade-in   { animation: fade-in 0.4s ease forwards; }
+.animate-fade-in   { animation: fade-in 200ms var(--ease-out) forwards; }
 .animate-spin-slow { animation: spin-slow 2s linear infinite; }
 .animate-shimmer   { animation: shimmer 2s linear infinite; }
 .animate-theme-pop { animation: theme-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
@@ -367,4 +376,66 @@ html[data-chat-open] .fp-theme-fab { opacity: 0; pointer-events: none; transform
 }
 @media (prefers-reduced-motion: reduce) {
   .fp-marquee { animation: none; }
+}
+
+/* ── Pressable feedback ─────────────────────────────
+   Anything tappable shrinks a touch while pressed so the UI visibly
+   "hears" the tap. Apply .fp-press to buttons outside components/ui. */
+.fp-press {
+  transition-property: transform, opacity, background-color, border-color, color;
+  transition-duration: var(--dur-press);
+  transition-timing-function: var(--ease-out);
+}
+.fp-press:active:not(:disabled) { transform: scale(0.97); }
+
+/* ── Checkout sheet ─────────────────────────────────
+   Phones: rises from the bottom edge. Desktop: scales up from 96%, centered.
+   Exit is quicker than entry — the user has already decided. */
+@keyframes fp-sheet-in  { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fp-sheet-out { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes fp-modal-in  { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes fp-modal-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.96); } }
+@keyframes fp-scrim-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fp-scrim-out { from { opacity: 1; } to { opacity: 0; } }
+
+.fp-sheet          { animation: fp-sheet-in var(--dur-sheet) var(--ease-drawer) both; }
+.fp-sheet.closing  { animation: fp-sheet-out 220ms var(--ease-out) both; }
+.fp-scrim          { animation: fp-scrim-in var(--dur-sheet) ease both; }
+.fp-scrim.closing  { animation: fp-scrim-out 200ms ease both; }
+@media (min-width: 640px) {
+  .fp-sheet         { animation: fp-modal-in 200ms var(--ease-out) both; }
+  .fp-sheet.closing { animation: fp-modal-out 150ms var(--ease-out) both; }
+}
+
+/* ── Event card ─────────────────────────────────────
+   Small, quick lift — and only for real pointers, so a tap on a phone
+   doesn't leave the card stuck raised. */
+.fp-card {
+  transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+}
+.fp-card-img { transition: transform 300ms var(--ease-out); }
+.group:active .fp-card:not([data-ended]) { transform: scale(0.99); }
+@media (hover: hover) and (pointer: fine) {
+  .group:hover .fp-card:not([data-ended]) { transform: translateY(-2px); box-shadow: 0 10px 30px var(--card-shadow) !important; }
+  .group:hover .fp-card:not([data-ended]) .fp-card-img { transform: scale(1.03); }
+}
+
+/* ── Gender tally slot filling in ── */
+@keyframes fp-tally-fill { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+.fp-tally-fill { animation: fp-tally-fill 180ms var(--ease-out) both; }
+
+/* ── Rolling number (ticket quantity) ── */
+@keyframes fp-roll-up   { from { opacity: 0; transform: translateY(70%);  filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes fp-roll-down { from { opacity: 0; transform: translateY(-70%); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+.fp-roll-up   { display: inline-block; animation: fp-roll-up 220ms var(--ease-out) both; }
+.fp-roll-down { display: inline-block; animation: fp-roll-down 220ms var(--ease-out) both; }
+
+/* ── Reduced motion, app-wide ───────────────────────
+   Fewer and gentler, not zero: fades stay, movement goes. */
+@media (prefers-reduced-motion: reduce) {
+  .fp-press:active:not(:disabled) { transform: none; }
+  .fp-sheet, .fp-sheet.closing { animation-name: fp-scrim-in; animation-duration: 150ms; }
+  .fp-sheet.closing { animation-name: fp-scrim-out; }
+  .fp-roll-up, .fp-roll-down, .fp-tally-fill { animation: none; }
+  .animate-fade-in, .animate-fade-up { animation-duration: 1ms; }
 }

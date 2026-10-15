@@ -49,9 +49,8 @@ export default function EventCard({ event, variant = "default", priority = false
   return (
     <Link href={`/events/${event.id}`} className="block group">
       <div
-        className={`rounded-2xl overflow-hidden border transition-all duration-300 ${
-          ended ? "opacity-60" : "hover:-translate-y-1"
-        }`}
+        className={`fp-card rounded-2xl overflow-hidden border ${ended ? "opacity-60" : ""}`}
+        data-ended={ended || undefined}
         style={{
           backgroundColor: "var(--card-bg)",
           borderColor: "var(--card-border)",
@@ -67,9 +66,7 @@ export default function EventCard({ event, variant = "default", priority = false
               fill
               sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
               priority={priority}
-              className={`object-cover transition-transform duration-500 ${
-                ended ? "grayscale" : "group-hover:scale-105"
-              }`}
+              className={`fp-card-img object-cover ${ended ? "grayscale" : ""}`}
               onError={() => setImgError(true)}
             />
           ) : (
@@ -94,7 +91,7 @@ export default function EventCard({ event, variant = "default", priority = false
               </span>
             )}
             {isSoon && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full animate-pulse"
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
                 style={{ backgroundColor: "var(--brand-amber)", color: "#0E0D0D" }}>
                 Soon
               </span>

@@ -96,6 +96,17 @@ export default function CheckoutModal({
   // hold in that case, just let it expire naturally.
   const transferPendingRef = useRef(false);
   const [isReserving, setIsReserving] = useState(false);
+  // Plays the exit animation before the parent unmounts us. Exit (220ms) is
+  // shorter than entry — see .fp-sheet in globals.css.
+  const [closing, setClosing] = useState(false);
+  useEffect(() => { if (open) setClosing(false); }, [open]);
+  const requestClose = useCallback(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { onOpenChange(false); return; }
+    setClosing(true);
+    setTimeout(() => onOpenChange(false), 220);
+  }, [onOpenChange]);
+  // Which way the quantity number rolls: +1 up, -1 down, 0 no animation.
+  const qtyDirRef = useRef(0);
 
   useEffect(() => {
     const code = sessionStorage.getItem(`ref_${eventId}`);
@@ -155,6 +166,12 @@ export default function CheckoutModal({
   const gender = orderGenders[0];
   const setTicketGender = (i: number, g: string) =>
     setGenders(prev => { const next = [...prev]; next[i] = g; return next; });
+  const setAllGenders = (g: string) => setGenders(Array.from({ length: attendeeCount }, () => g));
+  // Running 1-for-1 tally: every ticket needs exactly one pick.
+  const pickedCount = orderGenders.filter(Boolean).length;
+  const maleCount = orderGenders.filter(g => g === "Male").length;
+  const femaleCount = orderGenders.filter(g => g === "Female").length;
+  const allPicked = pickedCount === attendeeCount;
   const isFlexibleGroup = !isLegacyEvent && !!selectedTier?.min_quantity;
   const minQuantity = isFlexibleGroup ? (selectedTier!.min_quantity as number) : 1;
   // A flexible-group order is still one person's own checkout — cap it well
@@ -354,8 +371,8 @@ export default function CheckoutModal({
       {/* Backdrop — hidden when Paystack is active so its own UI shows cleanly */}
       {!paystackActive && (
         <div
-          className="fixed inset-0 z-40 bg-black/60"
-          onClick={() => onOpenChange(false)}
+          className={`${closing ? "closing " : ""}fp-scrim fixed inset-0 z-40 bg-black/60`}
+          onClick={requestClose}
         />
       )}
 
@@ -363,7 +380,7 @@ export default function CheckoutModal({
       {!paystackActive && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
           <div
-            className="relative w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden pointer-events-auto"
+            className={`${closing ? "closing " : ""}fp-sheet relative w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden pointer-events-auto`}
             style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)", maxHeight: "92vh" }}
             onClick={e => e.stopPropagation()}
           >
@@ -376,8 +393,8 @@ export default function CheckoutModal({
               <h2 className="font-display font-bold text-lg pr-4 truncate" style={{ color: "var(--text-primary)" }}>
                 {eventTitle}
               </h2>
-              <button onClick={() => onOpenChange(false)}
-                className="p-2 rounded-xl transition hover:opacity-70 flex-shrink-0"
+              <button onClick={requestClose} aria-label="Close checkout"
+                className="fp-press p-2 rounded-xl hover:opacity-70 flex-shrink-0"
                 style={{ color: "var(--text-muted)" }}>
                 <X size={20} />
               </button>
@@ -400,7 +417,7 @@ export default function CheckoutModal({
                         return (
                           <div key={tier.id}
                             onClick={() => !unavailable && setSelectedTier(tier)}
-                            className="p-3 rounded-xl transition-all flex items-center justify-between"
+                            className="fp-press p-3 rounded-xl flex items-center justify-between"
                             style={{
                               border: isSelected && !unavailable
                                 ? `2px solid var(--brand-indigo)`
@@ -495,16 +512,20 @@ export default function CheckoutModal({
                         </div>
                         <div className="flex items-center gap-3">
                           <button
-                            onClick={() => setQuantity(q => Math.max(minQuantity, q - 1))}
-                            className="h-9 w-9 rounded-full flex items-center justify-center transition hover:opacity-80"
+                            onClick={() => { qtyDirRef.current = -1; setQuantity(q => Math.max(minQuantity, q - 1)); }}
+                            aria-label="Fewer tickets"
+                            className="fp-press h-9 w-9 rounded-full flex items-center justify-center hover:opacity-80"
                             style={{ border: "1px solid var(--card-border)", color: "var(--text-primary)", backgroundColor: "var(--card-bg)" }}>
                             <Minus className="h-4 w-4" />
                           </button>
-                          <span className="text-xl font-bold w-6 text-center" style={{ color: "var(--text-primary)" }}>{quantity}</span>
+                          <span className="text-xl font-bold w-6 text-center overflow-hidden tabular-nums" style={{ color: "var(--text-primary)" }}>
+                            <span key={quantity} className={qtyDirRef.current > 0 ? "fp-roll-up" : qtyDirRef.current < 0 ? "fp-roll-down" : undefined}>{quantity}</span>
+                          </span>
                           <button
-                            onClick={() => setQuantity(q => Math.min(isLegacyEvent ? Math.min(perOrderCap, legacyRemaining ?? perOrderCap) : Math.min(perOrderCap, selectedTier?.remaining ?? perOrderCap), q + 1))}
+                            aria-label="More tickets"
+                            onClick={() => { qtyDirRef.current = 1; setQuantity(q => Math.min(isLegacyEvent ? Math.min(perOrderCap, legacyRemaining ?? perOrderCap) : Math.min(perOrderCap, selectedTier?.remaining ?? perOrderCap), q + 1)); }}
                             disabled={isLegacyEvent ? quantity >= (legacyRemaining ?? perOrderCap) : quantity >= Math.min(perOrderCap, selectedTier?.remaining ?? perOrderCap)}
-                            className="h-9 w-9 rounded-full flex items-center justify-center transition hover:opacity-80 disabled:opacity-40"
+                            className="fp-press h-9 w-9 rounded-full flex items-center justify-center hover:opacity-80 disabled:opacity-40"
                             style={{ border: "1px solid var(--card-border)", color: "var(--text-primary)", backgroundColor: "var(--card-bg)" }}>
                             <Plus className="h-4 w-4" />
                           </button>
@@ -570,20 +591,74 @@ export default function CheckoutModal({
                     {/* Gender - one per ticket, deliberately loud: some events
                         price by gender and door staff check the F/M on each ticket */}
                     <div className="rounded-xl p-4"
-                      style={{ border: "2px solid var(--brand-indigo)", backgroundColor: "rgba(72,0,130,0.05)" }}>
-                      <p className="font-display font-bold text-base" style={{ color: "var(--text-primary)" }}>
-                        {attendeeCount > 1 ? "Gender for each ticket" : "Your gender"}
-                      </p>
-                      <p className="text-xs font-semibold mt-0.5" style={{ color: "var(--brand-indigo)" }}>
-                        Printed in big bold letters on {attendeeCount > 1 ? "each" : "your"} ticket and checked at the door.
-                      </p>
+                      style={{ border: `2px solid ${allPicked ? "#16a34a" : "var(--brand-indigo)"}`, backgroundColor: allPicked ? "rgba(22,163,74,0.05)" : "rgba(72,0,130,0.05)", transition: "border-color 200ms ease, background-color 200ms ease" }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-display font-bold text-base" style={{ color: "var(--text-primary)" }}>
+                            {attendeeCount > 1 ? "Gender for each ticket" : "Your gender"}
+                          </p>
+                          <p className="text-xs font-semibold mt-0.5" style={{ color: "var(--brand-indigo)" }}>
+                            Printed in big bold letters on {attendeeCount > 1 ? "each" : "your"} ticket and checked at the door.
+                          </p>
+                        </div>
+                        {/* Live count: tickets vs picks, always 1 for 1 */}
+                        <span className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-full tabular-nums"
+                          aria-live="polite"
+                          style={allPicked
+                            ? { backgroundColor: "rgba(22,163,74,0.12)", color: "#16a34a" }
+                            : { backgroundColor: "var(--surface-raised)", color: "var(--text-secondary)" }}>
+                          {allPicked ? `✓ ${attendeeCount} of ${attendeeCount}` : `${pickedCount} of ${attendeeCount} picked`}
+                        </span>
+                      </div>
+
+                      {attendeeCount > 1 && (
+                        <>
+                          {/* Tally strip: one slot per ticket, filled with that ticket's letter */}
+                          <div className="mt-3 flex flex-wrap gap-1.5" aria-hidden="true">
+                            {orderGenders.map((g, i) => {
+                              const mark = genderMark(g);
+                              return (
+                                <span key={`${i}-${g}`}
+                                  className={`${mark ? "fp-tally-fill " : ""}h-7 w-7 rounded-lg flex items-center justify-center font-display text-sm leading-none tabular-nums`}
+                                  style={mark
+                                    ? { backgroundColor: mark.color, color: "#fff" }
+                                    : { border: "1.5px dashed var(--card-border)", color: "var(--text-muted)" }}>
+                                  {mark ? mark.letter : i + 1}
+                                </span>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-xs font-semibold tabular-nums" style={{ color: "var(--text-secondary)" }}>
+                              <span style={{ color: "#2F6FE4" }}>{maleCount} M</span>
+                              {" · "}
+                              <span style={{ color: "#E0457B" }}>{femaleCount} F</span>
+                              {!allPicked && <> · {attendeeCount - pickedCount} to pick</>}
+                            </span>
+                            <div className="flex gap-1.5">
+                              {GENDERS.map(opt => (
+                                <button key={opt} type="button" onClick={() => setAllGenders(opt)}
+                                  className="fp-press text-xs font-semibold px-2.5 py-1 rounded-lg hover:opacity-80"
+                                  style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--text-primary)" }}>
+                                  All {opt.toLowerCase()}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
                       <div className="mt-3 space-y-2">
                         {orderGenders.map((g, i) => (
-                          <div key={i} className="flex items-center gap-3">
+                          <div key={i} className="flex items-center gap-3 animate-fade-in">
                             {attendeeCount > 1 && (
                               <span className="text-xs font-bold w-[4.5rem] shrink-0" style={{ color: "var(--text-secondary)" }}>
-                                Ticket {i + 1}
-                                {i === 0 && <span className="block font-medium" style={{ color: "var(--text-muted)" }}>(you)</span>}
+                                {groupSize > 1
+                                  ? <>Group {Math.floor(i / groupSize) + 1}<span className="block font-medium">Ticket {(i % groupSize) + 1}</span></>
+                                  : <>Ticket {i + 1}</>}
+                                {i === 0
+                                  ? <span className="block font-medium" style={{ color: "var(--text-muted)" }}>(you)</span>
+                                  : !g && <span className="block font-medium" style={{ color: "#c98200" }}>pick one</span>}
                               </span>
                             )}
                             <div className="grid grid-cols-2 gap-2 flex-1" role="radiogroup"
@@ -594,7 +669,7 @@ export default function CheckoutModal({
                                 return (
                                   <button key={opt} type="button" role="radio" aria-checked={selected}
                                     onClick={() => setTicketGender(i, opt)}
-                                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition"
+                                    className="fp-press flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm"
                                     style={selected
                                       ? { backgroundColor: mark.color, border: `2px solid ${mark.color}`, color: "#fff" }
                                       : { backgroundColor: "var(--card-bg)", border: "2px solid var(--card-border)", color: "var(--text-primary)" }}>
@@ -659,13 +734,13 @@ export default function CheckoutModal({
                         </button>
                       ) : isFree ? (
                         <button onClick={handleClaimFree} disabled={!canProceed}
-                          className="w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="fp-press w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                           style={{ backgroundColor: "var(--brand-indigo)" }}>
                           Claim Free Ticket
                         </button>
                       ) : (
                         <button onClick={handlePay} disabled={!canProceed || isReserving}
-                          className="w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          className="fp-press w-full text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                           style={{ backgroundColor: "var(--brand-indigo)" }}>
                           {isReserving
                             ? <><Loader2 className="h-5 w-5 animate-spin" /> Reserving your ticket...</>
