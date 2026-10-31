@@ -14,6 +14,7 @@ import Link from "next/link";
 import LocationPicker, { LocationData } from "@/components/LocationPicker";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import BrandLogoPrompt from "@/components/BrandLogoPrompt";
+import FeeCalculator from "@/components/FeeCalculator";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
@@ -373,6 +374,7 @@ export default function CreateEvent() {
                             required />
                         </div>
                       </div>
+                      <FeeCalculator price={tier.price} onPriceChange={p => updateTier(i, "price", p)} />
                       <div className="mt-3">
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
                           Tickets per Purchase (optional)

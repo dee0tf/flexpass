@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { trackCheckoutEvent } from "@/lib/trackCheckoutEvent";
 import { sanitizeEmail } from "@/lib/sanitizeEmail";
 import { genderMark, GENDERS } from "@/lib/gender";
+import { checkoutTotals } from "@/lib/platformFee";
 
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY;
 
@@ -185,10 +186,7 @@ export default function CheckoutModal({
   const effectiveUnitPrice = bulkDiscountActive
     ? Math.round(finalPrice * (1 - (selectedTier!.bulk_discount_percent as number) / 100) * 100) / 100
     : finalPrice;
-  const FEE_PERCENTAGE = 0.05;
-  const subtotal = effectiveUnitPrice * quantity;
-  const fee = Math.round(subtotal * FEE_PERCENTAGE * 100) / 100;
-  const totalAmount = subtotal + fee;
+  const { subtotal, fee, total: totalAmount } = checkoutTotals(effectiveUnitPrice, quantity);
   const isFree = totalAmount === 0 && (isLegacyEvent || !!selectedTier);
 
   const resetForm = () => {

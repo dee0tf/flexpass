@@ -17,6 +17,7 @@ import { hostAmount } from "@/lib/hostAmount";
 import { splitName } from "@/lib/splitName";
 import { use } from "react";
 import { fetchAllRows } from "@/lib/fetchAllRows";
+import FeeCalculator from "@/components/FeeCalculator";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
@@ -756,6 +757,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                       </div>
                     ))}
                   </div>
+                  <FeeCalculator price={tier.price} onPriceChange={p => updateTier(i, "price", p)} />
                   {tier.id && (() => {
                     const groupSize = Number(tier.group_size) || 1;
                     const soldIndividual = soldByTier[tier.id!] ?? 0;
