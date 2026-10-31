@@ -371,6 +371,8 @@ export async function GET(request: Request) {
       fixed.push({ reference, email: customerEmail, amountNaira, ticketIds: result.ticketIds, recoveredVia });
     } else if (result.outcome === 'insert_failed') {
       flagged.push({ reference, email: customerEmail, amountNaira, reason: 'Ticket insert failed — see payment_events' });
+    } else if (result.outcome === 'underpaid') {
+      flagged.push({ reference, email: customerEmail, amountNaira, reason: 'Paid less than the ticket + fee — no ticket issued, review/refund' });
     }
   }
 

@@ -5,6 +5,7 @@ import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
 import { sanitizeEmail } from '@/lib/sanitizeEmail';
 import { ticketGender } from '@/lib/gender';
+import { expectedOrderPricing, UNDERPAY_TOLERANCE_KOBO } from '@/lib/orderPricing';
 
 // Service role — create_tickets_atomic's EXECUTE grant is restricted to
 // service_role only (see supabase/migrations/20260712_create_tickets_atomic.sql),
@@ -33,7 +34,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     ({ reference, eventId, email } = body);
-    const { fullName, gender, genders, quantity, tierId, tierName, price, fee, referralCode } = body;
+    // `price` / `fee` are still sent by older clients but are deliberately
+    // ignored — see expectedOrderPricing below.
+    const { fullName, gender, genders, quantity, tierId, tierName, price, referralCode } = body;
 
     // Strips invisible Unicode (zero-width space/joiners, BOM, soft hyphen) a
     // mobile keyboard can silently insert — it passes the \s-based regex
@@ -132,12 +135,11 @@ export async function POST(request: Request) {
     // checked atomically inside create_tickets_atomic below, under a row
     // lock, so it can't race with a concurrent purchase of the same tier.
     let groupSize = 1;
-    let unitPrice = price;
     let isFlexibleGroup = false;
     if (tierId) {
       const { data: tier } = await supabase
         .from('ticket_tiers')
-        .select('price, group_size, event_id, min_quantity, bulk_discount_qty, bulk_discount_percent')
+        .select('group_size, event_id, min_quantity')
         .eq('id', tierId)
         .single();
 
@@ -163,23 +165,22 @@ export async function POST(request: Request) {
       } else if (quantity > MAX_STANDARD_QUANTITY) {
         return NextResponse.json({ error: 'Invalid quantity' }, { status: 400 });
       }
-
-      // Authoritative per-ticket price — the client-submitted `price` is
-      // never trusted for a tiered purchase, since that's exactly what a
-      // discount claim would otherwise let a buyer forge.
-      unitPrice = tier.min_quantity && tier.bulk_discount_qty && tier.bulk_discount_percent && quantity >= tier.bulk_discount_qty
-        ? Math.round(tier.price * (1 - tier.bulk_discount_percent / 100) * 100) / 100
-        : tier.price;
     }
 
     // --- 4a. Validate that the paid amount matches what we expect ---
-    // Paystack returns amount in kobo; our price is in naira. `unitPrice` is
-    // already the bundle price for group tiers, so this math is unaffected
-    // by group_size — `quantity` here means "groups purchased".
+    // Price AND service fee both come from the DB (expectedOrderPricing) —
+    // the client-submitted `price` and `fee` are never trusted, or a buyer
+    // could edit the request and skip the ticket price or FlexPass's 5%.
+    // Paystack returns amount in kobo. `unitPrice` is already the bundle
+    // price for group tiers, so `quantity` here means "groups purchased".
+    const pricing = await expectedOrderPricing(supabase, { eventId, tierId, quantity });
+    if (!pricing) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+    const { unitPrice, fee, total: orderTotal, expectedKobo } = pricing;
     const paidKobo = paystackData.data.amount;
-    const expectedKobo = Math.round((unitPrice * quantity + fee) * 100);
 
-    if (paidKobo < expectedKobo) {
+    if (paidKobo < expectedKobo - quantity * UNDERPAY_TOLERANCE_KOBO) {
       await logPaymentEvent({
         source: 'verify-payment', eventType: 'amount_mismatch', status: 'error',
         reference, eventId, email, message: `paid=${paidKobo} expected=${expectedKobo}`,
@@ -331,7 +332,7 @@ export async function POST(request: Request) {
         email,
         eventTitle: eventRow?.title || 'your event',
         ticketIds: data.map(t => t.id),
-        amount: price * quantity + fee,
+        amount: orderTotal,
       });
       if (emailError) {
         console.error('[verify-payment] Ticket email failed:', emailError);

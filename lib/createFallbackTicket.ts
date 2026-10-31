@@ -4,6 +4,7 @@ import { logPaymentEvent } from './logPaymentEvent';
 import { createTicketsAtomic } from './createTicketsAtomic';
 import { sanitizeEmail } from './sanitizeEmail';
 import { ticketGender } from '@/lib/gender';
+import { expectedOrderPricing, UNDERPAY_TOLERANCE_KOBO } from './orderPricing';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -34,7 +35,7 @@ export async function createFallbackTicket({
   // payload). Recorded separately from our 5% markup so admin stats can
   // compute FlexPass's true net revenue, not just the gross fee charged.
   feesKobo?: number;
-}): Promise<{ outcome: 'already_exists' | 'created' | 'insert_failed' | 'no_event_id'; ticketIds?: string[] }> {
+}): Promise<{ outcome: 'already_exists' | 'created' | 'insert_failed' | 'no_event_id' | 'underpaid'; ticketIds?: string[] }> {
   // Paystack's customer.email is normally clean, but sanitize it anyway —
   // this is the value that ends up stored on the ticket and used as the
   // Resend `to` address, so it's the last line of defense against an
@@ -104,6 +105,23 @@ export async function createFallbackTicket({
     groupSize = tier?.group_size || 1;
   }
   const attendeeCount = quantity * groupSize;
+
+  // This path builds tickets from Paystack metadata alone, so without this
+  // check a buyer could pay ₦100 for a ₦10,000 ticket and just let the
+  // webhook issue it. Price + fee come from the DB, same as verify-payment.
+  const pricing = await expectedOrderPricing(supabase, {
+    eventId: metadata.event_id, tierId: metadata.tier_id || null, quantity,
+  });
+  if (!pricing || amountKobo < pricing.expectedKobo - quantity * UNDERPAY_TOLERANCE_KOBO) {
+    await logPaymentEvent({
+      source, eventType: 'amount_mismatch', status: 'error',
+      reference, eventId: metadata.event_id, email: customerEmail || null,
+      message: pricing
+        ? `paid=${amountKobo} expected=${pricing.expectedKobo} — no ticket issued`
+        : 'Event/tier not found — no ticket issued',
+    });
+    return { outcome: 'underpaid' };
+  }
 
   const perTicketAmount = (amountKobo / 100) / attendeeCount;
   const ticketsToCreate = Array.from({ length: attendeeCount }, (_, i) => ({
