@@ -127,14 +127,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ valid: false, code: 'not_valid', reason: `Ticket is ${ticket.status} — cannot admit` }, { status: 400 });
     }
 
-    // Mark as checked in (service-role bypasses RLS — always succeeds)
+    // Mark as checked in — but only if it's STILL unscanned at write time.
+    // The read above and this write aren't atomic, so two door phones
+    // scanning the same QR (e.g. a shared screenshot) at the same moment
+    // would otherwise both see 'valid' and both admit. The conditional
+    // update lets exactly one of them win.
     const now = new Date().toISOString();
-    const { error: updateError } = await db
+    const { data: claimed, error: updateError } = await db
       .from('tickets')
       .update({ checked_in_at: now, status: 'scanned' })
-      .eq('id', ticket.id);
+      .eq('id', ticket.id)
+      .eq('status', 'valid')
+      .is('checked_in_at', null)
+      .select('id');
 
     if (updateError) throw updateError;
+
+    if (!claimed || claimed.length === 0) {
+      const { data: latest } = await db.from('tickets').select('checked_in_at').eq('id', ticket.id).single();
+      return NextResponse.json({
+        valid: false,
+        code: 'already_checked_in',
+        reason: 'Already scanned — this ticket was used before',
+        checkedInAt: latest?.checked_in_at ?? null,
+        holder: ticket.user_name,
+        email: ticket.user_email,
+        gender: ticket.user_gender,
+        tier: ticket.tier_name || 'Standard',
+        giveaway: ticket.is_giveaway,
+      }, { status: 409 });
+    }
 
     return NextResponse.json({
       valid: true,

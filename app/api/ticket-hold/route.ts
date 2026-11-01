@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { sanitizeEmail } from '@/lib/sanitizeEmail';
+import { allowRequest, clientIp } from '@/lib/rateLimit';
 
 // Service role — reserve_tickets / release_ticket_hold are service_role-only
 // (see supabase/migrations/20261001_ticket_holds.sql).
@@ -16,6 +17,8 @@ const HOLD_TTL_SECONDS = 600;
 // Must match verify-payment / CheckoutModal.
 const MAX_FLEXIBLE_GROUP_QUANTITY = 50;
 const MAX_STANDARD_QUANTITY = 10;
+// Per IP, per event. A real buyer reopens checkout a handful of times at most.
+const HOLD_RATE_LIMIT = { limit: 20, windowSeconds: 600 };
 
 /**
  * Reserves tickets for a paid checkout BEFORE Paystack opens, so the first
@@ -39,6 +42,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
     }
 
+    // One-hold-per-email is trivially dodged with fake emails, so cap holds
+    // per IP too — otherwise a script could keep every remaining ticket
+    // permanently "being paid for". Generous because campus Wi-Fi shares IPs.
+    if (!(await allowRequest(supabase, `ticket-hold:${eventId}:${clientIp(request)}`, HOLD_RATE_LIMIT))) {
+      return NextResponse.json(
+        { error: 'Too many checkout attempts from your network — please wait a few minutes and try again.' },
+        { status: 429 }
+      );
+    }
+
     const { data: eventRow } = await supabase
       .from('events')
       .select('sales_end_date')
@@ -56,10 +69,12 @@ export async function POST(request: Request) {
     if (tierId) {
       const { data: tier } = await supabase
         .from('ticket_tiers')
-        .select('event_id, group_size, min_quantity, ends_at')
+        .select('event_id, group_size, min_quantity, ends_at, is_hidden')
         .eq('id', tierId)
         .single();
-      if (!tier || tier.event_id !== eventId) {
+      // Hidden tiers are host-issued giveaways (/api/issue-ticket) — never
+      // shown publicly, so never sellable through checkout either.
+      if (!tier || tier.event_id !== eventId || tier.is_hidden) {
         return NextResponse.json({ error: 'Invalid ticket tier for this event' }, { status: 400 });
       }
       if (tier.ends_at && new Date(tier.ends_at) < new Date()) {

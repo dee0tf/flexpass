@@ -66,6 +66,7 @@ export async function POST(request: Request) {
         amountKobo: amount,
         customerEmail: customer.email,
         feesKobo: typeof fees === 'number' ? fees : undefined,
+        paidAt: event.data.paid_at,
       });
     }
 

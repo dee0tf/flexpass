@@ -5,6 +5,7 @@ import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
 import { sanitizeEmail } from '@/lib/sanitizeEmail';
 import { ticketGender } from '@/lib/gender';
+import { allowRequest, clientIp } from '@/lib/rateLimit';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +14,8 @@ const supabase = createClient(
 
 // Must match components/CheckoutModal.tsx / app/api/verify-payment/route.ts.
 const MAX_FLEXIBLE_GROUP_QUANTITY = 50;
+// Per IP, per event.
+const CLAIM_RATE_LIMIT = { limit: 15, windowSeconds: 600 };
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -40,6 +43,16 @@ export async function POST(request: Request) {
     }
     if (typeof quantity !== 'number' || quantity < 1 || quantity > MAX_FLEXIBLE_GROUP_QUANTITY) {
       return NextResponse.json({ error: 'Invalid quantity' }, { status: 400 });
+    }
+
+    // The per-email cap below is dodged with fake emails, so cap claims per
+    // IP too — otherwise one script can drain a free event. Generous because
+    // a whole hostel on campus Wi-Fi can share one IP.
+    if (!(await allowRequest(supabase, `claim-free:${eventId}:${clientIp(request)}`, CLAIM_RATE_LIMIT))) {
+      return NextResponse.json(
+        { error: 'Too many claims from your network — please wait a few minutes and try again.' },
+        { status: 429 }
+      );
     }
 
     // --- 2. Fetch the event once — used for price (legacy events), the
@@ -72,12 +85,19 @@ export async function POST(request: Request) {
     if (tierId) {
       const { data: tier, error: tierErr } = await supabase
         .from('ticket_tiers')
-        .select('price, event_id, group_size, min_quantity')
+        .select('price, event_id, group_size, min_quantity, is_hidden, ends_at')
         .eq('id', tierId)
         .single();
 
-      if (tierErr || !tier) {
+      // Hidden tiers are host-issued giveaways (/api/issue-ticket only) —
+      // they're usually ₦0, so without this anyone who reads a tier ID off
+      // the public API could claim the host's comps for themselves.
+      if (tierErr || !tier || tier.is_hidden) {
         return NextResponse.json({ error: 'Ticket tier not found' }, { status: 404 });
+      }
+
+      if (tier.ends_at && new Date(tier.ends_at) < new Date()) {
+        return NextResponse.json({ error: 'Sales for this ticket type have ended' }, { status: 409 });
       }
 
       // Confirm tier actually belongs to the requested event

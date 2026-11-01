@@ -173,9 +173,18 @@ export async function POST(request: Request) {
     // could edit the request and skip the ticket price or FlexPass's 5%.
     // Paystack returns amount in kobo. `unitPrice` is already the bundle
     // price for group tiers, so `quantity` here means "groups purchased".
-    const pricing = await expectedOrderPricing(supabase, { eventId, tierId, quantity });
+    const pricing = await expectedOrderPricing(supabase, {
+      eventId, tierId, quantity, paidAt: paystackData.data.paid_at,
+    });
     if (!pricing) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+    if (pricing.salesEnded) {
+      await logPaymentEvent({
+        source: 'verify-payment', eventType: 'tier_sales_ended', status: 'error',
+        reference, eventId, email, message: `tierId=${tierId} paid_at=${paystackData.data.paid_at} — no ticket issued`,
+      });
+      return NextResponse.json({ error: 'Sales for this ticket type had ended' }, { status: 409 });
     }
     const { unitPrice, fee, total: orderTotal, expectedKobo } = pricing;
     const paidKobo = paystackData.data.amount;

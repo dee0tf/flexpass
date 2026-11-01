@@ -365,6 +365,7 @@ export async function GET(request: Request) {
       amountKobo: txn.amount,
       customerEmail,
       feesKobo: typeof txn.fees === 'number' ? txn.fees : undefined,
+      paidAt: txn.paid_at || txn.created_at,
     });
 
     if (result.outcome === 'created' && result.ticketIds) {
@@ -373,6 +374,8 @@ export async function GET(request: Request) {
       flagged.push({ reference, email: customerEmail, amountNaira, reason: 'Ticket insert failed — see payment_events' });
     } else if (result.outcome === 'underpaid') {
       flagged.push({ reference, email: customerEmail, amountNaira, reason: 'Paid less than the ticket + fee — no ticket issued, review/refund' });
+    } else if (result.outcome === 'sales_ended') {
+      flagged.push({ reference, email: customerEmail, amountNaira, reason: 'Paid after this ticket type stopped selling — no ticket issued, review/refund' });
     }
   }
 
