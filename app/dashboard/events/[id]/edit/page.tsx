@@ -17,6 +17,7 @@ import { hostAmount } from "@/lib/hostAmount";
 import { splitName } from "@/lib/splitName";
 import { use } from "react";
 import { fetchAllRows } from "@/lib/fetchAllRows";
+import { GENDERS, genderMark } from "@/lib/gender";
 import TierCard, { TierPresetRow, blankTier, publicMinPrice, type TierFields } from "@/components/TierCard";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -44,20 +45,41 @@ const toFormTier = (t: any): TierFormData => ({
 });
 
 // ── Issue Sponsored Ticket panel ─────────────────────────────────────
+type IssuedTicket = { id: string; user_name: string | null; user_email: string; user_gender: string | null; created_at: string };
+type Gender = (typeof GENDERS)[number];
+// Must match the quantity cap in app/api/issue-ticket/route.ts.
+const MAX_ISSUE_QTY = 10;
+
 function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: string; tierId: string; quantityAvailable: number }) {
   const [expanded, setExpanded] = useState(false);
-  const [issuedList, setIssuedList] = useState<Array<{ id: string; user_name: string | null; user_email: string; created_at: string }>>([]);
+  const [issuedList, setIssuedList] = useState<IssuedTicket[]>([]);
   const [issuedLoaded, setIssuedLoaded] = useState(false);
   const [winnerName, setWinnerName] = useState("");
   const [winnerEmail, setWinnerEmail] = useState("");
   const [quantity, setQuantity] = useState("1");
+  // One pick per ticket, so a guest bringing a +1 of the other gender is
+  // still counted correctly.
+  const [genders, setGenders] = useState<(Gender | null)[]>([null]);
   const [issuing, setIssuing] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const clampQty = (v: string) => Math.min(MAX_ISSUE_QTY, Math.max(1, Math.floor(Number(v)) || 1));
+  const qty = clampQty(quantity);
+  const changeQuantity = (value: string) => {
+    setQuantity(value);
+    const n = clampQty(value);
+    setGenders(prev => Array.from({ length: n }, (_, i) => prev[i] ?? null));
+  };
+  const setGenderAt = (i: number, g: Gender) => setGenders(prev => prev.map((x, idx) => (idx === i ? g : x)));
+
+  const maleCount = issuedList.filter(t => t.user_gender === "Male").length;
+  const femaleCount = issuedList.filter(t => t.user_gender === "Female").length;
+  const unsetCount = issuedList.length - maleCount - femaleCount;
 
   const loadIssued = async () => {
     const { data } = await supabase
       .from("tickets")
-      .select("id, user_name, user_email, created_at")
+      .select("id, user_name, user_email, user_gender, created_at")
       .eq("tier_id", tierId)
       .eq("is_giveaway", true)
       .order("created_at", { ascending: false });
@@ -72,6 +94,11 @@ function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: str
 
   const handleIssue = async () => {
     if (!winnerEmail.trim() || !winnerName.trim()) { setMessage({ text: "Name and email are required.", isError: true }); return; }
+    const picked = genders.slice(0, qty);
+    if (picked.some(g => !g)) {
+      setMessage({ text: qty > 1 ? "Pick a gender for every ticket." : "Pick the guest's gender.", isError: true });
+      return;
+    }
     setIssuing(true);
     setMessage(null);
     try {
@@ -81,16 +108,19 @@ function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: str
       const res = await fetch("/api/issue-ticket", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ eventId, tierId, email: winnerEmail.trim(), fullName: winnerName.trim(), quantity: Number(quantity) || 1 }),
+        body: JSON.stringify({
+          eventId, tierId, email: winnerEmail.trim(), fullName: winnerName.trim(),
+          quantity: qty, genders: picked, gender: picked[0],
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to issue ticket");
 
       setMessage({ text: `Ticket issued to ${winnerEmail}`, isError: false });
-      setWinnerName(""); setWinnerEmail(""); setQuantity("1");
+      setWinnerName(""); setWinnerEmail(""); setQuantity("1"); setGenders([null]);
       loadIssued();
-    } catch (e: any) {
-      setMessage({ text: e.message, isError: true });
+    } catch (e: unknown) {
+      setMessage({ text: e instanceof Error ? e.message : String(e), isError: true });
     } finally {
       setIssuing(false);
     }
@@ -107,7 +137,10 @@ function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: str
     <div className="mt-3 rounded-xl p-3" style={{ backgroundColor: "var(--card-bg)", border: "1px dashed var(--brand-indigo)" }}>
       <button type="button" onClick={handleExpand}
         className="w-full flex items-center justify-between text-xs font-semibold" style={{ color: "var(--brand-indigo)" }}>
-        <span>🎁 Issue Sponsored Ticket{issuedLoaded ? ` — ${issuedList.length}/${quantityAvailable} issued` : ""}</span>
+        <span>
+          🎁 Issue Sponsored Ticket
+          {issuedLoaded ? ` — ${issuedList.length}/${quantityAvailable} issued · ${maleCount} M · ${femaleCount} F` : ""}
+        </span>
         <span>{expanded ? "▲" : "▼"}</span>
       </button>
       {expanded && (
@@ -117,8 +150,32 @@ function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: str
               onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
             <input type="email" placeholder="Guest email" value={winnerEmail} onChange={e => setWinnerEmail(e.target.value)}
               onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
-            <input type="number" placeholder="Qty" min="1" value={quantity} onChange={e => setQuantity(e.target.value)}
+            <input type="number" placeholder="Qty" min="1" max={MAX_ISSUE_QTY} value={quantity} onChange={e => changeQuantity(e.target.value)}
               onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
+          </div>
+          <div className="space-y-1.5">
+            {genders.slice(0, qty).map((g, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs w-16 shrink-0" style={{ color: "var(--text-muted)" }}>
+                  {qty > 1 ? `Ticket ${i + 1}` : "Gender"}
+                </span>
+                {GENDERS.map(option => {
+                  const mark = genderMark(option)!;
+                  const active = g === option;
+                  return (
+                    <button key={option} type="button" onClick={() => setGenderAt(i, option)}
+                      className="px-3 py-1 rounded-lg text-xs font-semibold transition"
+                      style={{
+                        backgroundColor: active ? mark.color : "var(--input-bg)",
+                        color: active ? "#fff" : "var(--text-secondary)",
+                        border: `1px solid ${active ? mark.color : "var(--input-border)"}`,
+                      }}>
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
           {message && (
             <p className="text-xs font-medium" style={{ color: message.isError ? "#ef4444" : "#16a34a" }}>{message.text}</p>
@@ -130,12 +187,18 @@ function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: str
           </button>
           {issuedList.length > 0 && (
             <div className="pt-2 space-y-1 max-h-40 overflow-y-auto">
-              <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Issued so far:</p>
-              {issuedList.map(t => (
-                <p key={t.id} className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  {t.user_name || "—"} ({t.user_email}) — {new Date(t.created_at).toLocaleDateString()}
-                </p>
-              ))}
+              <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                Issued so far: {maleCount} male · {femaleCount} female{unsetCount > 0 ? ` · ${unsetCount} not set` : ""}
+              </p>
+              {issuedList.map(t => {
+                const mark = genderMark(t.user_gender);
+                return (
+                  <p key={t.id} className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                    {mark && <span className="font-bold mr-1" style={{ color: mark.color }}>{mark.letter}</span>}
+                    {t.user_name || "—"} ({t.user_email}) — {new Date(t.created_at).toLocaleDateString()}
+                  </p>
+                );
+              })}
             </div>
           )}
         </div>

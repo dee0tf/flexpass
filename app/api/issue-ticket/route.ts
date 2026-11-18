@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendTicketEmail } from '@/lib/sendTicketEmail';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { createTicketsAtomic } from '@/lib/createTicketsAtomic';
+import { ticketGender } from '@/lib/gender';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { eventId, tierId, email, fullName, gender } = body;
+    const { eventId, tierId, email, fullName, gender, genders } = body;
     const quantity = body.quantity && Number(body.quantity) > 0 ? Number(body.quantity) : 1;
 
     // --- 1. Input validation ---
@@ -84,7 +85,9 @@ export async function POST(request: Request) {
       event_id: eventId,
       user_email: email,
       user_name: fullName,
-      user_gender: gender || null,
+      // Same rule as checkout: per-ticket pick, else the single fallback;
+      // anything other than Male/Female is stored as null.
+      user_gender: ticketGender(genders, gender, i),
       status: 'valid',
       is_giveaway: true,
       purchase_reference: attendeeCount > 1 ? `${baseRef}-${i + 1}` : baseRef,
