@@ -48,3 +48,22 @@ next-env.d.ts
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# local-only files — kept on disk, never committed
+# Claude Code local settings/worktrees
+/.claude/
+# performance audit dumps
+/lighthouse_*.json
+/psi_*.json
+# scraped page/response dumps
+/homepage_raw.html
+/response_body.html
+/response_body.txt
+# data exports (contain subscriber emails)
+/newsletter_subscribers.csv
+*.csv
+# design explorations and video drafts
+/design/
+/video-scripts/
+# unused asset
+/public/tawk-icon-small.png
