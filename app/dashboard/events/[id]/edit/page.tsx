@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
-  Image as ImageIcon, Type, Clock, User, Plus, Trash2, Download, Ticket,
+  Image as ImageIcon, Type, Clock, User, Trash2, Download, Ticket,
   CheckCircle2, AlertTriangle, AlertCircle, Tag, Mail, EyeOff, Copy, Check, KeyRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -17,16 +17,33 @@ import { hostAmount } from "@/lib/hostAmount";
 import { splitName } from "@/lib/splitName";
 import { use } from "react";
 import { fetchAllRows } from "@/lib/fetchAllRows";
-import FeeCalculator from "@/components/FeeCalculator";
+import TierCard, { TierPresetRow, blankTier, publicMinPrice, type TierFields } from "@/components/TierCard";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
-interface TierFormData {
-  id?: string; name: string; price: string; quantity: string; ends_at?: string; isNew?: boolean; group_size: string; is_hidden: boolean; description: string;
-  is_flexible_group: boolean; min_quantity: string; bulk_discount_qty: string; bulk_discount_percent: string;
+// uid is client-only — a stable React key so collapsing/removing one tier
+// card never shifts another card's open/closed state.
+interface TierFormData extends TierFields {
+  id?: string; isNew?: boolean; uid: string;
 }
 
-// ── Issue Giveaway Ticket panel ─────────────────────────────────────
+const newTierRow = (t: TierFields): TierFormData => ({ ...t, isNew: true, uid: crypto.randomUUID() });
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const toFormTier = (t: any): TierFormData => ({
+  id: t.id, uid: t.id, name: t.name, price: t.price.toString(),
+  quantity: t.quantity_available.toString(),
+  ends_at: t.ends_at ? new Date(t.ends_at).toISOString().slice(0, 16) : "",
+  group_size: (t.group_size ?? 1).toString(),
+  is_hidden: t.is_hidden ?? false,
+  description: t.description || "",
+  is_flexible_group: !!t.min_quantity,
+  min_quantity: (t.min_quantity ?? "10").toString(),
+  bulk_discount_qty: (t.bulk_discount_qty ?? t.min_quantity ?? "10").toString(),
+  bulk_discount_percent: (t.bulk_discount_percent ?? "").toString(),
+});
+
+// ── Issue Sponsored Ticket panel ─────────────────────────────────────
 function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: string; tierId: string; quantityAvailable: number }) {
   const [expanded, setExpanded] = useState(false);
   const [issuedList, setIssuedList] = useState<Array<{ id: string; user_name: string | null; user_email: string; created_at: string }>>([]);
@@ -90,15 +107,15 @@ function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: str
     <div className="mt-3 rounded-xl p-3" style={{ backgroundColor: "var(--card-bg)", border: "1px dashed var(--brand-indigo)" }}>
       <button type="button" onClick={handleExpand}
         className="w-full flex items-center justify-between text-xs font-semibold" style={{ color: "var(--brand-indigo)" }}>
-        <span>🎁 Issue Giveaway Ticket{issuedLoaded ? ` — ${issuedList.length}/${quantityAvailable} issued` : ""}</span>
+        <span>🎁 Issue Sponsored Ticket{issuedLoaded ? ` — ${issuedList.length}/${quantityAvailable} issued` : ""}</span>
         <span>{expanded ? "▲" : "▼"}</span>
       </button>
       {expanded && (
         <div className="mt-3 space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input type="text" placeholder="Winner name" value={winnerName} onChange={e => setWinnerName(e.target.value)}
+            <input type="text" placeholder="Guest name" value={winnerName} onChange={e => setWinnerName(e.target.value)}
               onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
-            <input type="email" placeholder="Winner email" value={winnerEmail} onChange={e => setWinnerEmail(e.target.value)}
+            <input type="email" placeholder="Guest email" value={winnerEmail} onChange={e => setWinnerEmail(e.target.value)}
               onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
             <input type="number" placeholder="Qty" min="1" value={quantity} onChange={e => setQuantity(e.target.value)}
               onKeyDown={onEnter} className="p-2 rounded-lg text-sm" style={inputStyle} />
@@ -291,6 +308,33 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const [soldByTier, setSoldByTier] = useState<Record<string, number>>({});
 
 
+  // Loads tiers (with their DB ids) and per-tier sold counts. Also re-run
+  // after a save, so a just-added giveaway tier gets the id its Issue
+  // Ticket panel needs without the host leaving and coming back.
+  const loadTiers = useCallback(async (): Promise<number> => {
+    const { data: existingTiers } = await supabase
+      .from("ticket_tiers").select("*").eq("event_id", id).order("price", { ascending: true });
+
+    setTiers((existingTiers || []).map(toFormTier));
+
+    // Sold count per tier, so the host can see how many are left without
+    // leaving this page. count-only queries, not row fetches, so this
+    // stays accurate even for a tier sold past Supabase's default row cap.
+    const soldMap: Record<string, number> = {};
+    await Promise.all(
+      (existingTiers || []).map(async (t: { id: string }) => {
+        const { count } = await supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("tier_id", t.id)
+          .in("status", ["valid", "scanned"]);
+        soldMap[t.id] = count || 0;
+      })
+    );
+    setSoldByTier(soldMap);
+    return existingTiers?.length ?? 0;
+  }, [id]);
+
   useEffect(() => {
     async function loadData() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -300,42 +344,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       if (error || !event) { router.push("/dashboard"); return; }
       if (event.user_id !== session.user.id) { router.push("/dashboard"); return; }
 
-      const { data: existingTiers } = await supabase
-        .from("ticket_tiers").select("*").eq("event_id", id).order("price", { ascending: true });
-
-      setTiers(
-        (existingTiers || []).map((t: any) => ({
-          id: t.id, name: t.name, price: t.price.toString(),
-          quantity: t.quantity_available.toString(),
-          ends_at: t.ends_at ? new Date(t.ends_at).toISOString().slice(0, 16) : "",
-          group_size: (t.group_size ?? 1).toString(),
-          is_hidden: t.is_hidden ?? false,
-          description: t.description || "",
-          is_flexible_group: !!t.min_quantity,
-          min_quantity: (t.min_quantity ?? "10").toString(),
-          bulk_discount_qty: (t.bulk_discount_qty ?? t.min_quantity ?? "10").toString(),
-          bulk_discount_percent: (t.bulk_discount_percent ?? "").toString(),
-        }))
-      );
-      if (!existingTiers || existingTiers.length === 0) {
-        setTiers([{ name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "", ends_at: "", isNew: true, group_size: "1", is_hidden: false, description: "", is_flexible_group: false, min_quantity: "10", bulk_discount_qty: "10", bulk_discount_percent: "" }]);
+      const loadedCount = await loadTiers();
+      if (loadedCount === 0) {
+        setTiers([newTierRow({ ...blankTier(), name: "Regular", price: event.price?.toString() || "", quantity: event.total_tickets?.toString() || "" })]);
       }
-
-      // Sold count per tier, so the host can see how many are left without
-      // leaving this page. count-only queries, not row fetches, so this
-      // stays accurate even for a tier sold past Supabase's default row cap.
-      const soldMap: Record<string, number> = {};
-      await Promise.all(
-        (existingTiers || []).map(async (t: any) => {
-          const { count } = await supabase
-            .from("tickets")
-            .select("id", { count: "exact", head: true })
-            .eq("tier_id", t.id)
-            .in("status", ["valid", "scanned"]);
-          soldMap[t.id] = count || 0;
-        })
-      );
-      setSoldByTier(soldMap);
 
       // Detect if category is custom (not in CATEGORIES standard list)
       const stdCats = CATEGORIES.filter(c => c !== "Others");
@@ -379,24 +391,26 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
     }
     loadData();
-  }, [id, router]);
+  }, [id, router, loadTiers]);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", isNew: true, group_size: "1", is_hidden: false, description: "", is_flexible_group: false, min_quantity: "10", bulk_discount_qty: "10", bulk_discount_percent: "" }]);
+  const addTier = (t: TierFields) => setTiers(prev => [...prev, newTierRow(t)]);
   const removeTier = (i: number) => {
     if (tiers.length <= 1) return;
     const removed = tiers[i];
     if (removed.id) setRemovedTierIds(prev => [...prev, removed.id!]);
     setTiers(tiers.filter((_, idx) => idx !== i));
   };
-  const updateTier = (i: number, field: Exclude<keyof TierFormData, "is_hidden" | "is_flexible_group">, value: string) => {
-    const u = [...tiers]; u[i] = { ...u[i], [field]: value }; setTiers(u);
-  };
-  const toggleTierHidden = (i: number) => {
-    const u = [...tiers]; u[i] = { ...u[i], is_hidden: !u[i].is_hidden }; setTiers(u);
-  };
-  const toggleTierFlexibleGroup = (i: number) => {
-    const u = [...tiers]; u[i] = { ...u[i], is_flexible_group: !u[i].is_flexible_group }; setTiers(u);
-  };
+  const updateTier = (i: number, patch: Partial<TierFields>) =>
+    setTiers(prev => prev.map((t, idx) => idx === i ? { ...t, ...patch } : t));
+  // The copy is a brand-new row: no id, so save inserts it instead of
+  // overwriting the original.
+  const duplicateTier = (i: number) => setTiers(prev => {
+    const { id: _id, uid: _uid, isNew: _isNew, ...fields } = prev[i];
+    void _id; void _uid; void _isNew;
+    const n = [...prev];
+    n.splice(i + 1, 0, newTierRow({ ...fields, name: `${fields.name} (copy)` }));
+    return n;
+  });
 
   // Generates (or regenerates) the door-staff access code for this event.
   // Regenerating overwrites the stored value immediately, which is also how
@@ -458,7 +472,11 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (tiers.some(t => !t.name || !t.price || !t.quantity)) return;
+    const incomplete = tiers.find(t => !t.name || !t.price || !t.quantity);
+    if (incomplete) {
+      showToast(`Finish the "${incomplete.name || "Untitled"}" ticket class — it needs a name, price and quantity.`, "error");
+      return;
+    }
     for (const t of tiers) {
       if (!t.is_flexible_group) continue;
       const minQty = Number(t.min_quantity);
@@ -479,7 +497,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     }
     setIsSaving(true);
     try {
-      const minPrice = Math.min(...tiers.map(t => Number(t.price)));
+      const minPrice = publicMinPrice(tiers);
       const totalTickets = tiers.reduce((acc, t) => acc + Number(t.quantity) * (Number(t.group_size) || 1), 0);
       const finalCategory = formData.category === "Others" && formData.custom_category
         ? formData.custom_category : formData.category;
@@ -553,7 +571,16 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
         setRemovedTierIds([]);
       }
 
-      setShowSaved(true);
+      // A sponsored tier is only useful once it has an id to issue against —
+      // so instead of the "saved" modal (which sends the host back to the
+      // dashboard), stay here and reload so its Issue Ticket panel appears.
+      const addedSponsored = tiers.some(t => !t.id && t.is_hidden);
+      await loadTiers();
+      if (addedSponsored) {
+        showToast("Saved. Your sponsored tier is ready — use “Issue Sponsored Ticket” on it below to send tickets to your guests.", "success");
+      } else {
+        setShowSaved(true);
+      }
     } catch (error: unknown) {
       // Supabase errors are plain objects with a `message` property, not
       // real Error instances — `instanceof Error` misses them entirely and
@@ -732,155 +759,48 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
                 <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
                   <DollarSign className="h-5 w-5" style={{ color: "var(--brand-amber)" }} /> Ticket Classes
                 </h2>
-                <button type="button" onClick={addTier}
-                  className="text-sm font-semibold flex items-center gap-1 hover:opacity-80"
-                  style={{ color: "var(--brand-indigo)" }}>
-                  <Plus className="h-4 w-4" /> Add Ticket Class
-                </button>
               </div>
-              {tiers.map((tier, i) => (
-                <div key={i} className="p-4 rounded-xl" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {([
-                      { label: "Class Name", field: "name" as const, type: "text", placeholder: "e.g. VIP", colSpan: "col-span-2 sm:col-span-1" },
-                      { label: "Price (₦)", field: "price" as const, type: "number", placeholder: "0", colSpan: "" },
-                      { label: "Quantity", field: "quantity" as const, type: "number", placeholder: "100", colSpan: "" },
-                    ] as const).map(f => (
-                      <div key={f.field} className={f.colSpan}>
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>{f.label}</label>
-                        <input type={f.type} placeholder={f.placeholder} value={tier[f.field]}
-                          onChange={e => updateTier(i, f.field, e.target.value)}
-                          min={f.type === "number" ? "0" : undefined}
-                          className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                          style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                          required />
-                      </div>
-                    ))}
-                  </div>
-                  <FeeCalculator price={tier.price} onPriceChange={p => updateTier(i, "price", p)} />
-                  {tier.id && (() => {
-                    const groupSize = Number(tier.group_size) || 1;
-                    const soldIndividual = soldByTier[tier.id!] ?? 0;
-                    const groupsSold = soldIndividual / groupSize;
-                    const quantityAvailable = Number(tier.quantity) || 0;
-                    const remaining = Math.max(0, quantityAvailable - groupsSold);
-                    const soldOut = remaining <= 0;
-                    return (
-                      <div className="mt-2 flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                        <Ticket className="h-3.5 w-3.5" />
-                        <span>{groupsSold} sold</span>
-                        <span>&middot;</span>
-                        <span style={{ color: soldOut ? "#ef4444" : "var(--text-secondary)", fontWeight: 700 }}>
-                          {soldOut ? "Sold out" : `${remaining} left`}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                  <div className="mt-3">
-                    <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
-                      Tickets per Purchase (optional)
-                    </label>
-                    <input type="number" placeholder="1" value={tier.group_size} min="1"
-                      onChange={e => updateTier(i, "group_size", e.target.value)}
-                      className="w-full sm:w-1/3 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                      style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                      Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
-                    </p>
-                  </div>
-                  <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--card-border)" }}>
-                    <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-                      <input type="checkbox" checked={tier.is_flexible_group} onChange={() => toggleTierFlexibleGroup(i)} />
-                      Family / group ticket (flexible headcount)
-                    </label>
-                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                      For groups that don&apos;t fit a fixed bundle — the buyer picks their own headcount (at least the minimum below) instead of a preset table size, priced per ticket, with an optional bulk discount.
-                    </p>
-                    {tier.is_flexible_group && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                        <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Minimum Tickets</label>
-                          <input type="number" placeholder="10" value={tier.min_quantity} min="1" max="50"
-                            onChange={e => updateTier(i, "min_quantity", e.target.value)}
-                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                            style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+              <div className="space-y-3">
+                {tiers.map((tier, i) => {
+                  const groupSize = Number(tier.group_size) || 1;
+                  const groupsSold = tier.id ? (soldByTier[tier.id] ?? 0) / groupSize : 0;
+                  const remaining = Math.max(0, (Number(tier.quantity) || 0) - groupsSold);
+                  return (
+                    <TierCard key={tier.uid} tier={tier}
+                      // Sponsored tiers stay open: their Issue Ticket panel
+                      // lives in the expanded card only.
+                      defaultExpanded={!tier.id || tier.is_hidden}
+                      onChange={patch => updateTier(i, patch)}
+                      onDuplicate={() => duplicateTier(i)}
+                      onRemove={tiers.length > 1 ? () => removeTier(i) : undefined}
+                      sponsoredNote={tier.id ? "Hidden from buyers. Issue tickets to your guests below — they get the ticket at its full value without paying." : "Hidden from buyers. Save the event, then issue tickets to your guests here."}
+                      status={tier.id ? (
+                        <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                          <Ticket className="h-3.5 w-3.5" />
+                          <span>{groupsSold} sold</span>
+                          <span>&middot;</span>
+                          <span style={{ color: remaining <= 0 ? "#ef4444" : "var(--text-secondary)", fontWeight: 700 }}>
+                            {remaining <= 0 ? "Sold out" : `${remaining} left`}
+                          </span>
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount From (qty)</label>
-                          <input type="number" placeholder="10" value={tier.bulk_discount_qty} min="1" max="50"
-                            onChange={e => updateTier(i, "bulk_discount_qty", e.target.value)}
-                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                            style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount (%)</label>
-                          <input type="number" placeholder="10" value={tier.bulk_discount_percent} min="0" max="100"
-                            onChange={e => updateTier(i, "bulk_discount_percent", e.target.value)}
-                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                            style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                        </div>
-                      </div>
-                    )}
-                    {tier.is_flexible_group && (
-                      <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                        Buyers must select at least {tier.min_quantity || "10"} tickets (up to 50). {tier.bulk_discount_percent ? `At ${tier.bulk_discount_qty || tier.min_quantity || "10"}+ tickets, each ticket is ${tier.bulk_discount_percent}% off.` : "Leave the discount fields blank to charge the flat price regardless of headcount."}
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-3">
-                    <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
-                      Description (optional)
-                    </label>
-                    <textarea placeholder="e.g. Table of 5 — includes 2 bottles of champagne, reserved seating near the stage" value={tier.description} rows={2}
-                      onChange={e => updateTier(i, "description", e.target.value)}
-                      className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition resize-none"
-                      style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                      Shown to buyers when they pick this ticket class — useful for spelling out what a table/bundle includes.
-                    </p>
-                  </div>
-                  <div className="mt-3">
-                    <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-                      <input type="checkbox" checked={tier.is_hidden} onChange={() => toggleTierHidden(i)} />
-                      Hide from public checkout (invite-only — for giveaways)
-                    </label>
-                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                      Buyers won&apos;t see or be able to select this tier. Issue tickets to winners directly below.
-                    </p>
-                  </div>
-                  <div className="mt-3">
-                    <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--brand-amber)" }}>
-                      Early Bird Ends (optional)
-                    </label>
-                    <input type="datetime-local" value={tier.ends_at || ""}
-                      onChange={e => updateTier(i, "ends_at", e.target.value)}
-                      className="w-full sm:w-1/2 min-w-0 appearance-none p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                      style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
-                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier auto-closes after this date/time.</p>
-                  </div>
-                  {tier.id && tier.is_hidden && (
-                    <IssueTicketPanel eventId={id} tierId={tier.id} quantityAvailable={Number(tier.quantity) || 0} />
-                  )}
-                  {(tier.id || tiers.length > 1) && (
-                    <div className="mt-3 pt-3 flex items-center justify-between gap-2" style={{ borderTop: "1px solid var(--card-border)" }}>
-                      {tier.id ? (
-                        <button type="button" onClick={() => handleExportTierCsv(tier.id!, tier.name || "tier")}
-                          className="flex items-center gap-1.5 text-xs font-semibold transition px-3 py-1.5 rounded-lg hover:bg-[var(--surface-raised)]"
-                          style={{ color: "var(--text-secondary)" }}
-                          title="Download this ticket class's sales as CSV">
-                          <Download className="h-3.5 w-3.5" /> Download CSV
-                        </button>
-                      ) : <span />}
-                      {tiers.length > 1 && (
-                        <button type="button" onClick={() => removeTier(i)}
-                          className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 transition px-3 py-1.5 rounded-lg hover:bg-red-50">
-                          <Trash2 className="h-3.5 w-3.5" /> Remove Ticket Class
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                      ) : undefined}
+                      extras={tier.id ? (
+                        <>
+                          {tier.is_hidden && (
+                            <IssueTicketPanel eventId={id} tierId={tier.id} quantityAvailable={Number(tier.quantity) || 0} />
+                          )}
+                          <button type="button" onClick={() => handleExportTierCsv(tier.id!, tier.name || "tier")}
+                            className="mt-3 flex items-center gap-1.5 text-xs font-semibold transition px-3 py-1.5 rounded-lg hover:bg-[var(--input-bg)]"
+                            style={{ color: "var(--text-secondary)" }}
+                            title="Download this ticket class's sales as CSV">
+                            <Download className="h-3.5 w-3.5" /> Download CSV
+                          </button>
+                        </>
+                      ) : undefined} />
+                  );
+                })}
+              </div>
+              <TierPresetRow onAdd={addTier} />
               <div className="pt-2">
                 <label className={labelClass} style={labelStyle}>Stop Selling Tickets On</label>
                 <div className="relative w-full sm:w-1/2 min-w-0">

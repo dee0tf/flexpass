@@ -514,7 +514,7 @@ export default function CheckInScanner({
                 <div className="flex justify-center">
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full"
                     style={{ backgroundColor: "rgba(255,183,0,0.15)", color: "#d97706" }}>
-                    🎁 Giveaway
+                    🎁 Sponsored
                   </span>
                 </div>
               )}

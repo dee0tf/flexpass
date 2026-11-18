@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   if (eventId) {
     const { data: tickets, error } = await fetchAllRows((from, to) => db
       .from("tickets")
-      .select("id, user_name, user_email, tier_name, total_amount_paid, status, created_at, referral_code, checked_in_at")
+      .select("id, user_name, user_email, tier_name, total_amount_paid, status, created_at, referral_code, checked_in_at, is_giveaway")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false })
       .order("id")

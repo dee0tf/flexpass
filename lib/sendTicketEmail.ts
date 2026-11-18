@@ -11,11 +11,14 @@ export async function sendTicketEmail({
   eventTitle,
   ticketIds,
   amount,
+  sponsored = false,
 }: {
   email: string;
   eventTitle: string;
   ticketIds: string[];
   amount: number;
+  /** Host-issued ticket: `amount` is the ticket's value, not what was paid. */
+  sponsored?: boolean;
 }) {
   const safeTitle = sanitize(eventTitle).slice(0, 200);
   const safeTicketIds = ticketIds.map(sanitize);
@@ -72,8 +75,10 @@ export async function sendTicketEmail({
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
               <tr>
                 <td>
-                  <p style="margin:0;color:rgba(240,238,248,0.4);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Total Amount Paid</p>
-                  <p style="margin:4px 0 0;color:#9F67FE;font-size:22px;font-weight:800;">${amount === 0 ? "Free" : `&#x20A6;${amount.toLocaleString()}`}</p>
+                  <p style="margin:0;color:rgba(240,238,248,0.4);font-size:11px;text-transform:uppercase;letter-spacing:1px;">${sponsored ? "Ticket Value" : "Total Amount Paid"}</p>
+                  <p style="margin:4px 0 0;color:#9F67FE;font-size:22px;font-weight:800;">${sponsored
+                    ? `${amount > 0 ? `&#x20A6;${amount.toLocaleString()} ` : ""}<span style="font-size:13px;font-weight:700;color:#FFB700;">Sponsored</span>`
+                    : amount === 0 ? "Free" : `&#x20A6;${amount.toLocaleString()}`}</p>
                 </td>
               </tr>
             </table>

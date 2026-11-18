@@ -61,7 +61,7 @@ type AdminTicket = {
   id: string; user_name: string; user_email: string;
   tier_name: string | null; total_amount_paid: number;
   status: string; created_at: string; referral_code: string | null;
-  checked_in_at: string | null;
+  checked_in_at: string | null; is_giveaway?: boolean;
 };
 
 type AdminAnalytics = {
@@ -1080,7 +1080,7 @@ export default function AdminPage() {
                                                     {b.user_email}
                                                   </td>
                                                   <td className="px-5 py-3 font-semibold" style={{ color: "var(--text-primary)" }}>
-                                                    {b.total_amount_paid === 0 ? "Free" : `₦${b.total_amount_paid.toLocaleString()}`}
+                                                    {b.is_giveaway ? "Sponsored" : b.total_amount_paid === 0 ? "Free" : `₦${b.total_amount_paid.toLocaleString()}`}
                                                   </td>
                                                   <td className="px-5 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
                                                     {b.referral_code ? (

@@ -45,10 +45,10 @@ export async function POST(request: Request) {
     if (eventErr || !event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     if (event.user_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    // --- 3. Fetch the tier and confirm it's a hidden/giveaway tier for this event ---
+    // --- 3. Fetch the tier and confirm it's a hidden (sponsored) tier for this event ---
     const { data: tier, error: tierErr } = await supabase
       .from('ticket_tiers')
-      .select('id, event_id, name, quantity_available, group_size, is_hidden')
+      .select('id, event_id, name, price, quantity_available, group_size, is_hidden')
       .eq('id', tierId)
       .single();
 
@@ -68,9 +68,9 @@ export async function POST(request: Request) {
     if (!tier.is_hidden) {
       await logPaymentEvent({
         source: 'issue-ticket', eventType: 'not_hidden_tier', status: 'error',
-        eventId, email, message: `tierId=${tierId} is not a hidden/giveaway tier`,
+        eventId, email, message: `tierId=${tierId} is not a hidden/sponsored tier`,
       });
-      return NextResponse.json({ error: 'This action is only available for hidden/giveaway tiers' }, { status: 400 });
+      return NextResponse.json({ error: 'This action is only available for sponsored tiers' }, { status: 400 });
     }
 
     // --- 4. Create the giveaway ticket(s) atomically — one row per
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
           : `tierId=${tierId} not found`,
       });
       return NextResponse.json(
-        { error: remaining <= 0 ? 'This giveaway tier is exhausted' : `Only ${remaining} left in this tier` },
+        { error: remaining <= 0 ? 'This sponsored tier is fully issued' : `Only ${remaining} left in this tier` },
         { status: 409 }
       );
     } else if (result.outcome === 'error') {
@@ -148,7 +148,11 @@ export async function POST(request: Request) {
         email,
         eventTitle: event.title,
         ticketIds: data.map(t => t.id),
-        amount: 0,
+        // The guest pays nothing (total_amount_paid stays 0 so host revenue
+        // and payouts are untouched), but the email shows the ticket's real
+        // value — a sponsored ticket isn't a "free" one.
+        amount: (Number(tier.price) || 0) * quantity,
+        sponsored: true,
       });
       if (emailError) {
         console.error('[issue-ticket] Ticket email failed:', emailError);

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Calendar, DollarSign,
   Image as ImageIcon, Type, Clock,
-  AlertCircle, User, Plus, Trash2, CheckCircle2, Tag, EyeOff,
+  AlertCircle, User, CheckCircle2, Tag, EyeOff,
 } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
 import AuthModal from "@/components/AuthModal";
@@ -14,23 +14,17 @@ import Link from "next/link";
 import LocationPicker, { LocationData } from "@/components/LocationPicker";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import BrandLogoPrompt from "@/components/BrandLogoPrompt";
-import FeeCalculator from "@/components/FeeCalculator";
+import TierCard, { TierPresetRow, blankTier, publicMinPrice, type TierFields } from "@/components/TierCard";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
-interface TicketTier {
-  name: string;
-  price: string;
-  quantity: string;
-  ends_at?: string;
-  group_size: string;
-  is_hidden: boolean;
-  description: string;
-  is_flexible_group: boolean;
-  min_quantity: string;
-  bulk_discount_qty: string;
-  bulk_discount_percent: string;
+// uid is client-only — a stable React key so collapsing/removing one tier
+// card never shifts another card's open/closed state.
+interface TicketTier extends TierFields {
+  uid: string;
 }
+
+const withUid = (t: TierFields): TicketTier => ({ ...t, uid: crypto.randomUUID() });
 
 function SuccessModal({ eventId, onClose }: { eventId: string; onClose: () => void }) {
   return (
@@ -104,7 +98,7 @@ export default function CreateEvent() {
     locationReveal: false,
   });
 
-  const [tiers, setTiers] = useState<TicketTier[]>([{ name: "Regular", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false, description: "", is_flexible_group: false, min_quantity: "10", bulk_discount_qty: "10", bulk_discount_percent: "" }]);
+  const [tiers, setTiers] = useState<TicketTier[]>(() => [withUid({ ...blankTier(), name: "Regular" })]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
@@ -132,24 +126,24 @@ export default function CreateEvent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const addTier = () => setTiers([...tiers, { name: "", price: "", quantity: "", ends_at: "", group_size: "1", is_hidden: false, description: "", is_flexible_group: false, min_quantity: "10", bulk_discount_qty: "10", bulk_discount_percent: "" }]);
-  const removeTier = (i: number) => { if (tiers.length > 1) { const n = [...tiers]; n.splice(i, 1); setTiers(n); } };
-  const updateTier = (i: number, field: Exclude<keyof TicketTier, "is_hidden" | "is_flexible_group">, value: string) => {
-    const n = [...tiers]; n[i][field] = value; setTiers(n);
-  };
-  const toggleTierHidden = (i: number) => {
-    const n = [...tiers]; n[i] = { ...n[i], is_hidden: !n[i].is_hidden }; setTiers(n);
-  };
-  const toggleTierFlexibleGroup = (i: number) => {
-    const n = [...tiers]; n[i] = { ...n[i], is_flexible_group: !n[i].is_flexible_group }; setTiers(n);
-  };
+  const addTier = (t: TierFields) => setTiers(prev => [...prev, withUid(t)]);
+  const removeTier = (i: number) => setTiers(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
+  const updateTier = (i: number, patch: Partial<TierFields>) =>
+    setTiers(prev => prev.map((t, idx) => idx === i ? { ...t, ...patch } : t));
+  const duplicateTier = (i: number) => setTiers(prev => {
+    const n = [...prev];
+    n.splice(i + 1, 0, withUid({ ...prev[i], name: `${prev[i].name} (copy)` }));
+    return n;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     if (!user) return;
 
-    if (tiers.some(t => !t.name || !t.price || !t.quantity)) {
+    const incomplete = tiers.find(t => !t.name || !t.price || !t.quantity);
+    if (incomplete) {
+      showToast(`Finish the "${incomplete.name || "Untitled"}" ticket class — it needs a name, price and quantity.`, "error");
       setIsLoading(false); return;
     }
 
@@ -177,7 +171,7 @@ export default function CreateEvent() {
 
     try {
       const totalTickets = tiers.reduce((acc, t) => acc + Number(t.quantity) * (Number(t.group_size) || 1), 0);
-      const minPrice = Math.min(...tiers.map(t => Number(t.price)));
+      const minPrice = publicMinPrice(tiers);
 
       // Get creator social links from user metadata
       const meta = user.user_metadata || {};
@@ -337,137 +331,17 @@ export default function CreateEvent() {
                   <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
                     <DollarSign className="h-5 w-5" style={{ color: "var(--brand-amber)" }} /> Ticket Classes
                   </h2>
-                  <button type="button" onClick={addTier}
-                    className="text-sm font-semibold flex items-center gap-1 transition-colors hover:opacity-80"
-                    style={{ color: "var(--brand-indigo)" }}>
-                    <Plus className="h-4 w-4" /> Add Ticket Class
-                  </button>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {tiers.map((tier, i) => (
-                    <div key={i} className="p-4 rounded-xl" style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)" }}>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        <div className="col-span-2 sm:col-span-1">
-                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Class Name</label>
-                          <input type="text" placeholder="e.g. VIP, Regular" value={tier.name}
-                            onChange={e => updateTier(i, "name", e.target.value)}
-                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                            style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                            required />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Price (₦)</label>
-                          <input type="number" placeholder="0" value={tier.price}
-                            onChange={e => updateTier(i, "price", e.target.value)}
-                            min="0"
-                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                            style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                            required />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Quantity</label>
-                          <input type="number" placeholder="100" value={tier.quantity}
-                            onChange={e => updateTier(i, "quantity", e.target.value)}
-                            min="0"
-                            className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                            style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
-                            required />
-                        </div>
-                      </div>
-                      <FeeCalculator price={tier.price} onPriceChange={p => updateTier(i, "price", p)} />
-                      <div className="mt-3">
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
-                          Tickets per Purchase (optional)
-                        </label>
-                        <input type="number" placeholder="1" value={tier.group_size} min="1"
-                          onChange={e => updateTier(i, "group_size", e.target.value)}
-                          className="w-full sm:w-1/3 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                          style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                          Set above 1 to sell as a bundle — e.g. 5 for a &quot;Table of 5&quot;. Buyers pay the price above once and get {Number(tier.group_size) > 1 ? Number(tier.group_size) : "N"} separate QR codes to share with their group.
-                        </p>
-                      </div>
-                      <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--card-border)" }}>
-                        <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-                          <input type="checkbox" checked={tier.is_flexible_group} onChange={() => toggleTierFlexibleGroup(i)} />
-                          Family / group ticket (flexible headcount)
-                        </label>
-                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                          For groups that don&apos;t fit a fixed bundle — the buyer picks their own headcount (at least the minimum below) instead of a preset table size, priced per ticket, with an optional bulk discount.
-                        </p>
-                        {tier.is_flexible_group && (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                            <div>
-                              <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Minimum Tickets</label>
-                              <input type="number" placeholder="10" value={tier.min_quantity} min="1" max="50"
-                                onChange={e => updateTier(i, "min_quantity", e.target.value)}
-                                className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount From (qty)</label>
-                              <input type="number" placeholder="10" value={tier.bulk_discount_qty} min="1" max="50"
-                                onChange={e => updateTier(i, "bulk_discount_qty", e.target.value)}
-                                className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Discount (%)</label>
-                              <input type="number" placeholder="10" value={tier.bulk_discount_percent} min="0" max="100"
-                                onChange={e => updateTier(i, "bulk_discount_percent", e.target.value)}
-                                className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                                style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                            </div>
-                          </div>
-                        )}
-                        {tier.is_flexible_group && (
-                          <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                            Buyers must select at least {tier.min_quantity || "10"} tickets (up to 50). {tier.bulk_discount_percent ? `At ${tier.bulk_discount_qty || tier.min_quantity || "10"}+ tickets, each ticket is ${tier.bulk_discount_percent}% off.` : "Leave the discount fields blank to charge the flat price regardless of headcount."}
-                          </p>
-                        )}
-                      </div>
-                      <div className="mt-3">
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
-                          Description (optional)
-                        </label>
-                        <textarea placeholder="e.g. Table of 5 — includes 2 bottles of champagne, reserved seating near the stage" value={tier.description} rows={2}
-                          onChange={e => updateTier(i, "description", e.target.value)}
-                          className="w-full p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition resize-none"
-                          style={{ backgroundColor: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
-                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                          Shown to buyers when they pick this ticket class — useful for spelling out what a table/bundle includes.
-                        </p>
-                      </div>
-                      <div className="mt-3">
-                        <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-                          <input type="checkbox" checked={tier.is_hidden} onChange={() => toggleTierHidden(i)} />
-                          Hide from public checkout (invite-only — for giveaways)
-                        </label>
-                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                          Buyers won&apos;t see or be able to select this tier. Once the event is published, issue tickets to winners directly from the event&apos;s edit page.
-                        </p>
-                      </div>
-                      <div className="mt-3">
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
-                          Early Bird Ends (optional)
-                        </label>
-                        <input type="datetime-local" value={tier.ends_at || ""}
-                          onChange={e => updateTier(i, "ends_at", e.target.value)}
-                          className="w-full sm:w-1/2 p-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition"
-                          style={{ backgroundColor: "var(--input-bg)", border: "1px solid rgba(255,183,0,0.4)", color: "var(--text-primary)", colorScheme: "dark" }} />
-                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Leave blank for no expiry. Tier closes automatically after this date/time.</p>
-                      </div>
-                      {tiers.length > 1 && (
-                        <div className="mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid var(--card-border)" }}>
-                          <button type="button" onClick={() => removeTier(i)}
-                            className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-700 transition px-3 py-1.5 rounded-lg hover:bg-red-50">
-                            <Trash2 className="h-3.5 w-3.5" /> Remove Ticket Class
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <TierCard key={tier.uid} tier={tier}
+                      onChange={patch => updateTier(i, patch)}
+                      onDuplicate={() => duplicateTier(i)}
+                      onRemove={tiers.length > 1 ? () => removeTier(i) : undefined}
+                      sponsoredNote="Hidden from buyers. Once the event is published, issue these to your guests from the event's edit page." />
                   ))}
                 </div>
+                <TierPresetRow onAdd={addTier} />
                 <div className="pt-2">
                   <label className={labelClass} style={labelStyle}>Stop Selling Tickets On</label>
                   <div className="relative w-full sm:w-1/2">
