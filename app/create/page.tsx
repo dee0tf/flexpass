@@ -15,6 +15,7 @@ import LocationPicker, { LocationData } from "@/components/LocationPicker";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import BrandLogoPrompt from "@/components/BrandLogoPrompt";
 import TierCard, { TierPresetRow, blankTier, publicMinPrice, type TierFields } from "@/components/TierCard";
+import { friendlyError } from "@/lib/friendlyError";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
@@ -219,7 +220,8 @@ export default function CreateEvent() {
 
       setSuccessEventId(eventData.id);
     } catch (error: any) {
-      showToast("Failed to create event: " + error.message, "error");
+      console.error("[create event] Failed:", error);
+      showToast("Your event couldn't be created. " + friendlyError(error), "error");
     } finally {
       setIsLoading(false);
     }

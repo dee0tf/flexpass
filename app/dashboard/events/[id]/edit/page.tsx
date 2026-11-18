@@ -19,6 +19,7 @@ import { use } from "react";
 import { fetchAllRows } from "@/lib/fetchAllRows";
 import { GENDERS, genderMark } from "@/lib/gender";
 import TierCard, { TierPresetRow, blankTier, publicMinPrice, type TierFields } from "@/components/TierCard";
+import { friendlyError } from "@/lib/friendlyError";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
 
@@ -125,7 +126,7 @@ function IssueTicketPanel({ eventId, tierId, quantityAvailable }: { eventId: str
       setWinnerName(""); setWinnerEmail(""); setQuantity("1"); setGenders([null]);
       loadIssued();
     } catch (e: unknown) {
-      setMessage({ text: e instanceof Error ? e.message : String(e), isError: true });
+      setMessage({ text: friendlyError(e), isError: true });
     } finally {
       setIssuing(false);
     }
@@ -271,7 +272,7 @@ function DeleteRequestModal({ eventId, eventTitle, onClose }: { eventId: string;
       if (!res.ok) throw new Error(data.error || "Request failed");
       setSubmitted(true);
     } catch (e: any) {
-      setErr(e.message);
+      setErr(friendlyError(e));
     } finally {
       setSubmitting(false);
     }
@@ -513,7 +514,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       setScanLinkCopied(false);
       showToast(scanCode ? "Access code regenerated — the old code/link no longer works" : "Access code generated", "success");
     } catch (err) {
-      showToast("Failed to generate access code: " + (err instanceof Error ? err.message : String(err)), "error");
+      showToast("The access code couldn't be generated. " + friendlyError(err), "error");
     } finally {
       setScanCodeBusy(false);
     }
@@ -689,7 +690,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
       // Never show raw database wording ("violates foreign key constraint")
       // to a host — 23503 is the "tier still has tickets" case.
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
-      showToast(code === "23503" ? TIER_IN_USE_MESSAGE : "Your changes couldn't be saved: " + msg, "error");
+      showToast(code === "23503" ? TIER_IN_USE_MESSAGE : "Your changes couldn't be saved. " + friendlyError(error, msg), "error");
     } finally {
       setIsSaving(false);
     }

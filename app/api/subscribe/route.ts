@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from 'resend';
+import { friendlyError } from '@/lib/friendlyError';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ message: "Subscribed successfully! Check your inbox." });
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('[subscribe]', error);
+        return NextResponse.json({ error: friendlyError(error) }, { status: 500 });
     }
 }

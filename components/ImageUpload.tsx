@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Upload, Loader2, X, Image as ImageIcon } from "lucide-react";
 import Image from "next/image";
+import { friendlyError } from "@/lib/friendlyError";
 
 interface ImageUploadProps {
     onUpload: (url: string) => void;
@@ -57,7 +58,7 @@ export default function ImageUpload({ onUpload, defaultValue = "" }: ImageUpload
             setImageUrl(data.publicUrl);
             onUpload(data.publicUrl);
         } catch (error: any) {
-            setUploadError("Upload failed: " + error.message);
+            setUploadError("The image didn't upload. " + friendlyError(error));
         } finally {
             setUploading(false);
         }

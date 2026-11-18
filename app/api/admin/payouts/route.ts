@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { friendlyError } from '@/lib/friendlyError';
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     .select("id, amount, status, created_at, transfer_code, user_id")
     .order("created_at", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error('[admin/payouts]', error); return NextResponse.json({ error: friendlyError(error) }, { status: 500 }); }
 
   const userIds = [...new Set((payouts || []).map((p: any) => p.user_id as string).filter(Boolean))];
 

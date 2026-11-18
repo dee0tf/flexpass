@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { friendlyError } from '@/lib/friendlyError';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -125,6 +126,6 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ sent, failed, total: recipients.length });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: friendlyError(err) }, { status: 500 });
   }
 }

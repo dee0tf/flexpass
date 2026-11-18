@@ -9,6 +9,7 @@ import { trackCheckoutEvent } from "@/lib/trackCheckoutEvent";
 import { sanitizeEmail } from "@/lib/sanitizeEmail";
 import { genderMark, GENDERS } from "@/lib/gender";
 import { checkoutTotals } from "@/lib/platformFee";
+import { friendlyError } from "@/lib/friendlyError";
 
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY;
 
@@ -225,7 +226,7 @@ export default function CheckoutModal({
       const ids: string[] = result.ticketIds;
       router.push(ids.length > 1 ? `/tickets/order?ids=${ids.join(",")}` : `/tickets/${ids[0]}`);
     } catch (err: any) {
-      showToast("Could not claim ticket: " + err.message, "error");
+      showToast("We couldn't get your ticket. " + friendlyError(err), "error");
     } finally {
       setIsSaving(false);
     }
@@ -257,7 +258,7 @@ export default function CheckoutModal({
       const ids: string[] = result.ticketIds;
       router.push(ids.length > 1 ? `/tickets/order?ids=${ids.join(",")}` : `/tickets/${ids[0]}`);
     } catch (error: any) {
-      showToast("Ticket processing failed: " + error.message, "error");
+      showToast("We couldn't confirm your ticket. " + friendlyError(error), "error");
     } finally {
       setIsSaving(false);
     }

@@ -5,6 +5,7 @@ import { Upload, Loader2, X } from "lucide-react";
 import TrustedByLogo from "@/components/TrustedByLogo";
 import { supabase } from "@/lib/supabase";
 import { cleanLogoFile } from "@/lib/cleanLogo";
+import { friendlyError } from "@/lib/friendlyError";
 
 // Logos are shown whole (object-contain) on the dark "Trusted by" strip, so
 // uploads are trimmed and any solid backdrop is made transparent first.
@@ -40,7 +41,7 @@ export default function BrandLogoUpload({ value, onChange }: { value: string; on
       const { data } = supabase.storage.from("event-images").getPublicUrl(path);
       onChange(data.publicUrl);
     } catch (err) {
-      setError("Upload failed: " + (err instanceof Error ? err.message : "please try again"));
+      setError("The logo didn't upload. " + friendlyError(err));
     } finally {
       setUploading(false);
     }

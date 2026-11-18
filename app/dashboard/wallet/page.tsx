@@ -10,6 +10,7 @@ import BankSettings from "@/components/BankSettings";
 import { Toast, ToastState, ToastType } from "@/components/Toast";
 import { hostAmount } from "@/lib/hostAmount";
 import { fetchAllRows } from "@/lib/fetchAllRows";
+import { friendlyError } from "@/lib/friendlyError";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:    { label: "Pending Review", color: "bg-yellow-100 text-yellow-700" },
@@ -129,7 +130,7 @@ export default function WalletPage() {
         setWithdrawSuccess(false);
       }, 2200);
     } catch (err: any) {
-      showToast("Request failed: " + err.message, "error");
+      showToast("Your withdrawal request didn't go through. " + friendlyError(err), "error");
     } finally {
       setWithdrawLoading(false);
     }

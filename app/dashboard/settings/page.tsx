@@ -7,6 +7,7 @@ import {
   User, Loader2, Save, Lock, Bell, ShieldAlert,
   CheckCircle2, XCircle, Eye, EyeOff, LogOut, BadgeCheck,
 } from "lucide-react";
+import { friendlyError } from "@/lib/friendlyError";
 
 function SectionCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -261,7 +262,7 @@ export default function SettingsPage() {
     setSavingPassword(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
-      setPasswordMsg({ text: error.message || "Failed to update password.", type: "error" });
+      setPasswordMsg({ text: friendlyError(error, "Your password couldn't be updated. Please try again."), type: "error" });
     } else {
       setPasswordMsg({ text: "Password updated. You may need to log in again on other devices.", type: "success" });
       setNewPassword("");

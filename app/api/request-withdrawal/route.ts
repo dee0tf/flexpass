@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { logPaymentEvent } from "@/lib/logPaymentEvent";
 import { hostAmount } from "@/lib/hostAmount";
+import { friendlyError } from '@/lib/friendlyError';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
       status: "pending",
     }).select().single();
 
-    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+    if (insertError) { console.error('[request-withdrawal]', insertError); return NextResponse.json({ error: friendlyError(insertError) }, { status: 500 }); }
 
     // The withdrawal request itself is already saved above regardless of what
     // happens below — this email just alerts the admin to go process it. Must

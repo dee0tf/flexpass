@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, Mail, Send, Eye } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { friendlyError } from "@/lib/friendlyError";
 
 type Mode = "preview" | "test" | "send";
 
@@ -42,7 +43,7 @@ export default function BrandLogoReminderCard() {
         });
       }
     } catch (err) {
-      setMsg({ text: err instanceof Error ? err.message : "Something went wrong", ok: false });
+      setMsg({ text: friendlyError(err), ok: false });
     } finally {
       setBusy(null);
     }

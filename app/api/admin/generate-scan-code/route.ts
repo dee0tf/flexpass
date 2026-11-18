@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateScanCode } from '@/lib/generateScanCode';
+import { friendlyError } from '@/lib/friendlyError';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     const { error } = await supabase
       .from('event_scan_codes')
       .upsert({ event_id: eventId, scan_code: code, updated_at: new Date().toISOString() });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) { console.error('[admin/generate-scan-code]', error); return NextResponse.json({ error: friendlyError(error) }, { status: 500 }); }
 
     return NextResponse.json({ code });
   } catch {

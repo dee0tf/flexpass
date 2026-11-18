@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateScanCode } from '@/lib/generateScanCode';
+import { friendlyError } from '@/lib/friendlyError';
 
 // Anon client — only used for token verification, same pattern as /api/checkin.
 const authClient = createClient(
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     const { error } = await db
       .from('event_scan_codes')
       .upsert({ event_id: eventId, scan_code: code, updated_at: new Date().toISOString() });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) { console.error('[host/generate-scan-code]', error); return NextResponse.json({ error: friendlyError(error) }, { status: 500 }); }
 
     return NextResponse.json({ code });
   } catch {

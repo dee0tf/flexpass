@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { platformFeeFromGross } from "@/lib/platformFee";
 import { fetchAllRows } from "@/lib/fetchAllRows";
+import { friendlyError } from '@/lib/friendlyError';
 
 const authClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
     .update({ organizer_verified: verified })
     .eq("user_id", userId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error('[admin/hosts]', error); return NextResponse.json({ error: friendlyError(error) }, { status: 500 }); }
 
   return NextResponse.json({ success: true });
 }
