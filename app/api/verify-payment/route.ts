@@ -174,7 +174,7 @@ export async function POST(request: Request) {
     // Paystack returns amount in kobo. `unitPrice` is already the bundle
     // price for group tiers, so `quantity` here means "groups purchased".
     const pricing = await expectedOrderPricing(supabase, {
-      eventId, tierId, quantity, paidAt: paystackData.data.paid_at,
+      eventId, tierId, quantity, paidAt: paystackData.data.paid_at, reference,
     });
     if (!pricing) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });

@@ -113,7 +113,7 @@ export async function createFallbackTicket({
   // check a buyer could pay ₦100 for a ₦10,000 ticket and just let the
   // webhook issue it. Price + fee come from the DB, same as verify-payment.
   const pricing = await expectedOrderPricing(supabase, {
-    eventId: metadata.event_id, tierId: metadata.tier_id || null, quantity, paidAt,
+    eventId: metadata.event_id, tierId: metadata.tier_id || null, quantity, paidAt, reference,
   });
   if (pricing?.salesEnded) {
     await logPaymentEvent({

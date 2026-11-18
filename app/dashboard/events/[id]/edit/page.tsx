@@ -19,6 +19,7 @@ import { use } from "react";
 import { fetchAllRows } from "@/lib/fetchAllRows";
 import { GENDERS, genderMark } from "@/lib/gender";
 import TierCard, { TierPresetRow, blankTier, publicMinPrice, type TierFields } from "@/components/TierCard";
+import DiscountCodesPanel from "@/components/DiscountCodesPanel";
 import { friendlyError } from "@/lib/friendlyError";
 
 const CATEGORIES = ["Music", "Tech", "Business", "Arts", "Food", "Nightlife", "Others"];
@@ -956,6 +957,16 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
             </div>
           </form>
         </div>
+
+        {/* Outside the event <form> on purpose — its buttons and Enter key
+            must never submit the event-edit form. Only saved public tiers
+            can be targeted; sponsored tiers can't take codes. */}
+        <DiscountCodesPanel
+          eventId={id}
+          tiers={tiers.filter(t => t.id && !t.is_hidden).map(t => ({
+            id: t.id!, name: t.name, price: Number(t.price) || 0,
+            hasBulkDiscount: t.is_flexible_group && !!t.bulk_discount_percent,
+          }))} />
       </div>
     </div>
   );

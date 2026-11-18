@@ -10,6 +10,7 @@ import { sanitizeEmail } from "@/lib/sanitizeEmail";
 import { genderMark, GENDERS } from "@/lib/gender";
 import { checkoutTotals } from "@/lib/platformFee";
 import { friendlyError } from "@/lib/friendlyError";
+import { discountedUnitPrice, type DiscountTerms } from "@/lib/discountMath";
 
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY;
 
@@ -81,6 +82,13 @@ export default function CheckoutModal({
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  // Discount code. `applied` is only a preview; /api/ticket-hold re-checks it
+  // and fixes the real price when the buyer taps Pay.
+  const [codeInput, setCodeInput] = useState("");
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const [applyingCode, setApplyingCode] = useState(false);
+  const [applied, setApplied] = useState<{ code: string; label: string; terms: DiscountTerms } | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const showToast = useCallback((message: string, type: ToastType = "error") => {
     setToast({ message, type });
@@ -140,6 +148,14 @@ export default function CheckoutModal({
     setQuantity(selectedTier?.min_quantity ? selectedTier.min_quantity : 1);
   }, [selectedTier]);
 
+  // Codes can be limited to certain tiers, so re-check when the tier changes.
+  const appliedCodeRef = useRef<string | null>(null);
+  useEffect(() => { appliedCodeRef.current = applied?.code ?? null; }, [applied]);
+  useEffect(() => {
+    if (appliedCodeRef.current) applyCode(appliedCodeRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTier?.id]);
+
   // Lock/unlock body scroll with modal open state
   useEffect(() => {
     if (open && !paystackActive) {
@@ -184,16 +200,47 @@ export default function CheckoutModal({
     && !!selectedTier?.bulk_discount_qty
     && !!selectedTier?.bulk_discount_percent
     && quantity >= (selectedTier!.bulk_discount_qty as number);
-  const effectiveUnitPrice = bulkDiscountActive
+  const bulkPrice = bulkDiscountActive
     ? Math.round(finalPrice * (1 - (selectedTier!.bulk_discount_percent as number) / 100) * 100) / 100
     : finalPrice;
+  // Same math the server uses to fix the price at Pay time (lib/discountMath).
+  const effectiveUnitPrice = applied && finalPrice > 0
+    ? discountedUnitPrice(finalPrice, bulkPrice, applied.terms)
+    : bulkPrice;
   const { subtotal, fee, total: totalAmount } = checkoutTotals(effectiveUnitPrice, quantity);
+  const preCodeSubtotal = Math.round(bulkPrice * quantity * 100) / 100;
+  const codeSavings = applied ? Math.max(0, Math.round((preCodeSubtotal - subtotal) * 100) / 100) : 0;
   const isFree = totalAmount === 0 && (isLegacyEvent || !!selectedTier);
 
   const resetForm = () => {
     setQuantity(1); setEmail(""); setFirstName(""); setLastName(""); setGenders([]); setSelectedTier(null);
     setNameError("");
+    setApplied(null); setCodeInput(""); setCodeError(""); setCodeOpen(false);
   };
+
+  async function applyCode(raw: string = codeInput) {
+    const code = raw.trim();
+    if (!code) { setCodeError("Type your discount code first."); return; }
+    setApplyingCode(true);
+    setCodeError("");
+    try {
+      const res = await fetch("/api/discount/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId, tierId: selectedTier?.id || null, code, quantity, email: email || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setApplied(null); setCodeError(data.error || "That code didn't work."); return; }
+      setApplied({ code: data.code, label: data.label, terms: data.terms });
+      setCodeInput(data.code);
+    } catch (err) {
+      setApplied(null);
+      setCodeError(friendlyError(err));
+    } finally {
+      setApplyingCode(false);
+    }
+  }
+  const removeCode = () => { setApplied(null); setCodeError(""); };
 
   const handleClaimFree = async () => {
     // Synchronous re-check — don't rely solely on onBlur/canProceed timing,
@@ -309,6 +356,8 @@ export default function CheckoutModal({
       tier_id: selectedTier?.id || null,
       tier_name: selectedTier?.name || (isLegacyEvent ? "Standard" : null),
       referral_code: referralCode || null,
+      // Informational only. The price comes from the server-side hold.
+      discount_code: applied?.code || null,
     },
     ...(subaccountCode ? { subaccount: subaccountCode, bearer: "subaccount" } : {}),
   };
@@ -334,13 +383,24 @@ export default function CheckoutModal({
       const res = await fetch("/api/ticket-hold", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId, email, tierId: selectedTier?.id || null, quantity }),
+        body: JSON.stringify({ eventId, email, tierId: selectedTier?.id || null, quantity, discountCode: applied?.code || null }),
       });
       const result = await res.json();
       if (!res.ok) {
+        if (result.reason === "DISCOUNT") {
+          // The code stopped working (used up, expired, already used). Drop
+          // it so the buyer sees the normal price before trying again.
+          setApplied(null);
+          setCodeOpen(true);
+          setCodeError(result.error);
+        }
         showToast(result.error || "Could not reserve your ticket, please try again.", "error");
         return;
       }
+      // Charge exactly what the server priced the hold at.
+      const chargeTotal = typeof result.unitPrice === "number"
+        ? checkoutTotals(result.unitPrice, quantity).total
+        : totalAmount;
       holdRefRef.current = result.reference;
       transferPendingRef.current = false;
       paidRef.current = false;
@@ -349,7 +409,7 @@ export default function CheckoutModal({
       setPaystackActive(true);
       document.body.style.overflow = "";
       initializePayment({
-        config: { ...paystackConfig, reference: result.reference },
+        config: { ...paystackConfig, reference: result.reference, amount: Math.round(chargeTotal * 100) },
         onSuccess: handleSuccess,
         onClose: handlePaystackClose,
       });
@@ -698,6 +758,45 @@ export default function CheckoutModal({
                       {emailError && <p className="text-red-500 text-xs mt-1.5">{emailError}</p>}
                     </div>
 
+                    {/* Discount code */}
+                    {finalPrice > 0 && (
+                      <div>
+                        {applied ? (
+                          <div className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5"
+                            style={{ backgroundColor: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.35)" }}>
+                            <span className="text-sm font-semibold" style={{ color: "#16a34a" }}>
+                              🏷️ {applied.code} · {applied.label}
+                            </span>
+                            <button type="button" onClick={removeCode}
+                              className="fp-press text-xs font-semibold hover:opacity-70" style={{ color: "var(--text-secondary)" }}>
+                              Remove
+                            </button>
+                          </div>
+                        ) : !codeOpen ? (
+                          <button type="button" onClick={() => setCodeOpen(true)}
+                            className="fp-press text-sm font-semibold hover:opacity-80" style={{ color: "var(--brand-indigo)" }}>
+                            Have a discount code?
+                          </button>
+                        ) : (
+                          <>
+                            <div className="flex gap-2">
+                              <input type="text" placeholder="Enter code" value={codeInput} autoCapitalize="characters"
+                                onChange={e => { setCodeInput(e.target.value.toUpperCase()); if (codeError) setCodeError(""); }}
+                                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); applyCode(); } }}
+                                className="flex-1 min-w-0 px-4 py-2.5 rounded-xl uppercase tracking-wider focus:outline-none focus:ring-2 transition"
+                                style={{ ...inputStyle, border: codeError ? "1px solid #f87171" : inputStyle.border }} />
+                              <button type="button" onClick={() => applyCode()} disabled={applyingCode}
+                                className="fp-press px-4 rounded-xl text-sm font-bold text-white disabled:opacity-60"
+                                style={{ backgroundColor: "var(--brand-indigo)" }}>
+                                {applyingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                              </button>
+                            </div>
+                            {codeError && <p className="text-red-500 text-xs mt-1.5">{codeError}</p>}
+                          </>
+                        )}
+                      </div>
+                    )}
+
                     {/* Price summary */}
                     <div style={{ borderTop: "1px solid var(--card-border)", paddingTop: "16px" }}>
                       {isFree ? (
@@ -708,8 +807,13 @@ export default function CheckoutModal({
                       ) : (
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm" style={{ color: "var(--text-muted)" }}>
-                            <span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span>
+                            <span>Subtotal</span><span>₦{(applied ? preCodeSubtotal : subtotal).toLocaleString()}</span>
                           </div>
+                          {applied && codeSavings > 0 && (
+                            <div className="flex justify-between text-sm font-semibold" style={{ color: "#16a34a" }}>
+                              <span>Discount ({applied.code})</span><span>−₦{codeSavings.toLocaleString()}</span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-sm" style={{ color: "var(--text-muted)" }}>
                             <span>Service Fee (5%)</span><span>₦{fee.toLocaleString()}</span>
                           </div>

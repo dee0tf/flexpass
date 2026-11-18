@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { checkoutTotals } from './platformFee';
+import { bulkUnitPrice } from './discountMath';
 
 /**
  * Kobo of slack allowed per unit bought. The mobile app (and any cached old
@@ -26,12 +27,16 @@ const TIER_END_GRACE_MS = 15 * 60 * 1000;
  */
 export async function expectedOrderPricing(
   supabase: SupabaseClient,
-  { eventId, tierId, quantity, paidAt }: {
+  { eventId, tierId, quantity, paidAt, reference }: {
     eventId: string; tierId?: string | null; quantity: number;
     // When Paystack says the charge happened. The reconciliation job can run
     // hours later, so "has this tier's sale window closed?" must be judged
     // at payment time, not now.
     paidAt?: string | null;
+    // The Paystack reference. If its ticket hold was placed with a discount
+    // code, the discounted unit price stored on the hold (computed by
+    // /api/ticket-hold from the DB) is the price for this order.
+    reference?: string | null;
   }
 ) {
   let unitPrice: number;
@@ -48,13 +53,31 @@ export async function expectedOrderPricing(
       salesEnded = Date.parse(tier.ends_at) + TIER_END_GRACE_MS < (Number.isFinite(paidMs) ? paidMs : Date.now());
     }
     // Same bulk-discount math as CheckoutModal.
-    unitPrice = tier.min_quantity && tier.bulk_discount_qty && tier.bulk_discount_percent && quantity >= tier.bulk_discount_qty
-      ? Math.round(tier.price * (1 - tier.bulk_discount_percent / 100) * 100) / 100
-      : tier.price;
+    unitPrice = bulkUnitPrice(tier.price, tier, quantity);
   } else {
     const { data: event } = await supabase.from('events').select('price').eq('id', eventId).single();
     if (!event) return null;
     unitPrice = event.price || 0;
+  }
+
+  // Discount code: only ever a price the server itself stamped on the hold,
+  // and only if that hold is for this exact event, tier and quantity.
+  if (reference) {
+    const { data: hold } = await supabase
+      .from('ticket_holds')
+      .select('event_id, tier_id, quantity, unit_price, discount_code_id')
+      .eq('reference', reference)
+      .maybeSingle();
+    if (
+      hold?.discount_code_id && hold.unit_price != null &&
+      hold.event_id === eventId &&
+      (hold.tier_id ?? null) === (tierId ?? null) &&
+      Number(hold.quantity) === quantity
+    ) {
+      // Never above the normal price, never below the 50% floor.
+      const held = Number(hold.unit_price);
+      unitPrice = Math.max(Math.min(held, unitPrice), Math.round(unitPrice * 0.5 * 100) / 100 - 0.01);
+    }
   }
 
   const { fee, total } = checkoutTotals(unitPrice, quantity);

@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { logPaymentEvent } from '@/lib/logPaymentEvent';
 import { sanitizeEmail } from '@/lib/sanitizeEmail';
 import { allowRequest, clientIp } from '@/lib/rateLimit';
+import { resolveDiscount, reserveDiscountError } from '@/lib/discountCodes';
 
 // Service role — reserve_tickets / release_ticket_hold are service_role-only
 // (see supabase/migrations/20261001_ticket_holds.sql).
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     ({ eventId, email } = body);
-    const { tierId, quantity } = body;
+    const { tierId, quantity, discountCode } = body;
     if (typeof email === 'string') email = sanitizeEmail(email);
 
     if (!eventId || !email || typeof quantity !== 'number' || quantity < 1 || quantity > MAX_FLEXIBLE_GROUP_QUANTITY) {
@@ -116,16 +117,46 @@ export async function POST(request: Request) {
       .eq('status', 'active');
 
     const reference = `FP-${crypto.randomUUID()}`;
-    const { data, error } = await supabase.rpc('reserve_tickets', {
-      p_tier_id: tierId || null,
-      p_event_id: eventId,
-      p_quantity: quantity,
-      p_email: email.toLowerCase(),
-      p_reference: reference,
-      p_ttl_seconds: HOLD_TTL_SECONDS,
-    });
+
+    // Discount code: re-checked and re-priced here from the DB. This price is
+    // stamped on the hold and is what verify-payment / the webhook charge
+    // against — whatever the browser previewed is never trusted.
+    let discount: Awaited<ReturnType<typeof resolveDiscount>> | null = null;
+    if (discountCode) {
+      discount = await resolveDiscount(supabase, {
+        eventId, tierId: tierId || null, rawCode: discountCode, quantity, email: email.toLowerCase(),
+      });
+      if (!discount.ok) {
+        return NextResponse.json({ error: discount.error, reason: 'DISCOUNT' }, { status: 409 });
+      }
+    }
+
+    const { data, error } = discount?.ok
+      ? await supabase.rpc('reserve_discounted_tickets', {
+          p_code_id: discount.code.id,
+          p_tier_id: tierId || null,
+          p_event_id: eventId,
+          p_quantity: quantity,
+          p_email: email.toLowerCase(),
+          p_reference: reference,
+          p_unit_price: discount.unitPrice,
+          p_ttl_seconds: HOLD_TTL_SECONDS,
+        })
+      : await supabase.rpc('reserve_tickets', {
+          p_tier_id: tierId || null,
+          p_event_id: eventId,
+          p_quantity: quantity,
+          p_email: email.toLowerCase(),
+          p_reference: reference,
+          p_ttl_seconds: HOLD_TTL_SECONDS,
+        });
 
     if (error) throw new Error(error.message);
+
+    if (!data?.ok && discount?.ok) {
+      const msg = reserveDiscountError(data?.reason, discount.code.code, data?.remaining);
+      if (msg) return NextResponse.json({ error: msg, reason: 'DISCOUNT' }, { status: 409 });
+    }
 
     if (!data?.ok) {
       if (data?.reason === 'HELD') {
@@ -151,7 +182,12 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ reference, expiresAt: data.expires_at });
+    return NextResponse.json({
+      reference,
+      expiresAt: data.expires_at,
+      // Checkout charges exactly this unit price (null = normal price).
+      unitPrice: discount?.ok ? discount.unitPrice : null,
+    });
   } catch (err: unknown) {
     console.error('[ticket-hold] Unhandled error:', err);
     await logPaymentEvent({
