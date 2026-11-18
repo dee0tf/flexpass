@@ -28,6 +28,11 @@ interface TierFormData extends TierFields {
   id?: string; isNew?: boolean; uid: string;
 }
 
+const TIER_IN_USE_MESSAGE =
+  "Nothing was saved. One of the ticket classes you removed already has tickets on it, and a ticket class can't be " +
+  "deleted once people hold tickets from it — their QR codes would stop working at the door. Reload this page to bring " +
+  "it back. If you don't want any more to go out, change its quantity to the number already sold or issued instead.";
+
 const newTierRow = (t: TierFields): TierFormData => ({ ...t, isNew: true, uid: crypto.randomUUID() });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -460,6 +465,19 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const removeTier = (i: number) => {
     if (tiers.length <= 1) return;
     const removed = tiers[i];
+    // A tier with tickets can't be deleted — those tickets point at it (the
+    // tickets_tier_id_fkey constraint), and deleting would orphan live QR codes.
+    if (removed.id && (soldByTier[removed.id] ?? 0) > 0) {
+      const n = soldByTier[removed.id];
+      const verb = removed.is_hidden ? "issued" : "sold";
+      showToast(
+        `"${removed.name}" can't be removed because ${n} ticket${n === 1 ? " has" : "s have"} already been ${verb} from it. ` +
+        `Removing it would cancel ${n === 1 ? "that guest's ticket" : "those guests' tickets"} and their QR code${n === 1 ? "" : "s"} would stop working at the door. ` +
+        `If you don't want any more to go out, change its quantity to ${n} instead.`,
+        "warning"
+      );
+      return;
+    }
     if (removed.id) setRemovedTierIds(prev => [...prev, removed.id!]);
     setTiers(tiers.filter((_, idx) => idx !== i));
   };
@@ -560,6 +578,20 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     }
     setIsSaving(true);
     try {
+      // Check deletions BEFORE writing anything. soldByTier only counts
+      // valid/scanned tickets, but revoked/refunded ones block the delete too,
+      // and failing at the end used to leave a half-saved event (new tiers
+      // inserted again on every retry).
+      if (removedTierIds.length) {
+        const { data: blocking, error: blockErr } = await supabase
+          .from("tickets").select("tier_id").in("tier_id", removedTierIds).limit(1);
+        if (blockErr) throw blockErr;
+        if (blocking?.length) {
+          showToast(TIER_IN_USE_MESSAGE, "error");
+          return;
+        }
+      }
+
       const minPrice = publicMinPrice(tiers);
       const totalTickets = tiers.reduce((acc, t) => acc + Number(t.quantity) * (Number(t.group_size) || 1), 0);
       const finalCategory = formData.category === "Others" && formData.custom_category
@@ -654,7 +686,10 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           ? String((error as { message: unknown }).message)
           : "Unknown error";
       console.error("[edit event] Save failed:", error);
-      showToast("Failed to save: " + msg, "error");
+      // Never show raw database wording ("violates foreign key constraint")
+      // to a host — 23503 is the "tier still has tickets" case.
+      const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+      showToast(code === "23503" ? TIER_IN_USE_MESSAGE : "Your changes couldn't be saved: " + msg, "error");
     } finally {
       setIsSaving(false);
     }

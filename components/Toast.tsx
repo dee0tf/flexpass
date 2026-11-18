@@ -21,7 +21,8 @@ interface ToastProps {
 export function Toast({ toast, onClose }: ToastProps) {
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(onClose, 4500);
+    // Longer explanations stay up long enough to actually read (~15 chars/sec).
+    const t = setTimeout(onClose, Math.min(15000, Math.max(4500, toast.message.length * 65)));
     return () => clearTimeout(t);
   }, [toast, onClose]);
 
