@@ -14,7 +14,7 @@ export const db: SupabaseClient = createClient(
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const CODE_COLUMNS =
-  'id, event_id, code, discount_type, amount, starts_at, ends_at, max_uses, one_per_email, tier_ids, stacks_with_bulk, is_active, created_at';
+  'id, event_id, code, discount_type, amount, starts_at, ends_at, max_uses, one_per_email, tier_ids, excluded_tier_ids, stacks_with_bulk, is_active, created_at';
 
 export type OwnerCheck =
   | { error: string; status: 401 | 403 | 404 }

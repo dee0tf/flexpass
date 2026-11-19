@@ -12,6 +12,7 @@ export interface DiscountCodeRow extends DiscountTerms {
   max_uses: number | null;
   one_per_email: boolean;
   tier_ids: string[] | null;
+  excluded_tier_ids: string[] | null;
   is_active: boolean;
 }
 
@@ -33,7 +34,7 @@ export async function resolveDiscount(
 
   const { data: code } = await supabase
     .from('discount_codes')
-    .select('id, event_id, code, discount_type, amount, starts_at, ends_at, max_uses, one_per_email, tier_ids, stacks_with_bulk, is_active')
+    .select('id, event_id, code, discount_type, amount, starts_at, ends_at, max_uses, one_per_email, tier_ids, excluded_tier_ids, stacks_with_bulk, is_active')
     .eq('event_id', eventId)
     .eq('code', codeText)
     .maybeSingle<DiscountCodeRow>();
@@ -63,6 +64,9 @@ export async function resolveDiscount(
     }
     if (code.tier_ids?.length && !code.tier_ids.includes(tierId)) {
       return { ok: false, error: `"${codeText}" can't be used on ${tier.name} tickets. It only works on certain ticket types.` };
+    }
+    if (code.excluded_tier_ids?.includes(tierId)) {
+      return { ok: false, error: `"${codeText}" doesn't work on ${tier.name} tickets — the organiser left them out of this promo. Pick a different ticket type to use it.` };
     }
     basePrice = Number(tier.price) || 0;
     bulkPrice = bulkUnitPrice(basePrice, tier, quantity);

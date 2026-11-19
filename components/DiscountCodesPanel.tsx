@@ -16,6 +16,7 @@ interface DiscountCode {
   max_uses: number | null;
   one_per_email: boolean;
   tier_ids: string[] | null;
+  excluded_tier_ids?: string[] | null;
   stacks_with_bulk: boolean;
   is_active: boolean;
   used: number;
@@ -33,7 +34,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-NG", { day: "numer
 
 const blankForm = () => ({
   code: "", discountType: "percent" as "percent" | "fixed", amount: "", startsAt: "", endsAt: "",
-  maxUses: "", onePerEmail: false, tierIds: [] as string[], stacksWithBulk: false,
+  maxUses: "", onePerEmail: false, excludedTierIds: [] as string[], stacksWithBulk: false,
 });
 
 export default function DiscountCodesPanel({ eventId, tiers }: { eventId: string; tiers: CodeTier[] }) {
@@ -70,10 +71,10 @@ export default function DiscountCodesPanel({ eventId, tiers }: { eventId: string
     setForm(f => ({ ...f, [k]: v }));
 
   const toggleTier = (id: string) =>
-    set("tierIds", form.tierIds.includes(id) ? form.tierIds.filter(t => t !== id) : [...form.tierIds, id]);
+    set("excludedTierIds", form.excludedTierIds.includes(id) ? form.excludedTierIds.filter(t => t !== id) : [...form.excludedTierIds, id]);
 
   // Tiers this code would apply to, for the live preview.
-  const previewTiers = (form.tierIds.length ? tiers.filter(t => form.tierIds.includes(t.id)) : tiers).filter(t => t.price > 0);
+  const previewTiers = tiers.filter(t => !form.excludedTierIds.includes(t.id) && t.price > 0);
   const amountNum = Number(form.amount) || 0;
   const anyBulk = previewTiers.some(t => t.hasBulkDiscount);
 
@@ -251,32 +252,29 @@ export default function DiscountCodesPanel({ eventId, tiers }: { eventId: string
 
             {tiers.length > 1 && (
               <div>
-                <p className={labelCls} style={{ color: "var(--text-muted)" }}>Works on</p>
+                <p className={labelCls} style={{ color: "var(--text-muted)" }}>Exclude ticket types (optional)</p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => set("tierIds", [])}
-                    className="px-3 py-1.5 rounded-full text-xs font-semibold"
-                    style={{
-                      backgroundColor: form.tierIds.length === 0 ? "var(--brand-indigo)" : "var(--input-bg)",
-                      color: form.tierIds.length === 0 ? "#fff" : "var(--text-secondary)",
-                      border: "1px solid var(--input-border)",
-                    }}>
-                    All ticket types
-                  </button>
                   {tiers.map(t => {
-                    const on = form.tierIds.includes(t.id);
+                    const excluded = form.excludedTierIds.includes(t.id);
                     return (
-                      <button key={t.id} type="button" onClick={() => toggleTier(t.id)}
+                      <button key={t.id} type="button" onClick={() => toggleTier(t.id)} aria-pressed={excluded}
                         className="px-3 py-1.5 rounded-full text-xs font-semibold"
                         style={{
-                          backgroundColor: on ? "var(--brand-indigo)" : "var(--input-bg)",
-                          color: on ? "#fff" : "var(--text-secondary)",
-                          border: "1px solid var(--input-border)",
+                          backgroundColor: excluded ? "rgba(239,68,68,0.12)" : "var(--input-bg)",
+                          color: excluded ? "#ef4444" : "var(--text-secondary)",
+                          border: excluded ? "1px solid rgba(239,68,68,0.5)" : "1px solid var(--input-border)",
+                          textDecoration: excluded ? "line-through" : "none",
                         }}>
-                        {t.name}
+                        {excluded ? "✕ " : ""}{t.name}
                       </button>
                     );
                   })}
                 </div>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  {form.excludedTierIds.length === 0
+                    ? "Works on all ticket types. Tap a ticket type to leave it out of the promo."
+                    : `Works on everything except ${tiers.filter(t => form.excludedTierIds.includes(t.id)).map(t => t.name).join(", ")}. Ticket types you add later will get the discount too.`}
+                </p>
               </div>
             )}
 
@@ -319,9 +317,13 @@ export default function DiscountCodesPanel({ eventId, tiers }: { eventId: string
           <div className="space-y-2">
             {codes.map(c => {
               const st = status(c);
+              const excludedNames = (c.excluded_tier_ids || [])
+                .map(id => tiers.find(t => t.id === id)?.name).filter(Boolean).join(", ");
               const tierNames = c.tier_ids?.length
                 ? tiers.filter(t => c.tier_ids!.includes(t.id)).map(t => t.name).join(", ") || "Selected ticket types"
-                : "All ticket types";
+                : c.excluded_tier_ids?.length
+                  ? `All except ${excludedNames || "some ticket types"}`
+                  : "All ticket types";
               return (
                 <div key={c.id} className="p-3 rounded-xl flex flex-col sm:flex-row sm:items-center gap-3"
                   style={{ backgroundColor: "var(--surface-raised)", border: "1px solid var(--card-border)", opacity: c.is_active ? 1 : 0.7 }}>

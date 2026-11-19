@@ -79,6 +79,27 @@ export async function POST(request: Request) {
       tierIds = valid;
     }
 
+    // Excluded tiers: the code works on every public ticket type except these.
+    let excludedTierIds: string[] | null = null;
+    if (Array.isArray(body.excludedTierIds) && body.excludedTierIds.length) {
+      if (!body.excludedTierIds.every((t: unknown) => typeof t === 'string' && UUID_RE.test(t))) {
+        return NextResponse.json({ error: 'One of the excluded ticket types is invalid. Refresh and try again.' }, { status: 400 });
+      }
+      const { data: eventTiers } = await db
+        .from('ticket_tiers').select('id, is_hidden, price').eq('event_id', eventId);
+      const ids = new Set((eventTiers || []).map(t => t.id));
+      if (!body.excludedTierIds.every((t: string) => ids.has(t))) {
+        return NextResponse.json({ error: "One of the excluded ticket types isn't part of this event. Refresh and try again." }, { status: 400 });
+      }
+      const stillDiscountable = (eventTiers || []).filter(
+        t => !t.is_hidden && Number(t.price) > 0 && !body.excludedTierIds.includes(t.id)
+      );
+      if (stillDiscountable.length === 0) {
+        return NextResponse.json({ error: "You've excluded every paid ticket type, so nobody could use this code. Leave at least one ticket type included." }, { status: 400 });
+      }
+      excludedTierIds = body.excludedTierIds;
+    }
+
     const { data: created, error } = await db.from('discount_codes').insert({
       event_id: eventId,
       code,
@@ -89,6 +110,7 @@ export async function POST(request: Request) {
       max_uses: maxUses,
       one_per_email: !!body.onePerEmail,
       tier_ids: tierIds,
+      excluded_tier_ids: excludedTierIds,
       stacks_with_bulk: !!body.stacksWithBulk,
     }).select(CODE_COLUMNS).single();
 
